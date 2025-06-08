@@ -1,68 +1,76 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
 
 export default function ProfilePage() {
+  const router = useRouter();  
+
+  const handleLogout = () => { 
+    router.replace('/auth/login');  
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.background} />
       <Header userName="Dianne" />
       
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileHeader}>
-          <Text style={styles.headerText}>My Profile</Text>
+      <Text style={styles.pageTitle}>My Profile</Text>
+      <View style={styles.avatarContainer}>
+       <View style={styles.avatar}>
+       <MaterialIcons name="account-circle" size={80} color="#4682B4" />
+      <TouchableOpacity style={styles.editIcon}>
+       <MaterialIcons name="edit" size={20} color="#fff" />
+      </TouchableOpacity>
+      </View>
+      </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Name</Text>
+          <TextInput style={styles.input} value="Dianne Javellana" editable={false} />
         </View>
 
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <MaterialIcons name="account-circle" size={80} color="#4682B4" />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Username</Text>
+          <TextInput style={styles.input} value="Javellana123" editable={false} />
         </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput style={styles.input} value="Dianne Javellana" editable={false} />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput style={styles.input} value="javellana@gmail.com" editable={false} />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
-            <TextInput style={styles.input} value="Javellana123" editable={false} />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Address</Text>
+          <TextInput style={styles.input} value="Brgy. San Juan, Surigao City" editable={false} />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput style={styles.input} value="javellana@gmail.com" editable={false} />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone Number</Text>
+          <TextInput style={styles.input} value="09123456789" editable={false} />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Address</Text>
-            <TextInput style={styles.input} value="Brgy. San Juan, Surigao City" editable={false} />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput style={styles.input} value="********" secureTextEntry editable={false} />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput style={styles.input} value="09123456789" editable={false} />
-          </View>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.editButton}>
+            <Text style={styles.buttonText}>EDIT PROFILE</Text>
+          </TouchableOpacity>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput style={styles.input} value="********" secureTextEntry editable={false} />
-          </View>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={styles.buttonText}>EDIT PROFILE</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.logoutButton}>
-              <Text style={styles.buttonText}>LOGOUT</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.buttonText}>LOGOUT</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -73,6 +81,23 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     padding: 20,
     paddingBottom: 40,
+  },
+  pageTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    alignSelf: 'center',
+  },
+  editIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#4682B4',
+    borderRadius: 20,
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   background: {
     position: 'absolute',
@@ -91,11 +116,6 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     marginBottom: 20,
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
   },
   avatarContainer: {
     alignItems: 'center',
