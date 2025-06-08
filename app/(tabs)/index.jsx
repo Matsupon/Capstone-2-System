@@ -196,6 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   itemText: {
+    fontWeight: 'bold',
     fontSize: 15,
     color: '#000',
     marginBottom: 5,
