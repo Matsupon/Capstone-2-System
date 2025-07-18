@@ -1,10 +1,14 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import BookAppointment from '../../components/BookAppointment';
 import Header from '../../components/Header';
 
 export default function HomePage() {
   const userName = "Dianne";
+  const router = useRouter();
+  const [modalVisible, setModalVisible] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -96,10 +100,12 @@ export default function HomePage() {
           </View>
         </View>
       </ScrollView>
+ 
+      <BookAppointment visible={modalVisible} onClose={() => setModalVisible(false)} />
 
-      <TouchableOpacity style={styles.fab}>
-        <MaterialIcons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
+       <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+       <MaterialIcons name="add" size={30} color="#fff" />
+       </TouchableOpacity>
     </View>
   );
 }
