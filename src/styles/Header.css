@@ -1,0 +1,100 @@
+.header {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 0 clamp(10px, 2vw, 20px);
+  height: clamp(50px, 8vh, 60px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 2vw, 15px);
+}
+
+.profile-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.profile-picture {
+  width: clamp(32px, 5vw, 40px);
+  height: clamp(32px, 5vw, 40px);
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: clamp(14px, 2.5vw, 18px);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.profile-picture:hover {
+  background: #e0e0e0;
+}
+
+.user-role {
+  font-weight: 600;
+  color: #333;
+  font-size: clamp(11px, 1.8vw, 14px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 10px;
+    height: 50px;
+  }
+  
+  .header-right {
+    gap: 8px;
+  }
+  
+  .profile-picture {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  
+  .user-role {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 8px;
+    height: 45px;
+  }
+  
+  .header-right {
+    gap: 6px;
+  }
+  
+  .profile-picture {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .user-role {
+    font-size: 11px;
+  }
+} 

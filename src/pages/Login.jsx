@@ -1,5 +1,6 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import '../styles/Login.css';
 
@@ -7,11 +8,14 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
   const handleLogin = (e) => {
     e.preventDefault();
     console.log('Email:', email);
     console.log('Password:', password);
+    // Navigate to dashboard after successful login
+    navigate('/dashboard');
   };
 
   return (

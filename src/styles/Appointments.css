@@ -1,0 +1,53 @@
+.appointments-content {
+  padding: clamp(10px, 2vw, 20px);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.placeholder-content {
+  background: white;
+  border-radius: 8px;
+  padding: clamp(20px, 5vw, 40px);
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.placeholder-content h2 {
+  color: #333;
+  margin-bottom: 10px;
+  font-size: clamp(18px, 3vw, 24px);
+}
+
+.placeholder-content p {
+  color: #666;
+  font-size: clamp(14px, 2vw, 16px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .appointments-content {
+    padding: 10px;
+  }
+  
+  .placeholder-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .appointments-content {
+    padding: 8px;
+  }
+  
+  .placeholder-content {
+    padding: 15px;
+  }
+  
+  .placeholder-content h2 {
+    font-size: 20px;
+  }
+  
+  .placeholder-content p {
+    font-size: 14px;
+  }
+} 
