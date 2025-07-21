@@ -131,12 +131,13 @@ th, td {
 
 th {
   font-weight: 600;
-  color: #666;
+  color: #333;
   font-size: clamp(10px, 1.4vw, 14px);
   position: sticky;
   top: 0;
   background: white;
   z-index: 1;
+  background-color: #e8f4fd;
 }
 
 td {
