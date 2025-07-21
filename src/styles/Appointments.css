@@ -127,19 +127,49 @@ input[type="checkbox"]:checked {
 }
 
 /* Success Popups */
-.popup-success, .popup-deleted {
+.popup-queue-success {
   position: fixed;
   top: 40px;
   left: 50%;
   transform: translateX(-50%);
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   padding: 24px 32px;
   z-index: 1002;
   text-align: center;
   min-width: 320px;
   animation: fadeInDown 0.5s ease;
+}
+
+.popup-queue-success h3 {
+  margin: 0;
+  padding: 4px 0;
+  color: #4caf50;
+  font-size: 16px;
+}
+
+/* Delete Success Popup */
+.popup-delete-success {
+  position: fixed;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding: 24px 32px;
+  z-index: 1002;
+  text-align: center;
+  min-width: 320px;
+  animation: fadeInDown 0.5s ease;
+}
+
+.popup-delete-success h3 {
+  margin: 0;
+  padding: 4px 0;
+  color: #e53935;
+  font-size: 16px;
 }
 
 /* Checkbox Styles */
@@ -282,11 +312,6 @@ input[type="checkbox"]:checked::before {
   font-size: 18px;
 }
 
-.popup-success h3 {
-  color: #4caf50;
-  margin: 0;
-  font-size: 18px;
-}
 
 /* Details Modal Two-Column Layout */
 .details-modal {

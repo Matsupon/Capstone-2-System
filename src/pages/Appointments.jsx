@@ -166,11 +166,11 @@ const Appointments = () => {
 
           {/* Add to Queue Success Popup */}
           {queueSuccess && (
-            <div className="popup-success">
-              <h3>User appointment successfully accepted!</h3>
-              <div>View appointment details at the Orders Page</div>
-            </div>
-          )}
+  <div className="popup-queue-success">
+    <h3>User appointment successfully accepted!</h3>
+    <div>View appointment details at the Orders Page</div>
+  </div>
+)}
 
           {/* Remove Confirmation Modal */}
           {removeId !== null && (
@@ -187,10 +187,10 @@ const Appointments = () => {
 
           {/* Delete Success Popup */}
           {deleteSuccess && (
-            <div className="popup-deleted">
-              <h3>Appointment Successfully Deleted!</h3>
-            </div>
-          )}
+  <div className="popup-delete-success">
+    <h3>Appointment Successfully Deleted!</h3>
+  </div>
+)}
         </div>
       </div>
     </div>
