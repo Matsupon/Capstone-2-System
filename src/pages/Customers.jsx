@@ -32,7 +32,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
       {
         id: 103,
@@ -43,7 +44,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
     ],
   },
@@ -64,7 +66,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
       {
         id: 202,
@@ -75,7 +78,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
       {
         id: 203,
@@ -86,7 +90,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
     ],
   },
@@ -107,7 +112,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
       {
         id: 302,
@@ -118,7 +124,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
       {
         id: 303,
@@ -129,7 +136,8 @@ const customersData = [
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
+        notes: 'Client requested sleeveless design with name print.',
+        paymentFee: 950,
       },
     ],
   },
@@ -260,7 +268,16 @@ const Customers = () => {
                           <div className="customers-modal-detail-label">Phone Number</div>
                           <div className="customers-modal-detail-value">{order.phone}</div>
                           <div className="customers-modal-detail-label">Current Status</div>
-                          <div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>{order.status}</div>
+<div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>
+  {order.status}
+</div>
+
+{order.status === 'Completed' && (
+  <>
+    <div className="customers-modal-detail-label">Total Payment Fee</div>
+    <div className="customers-modal-detail-value">₱{order.paymentFee?.toLocaleString() || '0.00'}</div>
+  </>
+)}
 
                         </div>
                         <div className="customers-modal-details-right">
