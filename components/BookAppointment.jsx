@@ -20,6 +20,15 @@ const SERVICE_TYPES = [
   'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)',
 ];
 
+// ADDED: Size options
+const SIZES = [
+  'Extra Small',
+  'Small',
+  'Medium',
+  'Large',
+  'Extra Large'
+];
+
 const TIMES = Array.from({ length: 12 }, (_, i) => i + 1);
 const MINUTES = ['00', '15', '30', '45'];
 const AMPM = ['AM', 'PM'];
@@ -39,6 +48,13 @@ export default function BookAppointment({ visible, onClose }) {
   const [gcashImage, setGcashImage] = useState(null);
   const [successVisible, setSuccessVisible] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  
+  // ADDED: New state variables
+  const [sizes, setSizes] = useState({}); // { Small: 0, Medium: 0, ... }
+  const [quantity, setQuantity] = useState(''); // total, can be overridden
+  const [dueDateModal, setDueDateModal] = useState(false);
+  const [dueDate, setDueDate] = useState(null);
+  const [dueTime, setDueTime] = useState({ hour: '10', minute: '00', ampm: 'AM' });
 
   // Reset form when modal closes
   useEffect(() => {
@@ -52,8 +68,20 @@ export default function BookAppointment({ visible, onClose }) {
       setDesignImage(null);
       setGcashImage(null);
       setSuccessVisible(false);
+      setSizes({});
+      setQuantity('');
+      setDueDate(null);
+      setDueTime({ hour: '10', minute: '00', ampm: 'AM' });
     }
   }, [visible]);
+
+  // 3. Auto-calculate total quantity from sizes, but allow manual override
+  useEffect(() => {
+    const total = Object.values(sizes).reduce((a, b) => a + (b || 0), 0);
+    if (quantity === '' || Number(quantity) !== total) {
+      setQuantity(String(total));
+    }
+  }, [sizes]);
 
   // Calendar helpers
   const getDaysInMonth = (date) => {
@@ -230,6 +258,50 @@ export default function BookAppointment({ visible, onClose }) {
                 </View>
               )}
 
+              {/* ADDED: Size Selection */}
+              <Text style={[styles.label, { marginTop: 18 }]}>Select Sizes and Quantities:</Text>
+              {SIZES.map((size) => (
+                <View key={size} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                  <TouchableOpacity
+                    style={{ marginRight: 10 }}
+                    onPress={() => {
+                      setSizes((prev) => ({ ...prev, [size]: prev[size] ? 0 : 1 }));
+                    }}
+                  >
+                    <MaterialIcons
+                      name={sizes[size] ? 'check-box' : 'check-box-outline-blank'}
+                      size={22}
+                      color={sizes[size] ? '#4682B4' : '#aaa'}
+                    />
+                  </TouchableOpacity>
+                  <Text style={{ flex: 1 }}>{size}</Text>
+                  {sizes[size] !== undefined && (
+                    <TextInput
+                      style={[styles.inputField, { width: 80, height: 40, marginBottom: 0 }]}
+                      placeholder="Qty"
+                      value={sizes[size] ? String(sizes[size]) : ''}
+                      onChangeText={(val) => {
+                        const num = val.replace(/[^0-9]/g, '');
+                        setSizes((prev) => ({ ...prev, [size]: num ? parseInt(num) : 0 }));
+                      }}
+                      keyboardType="numeric"
+                      placeholderTextColor="#aaa"
+                    />
+                  )}
+                </View>
+              ))}
+
+              {/* ADDED: Total Quantity */}
+              <Text style={[styles.label, { marginTop: 18 }]}>Total Quantity:</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Total number of items"
+                value={quantity}
+                onChangeText={setQuantity}
+                keyboardType="numeric"
+                placeholderTextColor="#aaa"
+              />
+
               {/* Date Picker */}
               <Text style={[styles.label, { marginTop: 18 }]}>Choose Available Date</Text>
               <TouchableOpacity 
@@ -242,6 +314,7 @@ export default function BookAppointment({ visible, onClose }) {
                 </Text>
                 <MaterialIcons name="chevron-right" size={22} color="#222" />
               </TouchableOpacity>
+
 
               {/* Date Modal */}
               <Modal visible={dateModal} animationType="fade" transparent>
@@ -328,9 +401,12 @@ export default function BookAppointment({ visible, onClose }) {
                 keyboardType="phone-pad"
                 placeholderTextColor="#aaa"
               />
+              
+              {/* UPDATED: Notes field */}
+              <Text style={[styles.label, { marginTop: 18 }]}>Additional Information:</Text>
               <TextInput
                 style={[styles.inputField, { height: 80, textAlignVertical: 'top' }]}
-                placeholder="Notes (e.g. Measurements or Size)"
+                placeholder="Type 'N/A' if you have none"
                 value={notes}
                 onChangeText={setNotes}
                 multiline
@@ -352,7 +428,8 @@ export default function BookAppointment({ visible, onClose }) {
                 <TouchableOpacity 
                   style={styles.nextBtn} 
                   onPress={() => setStep(2)}
-                  disabled={!serviceType || !selectedDate || !fullName}
+                  // UPDATED: Added validation for new fields
+                  disabled={!serviceType || !selectedDate || !fullName || !selectedSize || !quantity}
                 >
                   <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 16 }}>Next</Text>
                   <MaterialIcons name="chevron-right" size={22} color="#222" />
@@ -387,6 +464,80 @@ export default function BookAppointment({ visible, onClose }) {
       <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
       {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}
     </TouchableOpacity>
+
+    {/* After Gcash upload, add Due Date picker button */}
+    <TouchableOpacity
+      style={styles.inputRow}
+      onPress={() => setDueDateModal(true)}
+    >
+      <MaterialIcons name="event" size={22} color="#4682B4" style={{ marginRight: 10 }} />
+      <Text style={{ flex: 1, color: dueDate ? '#000' : '#aaa' }}>
+        {dueDate ? `${formatDate(dueDate)} ${formatTime(dueTime)}` : 'Choose Due Date...'}
+      </Text>
+      <MaterialIcons name="chevron-right" size={22} color="#222" />
+    </TouchableOpacity>
+    <Modal visible={dueDateModal} animationType="fade" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {/* Calendar header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
+              <MaterialIcons name="chevron-left" size={28} color="#222" />
+            </TouchableOpacity>
+            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>
+              {calendarMonth.toLocaleString('default', { month: 'long' })} {calendarMonth.getFullYear()}
+            </Text>
+            <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
+              <MaterialIcons name="chevron-right" size={28} color="#222" />
+            </TouchableOpacity>
+          </View>
+          {/* Days of week */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, index) => (
+              <Text key={`day-${index}`} style={{ flex: 1, textAlign: 'center', color: '#4682B4', fontWeight: 'bold' }}>
+                {d}
+              </Text>
+            ))}
+          </View>
+          {/* Calendar grid */}
+          {renderCalendar()}
+          {/* Time picker */}
+          <Text style={{ marginTop: 16, fontWeight: 'bold' }}>Choose Due Time:</Text>
+          <View style={{ flexDirection: 'row', marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={styles.timePickerBox}>
+              <TextInput
+                style={styles.timeInput}
+                value={dueTime.hour}
+                keyboardType="numeric"
+                maxLength={2}
+                onChangeText={v => setDueTime(t => ({ ...t, hour: v.replace(/[^0-9]/g, '').slice(0, 2) }))}
+              />
+            </View>
+            <Text style={{ fontSize: 18, marginHorizontal: 2 }}>:</Text>
+            <View style={styles.timePickerBox}>
+              <TextInput
+                style={styles.timeInput}
+                value={dueTime.minute}
+                keyboardType="numeric"
+                maxLength={2}
+                onChangeText={v => setDueTime(t => ({ ...t, minute: v.replace(/[^0-9]/g, '').slice(0, 2) }))}
+              />
+            </View>
+            <View style={styles.timePickerBox}>
+              <TouchableOpacity onPress={() => setDueTime(t => ({ ...t, ampm: t.ampm === 'AM' ? 'PM' : 'AM' }))}>
+                <Text style={{ fontSize: 16 }}>{dueTime.ampm}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.setDateBtn}
+            onPress={() => setDueDateModal(false)}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>SET DUE DATE AND TIME</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   </ScrollView>
   
   <TouchableOpacity 
