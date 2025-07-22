@@ -259,6 +259,13 @@ td {
   background: #f8f9fa;
 }
 
+.calendar-date.past {
+  color: #bbb !important;
+  background: #f3f3f3 !important;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
 .date-number {
   font-size: clamp(8px, 1.1vw, 12px);
   color: #333;
@@ -646,4 +653,137 @@ td {
   border-radius: 0;
   box-shadow: none;
   padding: 0;
+}
+
+/* Unique Dashboard Modal Styles */
+.dashboard-modal-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.dashboard-modal-panel {
+  background: white;
+  border-radius: 10px;
+  padding: 28px 28px 20px 28px;
+  max-width: 620px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dashboard-modal-title {
+  margin-bottom: 18px;
+  color: #1a3c6c;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard-details-container {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 40px;
+  margin-bottom: 18px;
+  align-items: flex-start;
+}
+
+.dashboard-details-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-details-left,
+.dashboard-details-right {
+  flex: 1;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.dashboard-image-label {
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.dashboard-modal-image {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  border-radius: 4px;
+  background: #f0f0f0;
+  object-fit: contain;
+}
+
+
+.dashboard-detail-group {
+  margin-bottom: 12px;
+}
+
+.dashboard-detail-label {
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 2px;
+  font-size: 14px;
+  align-items: center;
+}
+
+.dashboard-detail-value {
+  color: #333;
+  font-size: 16px;
+}
+
+.dashboard-modal-button {
+  margin-top: 10px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px;
+  width: 100%;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.dashboard-modal-button:hover {
+  background-color: #217dbb;
+}
+
+@media (max-width: 600px) {
+  .dashboard-modal-panel {
+    max-width: 98vw;
+    padding: 16px 6px 12px 6px;
+  }
+  .dashboard-modal-title {
+    font-size: 18px;
+  }
+  .dashboard-detail-label, .dashboard-detail-value {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-details-container {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .dashboard-modal-panel {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
 }

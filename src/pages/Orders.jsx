@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Orders.css';
+import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
 const initialOrders = [
   {
@@ -11,6 +12,7 @@ const initialOrders = [
     services: 'Customize Jersey',
     status: 'Ready to check',
     dueDate: 'May 30 - 9:30 AM',
+    scheduledDateTime: 'May 30 - 9:30 AM',
     designImg: 'jersey.jpg',
     appointmentDate: 'May 28, 2023',
     phoneNumber: '+63 912 345 6789'
@@ -45,6 +47,81 @@ const Orders = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [showUpdateDropdown, setShowUpdateDropdown] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [calendarOrderId, setCalendarOrderId] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedTime, setSelectedTime] = useState('');
+  const [calendarSuccess, setCalendarSuccess] = useState(false);
+
+  const today = new Date();
+  const todayDate = today.getDate();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const isCurrentMonth = calendarMonth === currentMonth && calendarYear === currentYear;
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const currentMonthName = monthNames[calendarMonth];
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay();
+  const calendarDays = [
+    ...Array(firstDayOfMonth).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
+  ];
+
+  const handleCalendarPrevMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear(calendarYear - 1);
+    } else {
+      setCalendarMonth(calendarMonth - 1);
+    }
+  };
+
+  const handleCalendarNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear(calendarYear + 1);
+    } else {
+      setCalendarMonth(calendarMonth + 1);
+    }
+  };
+
+  const openCalendarModal = (orderId) => {
+    setCalendarOrderId(orderId);
+    setShowCalendarModal(true);
+    setSelectedDay(null);
+    setSelectedTime('');
+    setCalendarMonth(currentMonth);
+    setCalendarYear(currentYear);
+  };
+
+  const closeCalendarModal = () => {
+    setShowCalendarModal(false);
+    setCalendarOrderId(null);
+    setSelectedDay(null);
+    setSelectedTime('');
+  };
+
+  const handleSetDateTime = () => {
+    if (calendarOrderId && selectedDay && selectedTime) {
+      const newDueDate = `${monthNames[calendarMonth]} ${selectedDay} - ${selectedTime}`;
+      setOrders(orders.map(order =>
+        order.id === calendarOrderId
+          ? {
+              ...order,
+              status: 'Ready to check',
+              dueDate: newDueDate,
+              scheduledDateTime: newDueDate // <-- Add this line
+            }
+          : order
+      ));
+      setShowCalendarModal(false);
+      setCalendarSuccess(true);
+      setTimeout(() => setCalendarSuccess(false), 3000);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -65,8 +142,15 @@ const Orders = () => {
   };
 
   const handleUpdateStatus = (orderId, newStatus) => {
-    setOrders(orders.map(order => 
-      order.id === orderId ? { ...order, status: newStatus } : order
+    if (newStatus === 'Ready to check') {
+      openCalendarModal(orderId);
+      setShowUpdateDropdown(null);
+      return;
+    }
+    setOrders(orders.map(order =>
+      order.id === orderId
+        ? { ...order, status: newStatus, scheduledDateTime: undefined }
+        : order
     ));
     setShowUpdateDropdown(null);
     setUpdateSuccess(true);
@@ -82,16 +166,15 @@ const Orders = () => {
       <Sidebar />
       <div className="main-content">
         <Header />
-        
         <div className="page-title">
           <h1>ORDERS</h1>
         </div>
-        
         <div className="orders-content">
           <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
+                  <th>Order #</th>
                   <th>Queue #</th>
                   <th>Name</th>
                   <th>Services</th>
@@ -104,18 +187,26 @@ const Orders = () => {
               <tbody>
                 {orders.map((order) => (
                   <tr key={order.id}>
+                    <td>{order.id}</td>
                     <td>{order.queueNumber}</td>
                     <td>{order.name}</td>
                     <td>{order.services}</td>
                     <td>
-                      <span style={{ color: getStatusColor(order.status) }}>
-                        {order.status}
-                      </span>
+                      <div>
+                        <span style={{ color: getStatusColor(order.status), display: 'block' }}>
+                          {order.status}
+                        </span>
+                        {order.status === 'Ready to check' && order.scheduledDateTime && (
+                          <span style={{ fontSize: '12px', color: '#000' }}>
+                            ({order.scheduledDateTime})
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>{order.dueDate}</td>
                     <td>
-                      <span 
-                        className="action-link" 
+                      <span
+                        className="action-link"
                         onClick={() => handleViewFile(order)}
                         style={{ color: '#007bff', cursor: 'pointer' }}
                       >
@@ -124,7 +215,7 @@ const Orders = () => {
                     </td>
                     <td>
                       <div style={{ position: 'relative' }}>
-                        <button 
+                        <button
                           className="update-btn"
                           onClick={() => toggleUpdateDropdown(order.id)}
                           style={{
@@ -140,19 +231,19 @@ const Orders = () => {
                         </button>
                         {showUpdateDropdown === order.id && (
                           <div className="update-dropdown">
-                            <div 
+                            <div
                               className="dropdown-item"
                               onClick={() => handleUpdateStatus(order.id, 'Ready to check')}
                             >
                               Ready to check
                             </div>
-                            <div 
+                            <div
                               className="dropdown-item"
                               onClick={() => handleUpdateStatus(order.id, 'Pending')}
                             >
                               Pending
                             </div>
-                            <div 
+                            <div
                               className="dropdown-item"
                               onClick={() => handleUpdateStatus(order.id, 'Completed')}
                             >
@@ -167,6 +258,7 @@ const Orders = () => {
               </tbody>
             </table>
           </div>
+
 
           {/* View File Modal */}
           {showDetails && selectedOrder && (
@@ -222,6 +314,74 @@ const Orders = () => {
           {updateSuccess && (
             <div className="popup-success">
               <h3 style={{ color: '#4caf50' }}>Update changed successfully!</h3>
+            </div>
+          )}
+
+          {/* Calendar/Time Picker Modal */}
+          {showCalendarModal && (
+            <div className="orders-calendar-modal-bg" onClick={closeCalendarModal}>
+              <div className="orders-calendar-modal-panel" onClick={e => e.stopPropagation()}>
+                <div className="orders-calendar-modal-header">
+                  <FaTimes className="orders-calendar-modal-exit" onClick={closeCalendarModal} />
+                  <h2>Set Date and Time</h2>
+                </div>
+                <div className="orders-calendar-section">
+                  <div className="orders-calendar-header">
+                    <button className="orders-nav-btn" onClick={handleCalendarPrevMonth}><FaChevronLeft /></button>
+                    <span>{currentMonthName} {calendarYear}</span>
+                    <button className="orders-nav-btn" onClick={handleCalendarNextMonth}><FaChevronRight /></button>
+                  </div>
+                  <div className="orders-calendar-grid">
+                    <div className="orders-calendar-days">
+                      <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                    </div>
+                    <div className="orders-calendar-dates">
+                      {calendarDays.map((day, idx) => {
+                        let isToday = isCurrentMonth && day === todayDate;
+                        let isPast = false;
+                        if (day && (calendarYear < currentYear || (calendarYear === currentYear && (calendarMonth < currentMonth || (calendarMonth === currentMonth && day < todayDate))))) {
+                          isPast = true;
+                        }
+                        return (
+                          <div
+                            key={idx}
+                            className={`orders-calendar-date${!day ? ' empty' : ''}${isToday ? ' today' : ''}${isPast ? ' past' : ''}${selectedDay === day ? ' selected' : ''}`}
+                            onClick={() => !isPast && day && setSelectedDay(day)}
+                          >
+                            {day && <span className="orders-date-number">{day}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                {selectedDay && (
+                  <div className="orders-time-picker-section">
+                    <label htmlFor="orders-time-picker">Select Time:</label>
+                    <input
+                      id="orders-time-picker"
+                      type="time"
+                      value={selectedTime}
+                      onChange={e => setSelectedTime(e.target.value)}
+                      className="orders-time-picker-input"
+                    />
+                  </div>
+                )}
+                <button
+                  className="orders-set-date-btn"
+                  onClick={handleSetDateTime}
+                  disabled={!selectedDay || !selectedTime}
+                >
+                  Set Date and Time
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Success Popup for Calendar Set */}
+          {calendarSuccess && (
+            <div className="orders-calendar-success-popup">
+              <h3 style={{ color: '#4caf50', textAlign: 'center' }}>Successfully updated status!</h3>
             </div>
           )}
         </div>
