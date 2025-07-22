@@ -72,32 +72,36 @@ const Dashboard = () => {
     { title: "Completed Orders", value: 3, color: "green" }
   ];
 
+  // 1. Update recentAppointments to use sizes object
   const recentAppointments = [
-  { 
-    time: "9:30 AM", 
-    name: "John Doe", 
-    service: "Customize Jersey", 
-    action: "View Details",
-    amount: "5 pcs",
-    phoneNumber: "09123456789"
-  },
-  { 
-    time: "11:00 AM", 
-    name: "Jane Smith", 
-    service: "Customize Jersey", 
-    action: "View Details",
-    amount: "8 pcs",
-    phoneNumber: "09987654321"
-  },
-  { 
-    time: "1:00 PM", 
-    name: "Sam Wilson", 
-    service: "Customize Jersey", 
-    action: "View Details",
-    amount: "10 pcs",
-    phoneNumber: "09011223344"
-  }
-];
+    { 
+      time: "9:30 AM", 
+      name: "John Doe", 
+      service: "Customize Jersey", 
+      action: "View Details",
+      sizes: { Small: 2, Medium: 3 },
+      phoneNumber: "09123456789",
+      notes: "Add red collar."
+    },
+    { 
+      time: "11:00 AM", 
+      name: "Jane Smith", 
+      service: "Customize Jersey", 
+      action: "View Details",
+      sizes: { Large: 4 },
+      phoneNumber: "09987654321",
+      notes: "Add red collar."
+    },
+    { 
+      time: "1:00 PM", 
+      name: "Sam Wilson", 
+      service: "Customize Jersey", 
+      action: "View Details",
+      sizes: { Small: 1, Medium: 2, Large: 1 },
+      phoneNumber: "09011223344",
+      notes: "Add red collar."
+    }
+  ];
 
   const liveQueue = {
     current: { number: "001", name: "Juan Dela Cruz" },
@@ -205,9 +209,9 @@ const Dashboard = () => {
             {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
   <div className="dashboard-modal-bg">
-    <div className="dashboard-modal-panel">
+    <div className="dashboard-modal-panel" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
       <h2 className="dashboard-modal-title">Appointment Details</h2>
-      <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px'}}>
+      <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px', flexWrap: 'wrap'}}>
         <div className="dashboard-details-left">
           <div className="dashboard-detail-group">
             <div className="dashboard-detail-label">Full Name</div>
@@ -217,35 +221,64 @@ const Dashboard = () => {
             <div className="dashboard-detail-label">Service Type</div>
             <div className="dashboard-detail-value">{selectedAppointment.service}</div>
           </div>
-          <div className="dashboard-detail-group">
-            <div className="dashboard-detail-label">Amount of Clothes</div>
-            <div className="dashboard-detail-value">{selectedAppointment.amount || '10 pcs'}</div>
+
+          <div className="dashboard-detail-label">Size</div>
+          <div className="dashboard-detail-value">
+            {selectedAppointment.sizes && Object.keys(selectedAppointment.sizes).length > 0 ? (
+              <>
+                {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
+                  <div key={size}>{size} - {qty} pcs.</div>
+                ))}
+              </>
+            ) : 'N/A'}
           </div>
+
+          <div className="dashboard-detail-group">
+  <div className="dashboard-detail-label">Quantity</div>
+  <div className="dashboard-detail-value">
+    {selectedAppointment.sizes && Object.keys(selectedAppointment.sizes).length > 0 ? (
+      Object.values(selectedAppointment.sizes).reduce((total, qty) => total + qty, 0) + ' pcs.'
+    ) : 'N/A'}
+  </div>
+</div>
           <div className="dashboard-detail-group">
             <div className="dashboard-detail-label">Phone Number</div>
             <div className="dashboard-detail-value">{selectedAppointment.phoneNumber || '09123456789'}</div>
           </div>
+          
+  <div className="dashboard-detail-group">
+    <div className="dashboard-detail-label">Due Date</div>
+    <div className="dashboard-detail-value">{selectedAppointment.time || 'N/A'}</div>
+  </div>
+          {/* 2. In the modal, show size breakdown and total */}
+         
+        
         </div>
         <div className="dashboard-details-right">
-          <div className="dashboard-image-group">
-            <div className="dashboard-image-label">Design Image</div>
-            <img 
-              src="jersey.jpg" 
-              alt="Jersey Design" 
-              className="dashboard-modal-image" 
-              style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-            />
-          </div>
-          <div className="dashboard-image-group">
-            <div className="dashboard-image-label">Gcash Downpayment</div>
-            <img 
-              src="gcash.png" 
-              alt="Gcash Payment" 
-              className="dashboard-modal-image" 
-              style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-            />
-          </div>
-        </div>
+  <div className="dashboard-detail-group">
+    <div className="dashboard-detail-label">Notes</div>
+    <div className="dashboard-detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
+  </div>
+  <div className="dashboard-image-group">
+    <div className="dashboard-image-label">Design Image</div>
+    <img 
+      src="jersey.jpg" 
+      alt="Jersey Design" 
+      className="dashboard-modal-image" 
+      style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+    />
+  </div>
+  <div className="dashboard-image-group">
+    <div className="dashboard-image-label">Gcash Downpayment</div>
+    <img 
+      src="gcash.png" 
+      alt="Gcash Payment" 
+      className="dashboard-modal-image" 
+      style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+    />
+  </div>
+</div>
+
       </div>
       <button className="dashboard-modal-button" onClick={() => setShowDetails(false)}>Close</button>
     </div>

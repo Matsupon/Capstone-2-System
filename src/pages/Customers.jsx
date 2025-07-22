@@ -16,31 +16,34 @@ const customersData = [
         id: 101,
         appointmentDate: 'January 1, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 2,
+        sizes: { Small: 1, Medium: 1 },
         phone: '09091234567',
         status: 'Ongoing',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 102,
         appointmentDate: 'December 1, 2024',
         service: 'Customize Jersey',
-        clothesAmount: 1,
+        sizes: { Large: 1 },
         phone: '09091234567',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 103,
         appointmentDate: 'November 1, 2024',
         service: 'Customize Jersey',
-        clothesAmount: 3,
+        sizes: { Medium: 2, Large: 1 },
         phone: '09091234567',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
     ],
   },
@@ -56,31 +59,34 @@ const customersData = [
         id: 201,
         appointmentDate: 'February 2, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 2,
+        sizes: { Small: 1, Medium: 1 },
         phone: '09123457890',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 202,
         appointmentDate: 'January 2, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 1,
+        sizes: { Large: 1 },
         phone: '09123457890',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 203,
         appointmentDate: 'December 2, 2024',
         service: 'Customize Jersey',
-        clothesAmount: 2,
+        sizes: { Medium: 2, Large: 1 },
         phone: '09123457890',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
     ],
   },
@@ -96,31 +102,34 @@ const customersData = [
         id: 301,
         appointmentDate: 'March 3, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 4,
+        sizes: { Small: 1, Medium: 1, Large: 1 },
         phone: '09123433456',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 302,
         appointmentDate: 'February 3, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 2,
+        sizes: { Medium: 2, Large: 1 },
         phone: '09123433456',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
       {
         id: 303,
         appointmentDate: 'January 3, 2025',
         service: 'Customize Jersey',
-        clothesAmount: 1,
+        sizes: { Small: 1, Medium: 1 },
         phone: '09123433456',
         status: 'Completed',
         designImg: 'jersey.jpg',
         gcashImg: 'gcash.png',
+        notes: 'Client requested sleeveless design with name print.'
       },
     ],
   },
@@ -234,14 +243,31 @@ const Customers = () => {
                           <div className="customers-modal-detail-value">{order.appointmentDate}</div>
                           <div className="customers-modal-detail-label">Service Type</div>
                           <div className="customers-modal-detail-value">{order.service}</div>
-                          <div className="customers-modal-detail-label">Amount of Clothes</div>
-                          <div className="customers-modal-detail-value">{order.clothesAmount}</div>
+                          <div className="customers-modal-detail-label">Size</div>
+                          <div className="customers-modal-detail-value">
+                            {order.sizes && Object.keys(order.sizes).length > 0 ? (
+                              <>
+                                {Object.entries(order.sizes).map(([size, qty]) => (
+                                  <div key={size}>{size} - {qty} pcs.</div>
+                                ))}
+                              </>
+                            ) : 'N/A'}
+                          </div>
+                          <div className="customers-modal-detail-label">Quantity</div>
+                          <div className="customers-modal-detail-value">
+                            {order.sizes ? Object.values(order.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
+                          </div>
                           <div className="customers-modal-detail-label">Phone Number</div>
                           <div className="customers-modal-detail-value">{order.phone}</div>
                           <div className="customers-modal-detail-label">Current Status</div>
                           <div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>{order.status}</div>
+
                         </div>
                         <div className="customers-modal-details-right">
+                        <div className="customers-modal-detail-label">Notes</div>
+                                  <div className="customers-modal-detail-value">
+                            {order.notes || 'N/A'}
+                            </div>
                           <div className="customers-modal-image-label">Design Image</div>
                           <img src={order.designImg} alt="Design" className="customers-modal-image" />
                           <div className="customers-modal-image-label">GCash Proof</div>

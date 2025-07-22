@@ -107,18 +107,18 @@
 }
 
 .details-modal {
-  padding: 20px 24px;
+  padding: 10px 24px;
 }
 
 .details-modal h2 {
-  margin-bottom: 20px;
+  margin-bottom: 0px;
   color: #333;
 }
 
 .details-container {
   display: flex;
   gap: 30px;
-  margin-bottom: 20px;
+  margin-bottom: 1px;
 }
 
 .details-left {

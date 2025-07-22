@@ -11,18 +11,21 @@ const initialAppointments = [
     time: 'May 2 - 9:30 AM',
     name: 'John Doe',
     service: 'Customize Jersey',
+    sizes: { Small: 2, Medium: 3 },
   },
   {
     id: 2,
     time: 'May 1 - 11:00 AM',
     name: 'Jane Smith',
     service: 'Customize Jersey',
+    sizes: { Large: 4 },
   },
   {
     id: 3,
     time: 'May 1 - 1:00 PM',
     name: 'Sam Wilson',
     service: 'Customize Jersey',
+    sizes: { Small: 1, Medium: 2, Large: 1 },
   },
 ];
 
@@ -42,6 +45,8 @@ const Appointments = () => {
     name: selected ? appointments.find(a => a.id === selected)?.name : '',
     phone: '09123456789',
     notes: 'Sample notes for the appointment.',
+    sizes: selected ? appointments.find(a => a.id === selected)?.sizes : {},
+    dueDate: selected ? appointments.find(a => a.id === selected)?.time : '',
     designImg: 'jersey.jpg',
     gcashImg: 'gcash.png',
   };
@@ -124,9 +129,9 @@ const Appointments = () => {
           {/* View Details Modal */}
           {showDetails && (
             <div className="modal-bg">
-              <div className="modal-panel details-modal">
+              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
                 <h2 style={{textAlign: 'center'}}>Appointment Details</h2>
-                <div className="details-container">
+                <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
                     <div className="detail-label">Service Type</div>
                     <div className="detail-value">{details.service}</div>
@@ -136,15 +141,35 @@ const Appointments = () => {
                     <div className="detail-value">{details.name}</div>
                     <div className="detail-label">Phone Number</div>
                     <div className="detail-value">{details.phone}</div>
-                    <div className="detail-label">Notes</div>
-                    <div className="detail-value">{details.notes}</div>
+                    <div className="detail-label">Size</div>
+                    <div className="detail-value">
+  {details.sizes && Object.keys(details.sizes).length > 0 ? (
+    <>
+      {Object.entries(details.sizes).map(([size, qty]) => (
+        <div key={size}>{size} - {qty} pcs.</div>
+      ))}
+    </>
+  ) : 'N/A'}
+</div>
+<div className="detail-label">Quantity</div>
+<div className="detail-value">
+  {details.sizes ? Object.values(details.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
+</div>
                   </div>
                   <div className="details-right">
-                    <div className="image-label">Design Image</div>
-                    <img src={details.designImg} alt="Design" className="modal-image" />
-                    <div className="image-label">GCash Proof</div>
-                    <img src={details.gcashImg} alt="GCash Proof" className="modal-image" />
-                  </div>
+  <div className="detail-group">
+    <div className="detail-label">Due Date</div>
+    <div className="detail-value">{details.dueDate}</div>
+  </div>
+  <div className="detail-group">
+    <div className="detail-label">Notes</div>
+    <div className="detail-value">{details.notes || 'No notes provided.'}</div>
+  </div>
+  <div className="image-label">Design Image</div>
+  <img src={details.designImg} alt="Design" className="modal-image" />
+  <div className="image-label">GCash Proof</div>
+  <img src={details.gcashImg} alt="GCash Proof" className="modal-image" />
+</div>
                 </div>
                 <button className="modal-button" onClick={() => setShowDetails(false)}>Close</button>
               </div>

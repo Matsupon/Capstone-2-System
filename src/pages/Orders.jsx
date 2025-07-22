@@ -15,7 +15,10 @@ const initialOrders = [
     scheduledDateTime: 'May 30 - 9:30 AM',
     designImg: 'jersey.jpg',
     appointmentDate: 'May 28, 2023',
-    phoneNumber: '+63 912 345 6789'
+    phoneNumber: '+63 912 345 6789',
+    sizes: { Small: 2, Medium: 3 },
+    paymentFee: null,
+    notes: "Add red stripes on sleeves.",
   },
   {
     id: 2,
@@ -26,7 +29,10 @@ const initialOrders = [
     dueDate: 'June 1 - 11:00 AM',
     designImg: 'jersey.jpg',
     appointmentDate: 'May 29, 2023',
-    phoneNumber: '+63 923 456 7890'
+    phoneNumber: '+63 923 456 7890',
+    sizes: { Large: 4 },
+    paymentFee: null,
+    notes: "Add red stripes on sleeves.",
   },
   {
     id: 3,
@@ -37,7 +43,10 @@ const initialOrders = [
     dueDate: 'April 1 - 1:00 PM',
     designImg: 'jersey.jpg',
     appointmentDate: 'March 30, 2023',
-    phoneNumber: '+63 934 567 8901'
+    phoneNumber: '+63 934 567 8901',
+    sizes: { Small: 1, Medium: 2, Large: 1 },
+    paymentFee: 1500,
+    notes: "Add red stripes on sleeves.",
   },
 ];
 
@@ -54,6 +63,9 @@ const Orders = () => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [calendarSuccess, setCalendarSuccess] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentOrderId, setPaymentOrderId] = useState(null);
+  const [paymentFee, setPaymentFee] = useState('');
 
   const today = new Date();
   const todayDate = today.getDate();
@@ -147,12 +159,31 @@ const Orders = () => {
       setShowUpdateDropdown(null);
       return;
     }
+    if (newStatus === 'Completed') {
+      setPaymentOrderId(orderId);
+      setShowPaymentModal(true);
+      setShowUpdateDropdown(null);
+      return;
+    }
     setOrders(orders.map(order =>
       order.id === orderId
         ? { ...order, status: newStatus, scheduledDateTime: undefined }
         : order
     ));
     setShowUpdateDropdown(null);
+    setUpdateSuccess(true);
+    setTimeout(() => setUpdateSuccess(false), 3000);
+  };
+
+  const handlePaymentSubmit = () => {
+    setOrders(orders.map(order =>
+      order.id === paymentOrderId
+        ? { ...order, status: 'Completed', paymentFee: paymentFee, scheduledDateTime: undefined }
+        : order
+    ));
+    setShowPaymentModal(false);
+    setPaymentOrderId(null);
+    setPaymentFee('');
     setUpdateSuccess(true);
     setTimeout(() => setUpdateSuccess(false), 3000);
   };
@@ -199,6 +230,11 @@ const Orders = () => {
                         {order.status === 'Ready to check' && order.scheduledDateTime && (
                           <span style={{ fontSize: '12px', color: '#000' }}>
                             ({order.scheduledDateTime})
+                          </span>
+                        )}
+                        {order.status === 'Completed' && order.paymentFee && (
+                          <span style={{ fontSize: '12px', color: '#000' }}>
+                            (₱{order.paymentFee} total fee)
                           </span>
                         )}
                       </div>
@@ -263,47 +299,73 @@ const Orders = () => {
           {/* View File Modal */}
           {showDetails && selectedOrder && (
             <div className="modal-bg">
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh' }}>
-                <h2 style={{ textAlign: 'center', marginTop: '10px', marginBottom: '25px' }}>Order Details</h2>
-                <div className="details-container">
+              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+                <h2 style={{ textAlign: 'center', marginTop: '10px', marginBottom: '-5px' }}>Order Details</h2>
+                <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
                     <div className="detail-group">
                       <div className="detail-label">Full Name</div>
                       <div className="detail-value">{selectedOrder.name}</div>
                     </div>
-                    
                     <div className="detail-group">
                       <div className="detail-label">Queue Number</div>
                       <div className="detail-value">{selectedOrder.queueNumber}</div>
                     </div>
-                    
                     <div className="detail-group">
                       <div className="detail-label">Appointment Date Accepted</div>
                       <div className="detail-value">{selectedOrder.appointmentDate}</div>
                     </div>
-                    
                     <div className="detail-group">
                       <div className="detail-label">Service Type</div>
                       <div className="detail-value">{selectedOrder.services}</div>
                     </div>
-                    
                     <div className="detail-group">
                       <div className="detail-label">Phone Number</div>
                       <div className="detail-value">{selectedOrder.phoneNumber}</div>
                     </div>
-                    
                     <div className="detail-group">
-                      <div className="detail-label">Current Status</div>
-                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status) }}>
-                        {selectedOrder.status}
+                      <div className="detail-label">Size</div>
+                      <div className="detail-value">
+                        {selectedOrder.sizes && Object.keys(selectedOrder.sizes).length > 0 ? (
+                          <>
+                            {Object.entries(selectedOrder.sizes).map(([size, qty]) => (
+                              <div key={size}>{size} - {qty} pcs.</div>
+                            ))}
+                          </>
+                        ) : 'N/A'}
                       </div>
                     </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Quantity</div>
+                      <div className="detail-value">
+                        {selectedOrder.sizes ? Object.values(selectedOrder.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
+                      </div>
+                    </div>
+                    {selectedOrder.status === 'Completed' && selectedOrder.paymentFee && (
+                      <div className="detail-group">
+                        <div className="detail-label">Total Payment Fee</div>
+                        <div className="detail-value">₱{selectedOrder.paymentFee}</div>
+                      </div>
+                    )}
                   </div>
-                  
                   <div className="details-right">
-                    <div className="image-label">Design Image</div>
-                    <img src={selectedOrder.designImg} alt="Design" className="modal-image" />
-                  </div>
+  <div className="detail-group">
+    <div className="detail-label">Due Date</div>
+    <div className="detail-value">{selectedOrder.dueDate || 'N/A'}</div>
+  </div>
+  <div className="detail-group">
+    <div className="detail-label">Current Status</div>
+    <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status) }}>
+      {selectedOrder.status}
+    </div>
+  </div>
+  <div className="detail-group">
+    <div className="detail-label">Notes</div>
+    <div className="detail-value">{selectedOrder.notes || 'No notes provided.'}</div>
+  </div>
+  <div className="image-label">Design Image</div>
+  <img src={selectedOrder.designImg} alt="Design" className="modal-image" />
+</div>
                 </div>
                 <button className="modal-button" onClick={() => setShowDetails(false)}>Close</button>
               </div>
@@ -382,6 +444,31 @@ const Orders = () => {
           {calendarSuccess && (
             <div className="orders-calendar-success-popup">
               <h3 style={{ color: '#4caf50', textAlign: 'center' }}>Successfully updated status!</h3>
+            </div>
+          )}
+
+          {/* Payment Fee Modal */}
+          {showPaymentModal && (
+            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }}>
+              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Please provide the total payment fee for this order:</h3>
+                <input
+                  type="number"
+                  min="0"
+                  value={paymentFee}
+                  onChange={e => setPaymentFee(e.target.value)}
+                  style={{ width: '100%', padding: 10, fontSize: 18, marginBottom: 24, borderRadius: 6, border: '1px solid #ccc' }}
+                  placeholder="Enter fee (₱)"
+                />
+                <button
+                  className="modal-button"
+                  style={{ width: '100%', fontSize: 18, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                  onClick={handlePaymentSubmit}
+                  disabled={!paymentFee || isNaN(paymentFee) || Number(paymentFee) <= 0}
+                >
+                  Submit
+                </button>
+              </div>
             </div>
           )}
         </div>
