@@ -12,14 +12,15 @@ const initialOrders = [
     name: 'Juan Dela Cruz',
     services: 'Customize Jersey',
     status: 'Ready to check',
-    dueDate: 'May 30 - 9:30 AM',
-    scheduledDateTime: 'May 30 - 9:30 AM',
+    dueDate: 'May 30 - 9:30 AM',  // Changed to AM/PM
+    scheduledDateTime: 'May 30 - 9:30 AM',  // Changed to AM/PM
     designImg: 'jersey.jpg',
     appointmentDate: 'May 28, 2023',
     phoneNumber: '+63 912 345 6789',
     sizes: { Small: 2, Medium: 3 },
     paymentFee: null,
     notes: "Add red stripes on sleeves.",
+    completionDateTime: null,
   },
   {
     id: 2,
@@ -27,13 +28,14 @@ const initialOrders = [
     name: 'Dianne Javellana',
     services: 'Customize Jersey',
     status: 'Pending',
-    dueDate: 'June 1 - 11:00 AM',
+    dueDate: 'June 1 - 11:00 AM',  // Changed to AM/PM
     designImg: 'jersey.jpg',
     appointmentDate: 'May 29, 2023',
     phoneNumber: '+63 923 456 7890',
     sizes: { Large: 4 },
     paymentFee: null,
     notes: "Add red stripes on sleeves.",
+    completionDateTime: null,
   },
   {
     id: 3,
@@ -41,15 +43,26 @@ const initialOrders = [
     name: 'Sam Wilson',
     services: 'Customize Jersey',
     status: 'Completed',
-    dueDate: 'April 1 - 1:00 PM',
+    dueDate: 'April 1 - 1:00 PM',  // Changed to AM/PM
     designImg: 'jersey.jpg',
     appointmentDate: 'March 30, 2023',
     phoneNumber: '+63 934 567 8901',
     sizes: { Small: 1, Medium: 2, Large: 1 },
     paymentFee: 1500,
     notes: "Add red stripes on sleeves.",
+    completionDateTime: 'April 1 - 1:00 PM',  // Changed to AM/PM
   },
 ];
+
+const formatTimeToAMPM = (timeString) => {
+  if (!timeString) return '';
+  
+  const [hours, minutes] = timeString.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12; // Convert 0 to 12
+  
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
 
 const Orders = () => {
   const [orders, setOrders] = useState(initialOrders);
@@ -58,6 +71,7 @@ const Orders = () => {
   const [showUpdateDropdown, setShowUpdateDropdown] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showCompletionCalendar, setShowCompletionCalendar] = useState(false); // New state for completion calendar
   const [calendarOrderId, setCalendarOrderId] = useState(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -67,6 +81,12 @@ const Orders = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState(null);
   const [paymentFee, setPaymentFee] = useState('');
+  
+  // New states for completion calendar
+  const [completionCalendarMonth, setCompletionCalendarMonth] = useState(new Date().getMonth());
+  const [completionCalendarYear, setCompletionCalendarYear] = useState(new Date().getFullYear());
+  const [completionSelectedDay, setCompletionSelectedDay] = useState(null);
+  const [completionSelectedTime, setCompletionSelectedTime] = useState('');
 
   const today = new Date();
   const todayDate = today.getDate();
@@ -83,12 +103,52 @@ const Orders = () => {
     ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
   ];
 
+  // Calendar functions
   const handleCalendarPrevMonth = () => {
     if (calendarMonth === 0) {
       setCalendarMonth(11);
       setCalendarYear(calendarYear - 1);
     } else {
       setCalendarMonth(calendarMonth - 1);
+    }
+  };
+
+  const handleSetDateTime = () => {
+    if (calendarOrderId && selectedDay && selectedTime) {
+      const formattedTime = formatTimeToAMPM(selectedTime);
+      const newDueDate = `${monthNames[calendarMonth]} ${selectedDay} - ${formattedTime}`;
+      setOrders(orders.map(order =>
+        order.id === calendarOrderId
+          ? {
+              ...order,
+              status: 'Ready to check',
+              dueDate: newDueDate,
+              scheduledDateTime: newDueDate
+            }
+          : order
+      ));
+      setShowCalendarModal(false);
+      setCalendarSuccess(true);
+      setTimeout(() => setCalendarSuccess(false), 3000);
+    }
+  };
+
+  const handleSetCompletionDateTime = () => {
+    if (calendarOrderId && completionSelectedDay && completionSelectedTime) {
+      const formattedTime = formatTimeToAMPM(completionSelectedTime);
+      const newCompletionDate = `${monthNames[completionCalendarMonth]} ${completionSelectedDay} - ${formattedTime}`;
+      setOrders(orders.map(order =>
+        order.id === calendarOrderId
+          ? {
+              ...order,
+              status: 'Completed',
+              completionDateTime: newCompletionDate
+            }
+          : order
+      ));
+      setShowCompletionCalendar(false);
+      setCalendarSuccess(true);
+      setTimeout(() => setCalendarSuccess(false), 3000);
     }
   };
 
@@ -101,6 +161,25 @@ const Orders = () => {
     }
   };
 
+  // Completion calendar functions
+  const handleCompletionCalendarPrevMonth = () => {
+    if (completionCalendarMonth === 0) {
+      setCompletionCalendarMonth(11);
+      setCompletionCalendarYear(completionCalendarYear - 1);
+    } else {
+      setCompletionCalendarMonth(completionCalendarMonth - 1);
+    }
+  };
+
+  const handleCompletionCalendarNextMonth = () => {
+    if (completionCalendarMonth === 11) {
+      setCompletionCalendarMonth(0);
+      setCompletionCalendarYear(completionCalendarYear + 1);
+    } else {
+      setCompletionCalendarMonth(completionCalendarMonth + 1);
+    }
+  };
+
   const openCalendarModal = (orderId) => {
     setCalendarOrderId(orderId);
     setShowCalendarModal(true);
@@ -110,6 +189,16 @@ const Orders = () => {
     setCalendarYear(currentYear);
   };
 
+  // New function to open completion calendar
+  const openCompletionCalendarModal = (orderId) => {
+    setCalendarOrderId(orderId);
+    setShowCompletionCalendar(true);
+    setCompletionSelectedDay(null);
+    setCompletionSelectedTime('');
+    setCompletionCalendarMonth(currentMonth);
+    setCompletionCalendarYear(currentYear);
+  };
+
   const closeCalendarModal = () => {
     setShowCalendarModal(false);
     setCalendarOrderId(null);
@@ -117,23 +206,12 @@ const Orders = () => {
     setSelectedTime('');
   };
 
-  const handleSetDateTime = () => {
-    if (calendarOrderId && selectedDay && selectedTime) {
-      const newDueDate = `${monthNames[calendarMonth]} ${selectedDay} - ${selectedTime}`;
-      setOrders(orders.map(order =>
-        order.id === calendarOrderId
-          ? {
-              ...order,
-              status: 'Ready to check',
-              dueDate: newDueDate,
-              scheduledDateTime: newDueDate // <-- Add this line
-            }
-          : order
-      ));
-      setShowCalendarModal(false);
-      setCalendarSuccess(true);
-      setTimeout(() => setCalendarSuccess(false), 3000);
-    }
+  // New function to close completion calendar
+  const closeCompletionCalendarModal = () => {
+    setShowCompletionCalendar(false);
+    setCalendarOrderId(null);
+    setCompletionSelectedDay(null);
+    setCompletionSelectedTime('');
   };
 
   const getStatusColor = (status) => {
@@ -177,16 +255,9 @@ const Orders = () => {
   };
 
   const handlePaymentSubmit = () => {
-    setOrders(orders.map(order =>
-      order.id === paymentOrderId
-        ? { ...order, status: 'Completed', paymentFee: paymentFee, scheduledDateTime: undefined }
-        : order
-    ));
+    // After payment submission, open completion calendar
     setShowPaymentModal(false);
-    setPaymentOrderId(null);
-    setPaymentFee('');
-    setUpdateSuccess(true);
-    setTimeout(() => setUpdateSuccess(false), 3000);
+    openCompletionCalendarModal(paymentOrderId);
   };
 
   const toggleUpdateDropdown = (orderId) => {
@@ -211,7 +282,7 @@ const Orders = () => {
                   <th>Name</th>
                   <th>Services</th>
                   <th>Status</th>
-                  <th>Due Date</th>
+                  <th>Next Appoint.</th>
                   <th>Layout/Notes</th>
                   <th>Actions</th>
                 </tr>
@@ -228,11 +299,6 @@ const Orders = () => {
                         <span style={{ color: getStatusColor(order.status), display: 'block' }}>
                           {order.status}
                         </span>
-                        {order.status === 'Ready to check' && order.scheduledDateTime && (
-                          <span style={{ fontSize: '12px', color: '#000' }}>
-                            ({order.scheduledDateTime})
-                          </span>
-                        )}
                         {order.status === 'Completed' && order.paymentFee && (
                           <span style={{ fontSize: '12px', color: '#000' }}>
                             (₱{order.paymentFee} total fee)
@@ -240,7 +306,18 @@ const Orders = () => {
                         )}
                       </div>
                     </td>
-                    <td>{order.dueDate}</td>
+                    <td>
+                      {/* NEXT APPOINT COLUMN */}
+                      {order.status === 'Ready to check' && order.scheduledDateTime && (
+                        <span>{order.scheduledDateTime}</span>
+                      )}
+                      {order.status === 'Pending' && order.dueDate && (
+                        <span>{order.dueDate}</span>
+                      )}
+                      {order.status === 'Completed' && order.completionDateTime && (
+                        <span>{order.completionDateTime}</span>
+                      )}
+                    </td>
                     <td>
                       <span
                         className="action-link"
@@ -296,15 +373,14 @@ const Orders = () => {
             </table>
           </div>
 
-
           {/* View File Modal */}
           {showDetails && selectedOrder && (
             <div className="modal-bg">
               <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
-              <AiOutlineClose
-    className="orders-modal-exit-icon"
-    onClick={() => setShowDetails(false)}
-  />
+                <AiOutlineClose
+                  className="orders-modal-exit-icon"
+                  onClick={() => setShowDetails(false)}
+                />
                 <h2 style={{ textAlign: 'center', marginTop: '10px', marginBottom: '-5px' }}>Order Details</h2>
                 <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
@@ -354,23 +430,29 @@ const Orders = () => {
                     )}
                   </div>
                   <div className="details-right">
-  <div className="detail-group">
-    <div className="detail-label">Due Date</div>
-    <div className="detail-value">{selectedOrder.dueDate || 'N/A'}</div>
-  </div>
-  <div className="detail-group">
-    <div className="detail-label">Current Status</div>
-    <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status) }}>
-      {selectedOrder.status}
-    </div>
-  </div>
-  <div className="detail-group">
-    <div className="detail-label">Notes</div>
-    <div className="detail-value">{selectedOrder.notes || 'No notes provided.'}</div>
-  </div>
-  <div className="image-label">Design Image</div>
-  <img src={selectedOrder.designImg} alt="Design" className="modal-image" />
-</div>
+                    <div className="detail-group">
+                      <div className="detail-label">Due Date</div>
+                      <div className="detail-value">{selectedOrder.dueDate || 'N/A'}</div>
+                    </div>
+                    {selectedOrder.status === 'Completed' && selectedOrder.completionDateTime && (
+                      <div className="detail-group">
+                        <div className="detail-label">Completion Date</div>
+                        <div className="detail-value">{selectedOrder.completionDateTime}</div>
+                      </div>
+                    )}
+                    <div className="detail-group">
+                      <div className="detail-label">Current Status</div>
+                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status) }}>
+                        {selectedOrder.status}
+                      </div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Notes</div>
+                      <div className="detail-value">{selectedOrder.notes || 'No notes provided.'}</div>
+                    </div>
+                    <div className="image-label">Design Image</div>
+                    <img src={selectedOrder.designImg} alt="Design" className="modal-image" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -383,13 +465,13 @@ const Orders = () => {
             </div>
           )}
 
-          {/* Calendar/Time Picker Modal */}
+          {/* Calendar/Time Picker Modal (for Ready to Check) */}
           {showCalendarModal && (
             <div className="orders-calendar-modal-bg" onClick={closeCalendarModal}>
               <div className="orders-calendar-modal-panel" onClick={e => e.stopPropagation()}>
                 <div className="orders-calendar-modal-header">
                   <FaTimes className="orders-calendar-modal-exit" onClick={closeCalendarModal} />
-                  <h2>Set Date and Time</h2>
+                  <h2>Set Due Date and Time</h2>
                 </div>
                 <div className="orders-calendar-section">
                   <div className="orders-calendar-header">
@@ -438,7 +520,73 @@ const Orders = () => {
                   onClick={handleSetDateTime}
                   disabled={!selectedDay || !selectedTime}
                 >
-                  Set Date and Time
+                  Set Due Date and Time
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Completion Calendar Modal */}
+          {showCompletionCalendar && (
+            <div className="orders-calendar-modal-bg" onClick={closeCompletionCalendarModal}>
+              <div className="orders-calendar-modal-panel" onClick={e => e.stopPropagation()}>
+                <div className="orders-calendar-modal-header">
+                  <FaTimes className="orders-calendar-modal-exit" onClick={closeCompletionCalendarModal} />
+                  <h2>Set Completion Date and Time</h2>
+                </div>
+                <div className="orders-calendar-section">
+                  <div className="orders-calendar-header">
+                    <button className="orders-nav-btn" onClick={handleCompletionCalendarPrevMonth}><FaChevronLeft /></button>
+                    <span>{monthNames[completionCalendarMonth]} {completionCalendarYear}</span>
+                    <button className="orders-nav-btn" onClick={handleCompletionCalendarNextMonth}><FaChevronRight /></button>
+                  </div>
+                  <div className="orders-calendar-grid">
+                    <div className="orders-calendar-days">
+                      <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                    </div>
+                    <div className="orders-calendar-dates">
+                      {calendarDays.map((day, idx) => {
+                        const isToday = completionCalendarMonth === currentMonth && 
+                                        completionCalendarYear === currentYear && 
+                                        day === todayDate;
+                        const isPast = day && (
+                          completionCalendarYear < currentYear || 
+                          (completionCalendarYear === currentYear && 
+                          (completionCalendarMonth < currentMonth || 
+                          (completionCalendarMonth === currentMonth && day < todayDate)))
+                        );
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className={`orders-calendar-date${!day ? ' empty' : ''}${isToday ? ' today' : ''}${isPast ? ' past' : ''}${completionSelectedDay === day ? ' selected' : ''}`}
+                            onClick={() => !isPast && day && setCompletionSelectedDay(day)}
+                          >
+                            {day && <span className="orders-date-number">{day}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                {completionSelectedDay && (
+                  <div className="orders-time-picker-section">
+                    <label htmlFor="orders-completion-time-picker">Select Time:</label>
+                    <input
+                      id="orders-completion-time-picker"
+                      type="time"
+                      value={completionSelectedTime}
+                      onChange={e => setCompletionSelectedTime(e.target.value)}
+                      className="orders-time-picker-input"
+                    />
+                  </div>
+                )}
+                <button
+                  className="orders-set-date-btn"
+                  onClick={handleSetCompletionDateTime}
+                  disabled={!completionSelectedDay || !completionSelectedTime}
+                >
+                  Set Completion Date and Time
                 </button>
               </div>
             </div>
@@ -470,7 +618,7 @@ const Orders = () => {
                   onClick={handlePaymentSubmit}
                   disabled={!paymentFee || isNaN(paymentFee) || Number(paymentFee) <= 0}
                 >
-                  Submit
+                  Submit Payment
                 </button>
               </div>
             </div>

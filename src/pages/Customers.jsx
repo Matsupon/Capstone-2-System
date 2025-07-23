@@ -9,6 +9,7 @@ const customersData = [
     id: 1,
     name: 'Juan Dela Cruz',
     contact: '09091234567',
+    address: 'Brgy. Mabini, Manila',
     totalOrders: 3,
     lastAppointment: 'January 1, 2025',
     lastOrderStatus: 'Ongoing',
@@ -54,6 +55,7 @@ const customersData = [
     id: 2,
     name: 'Jane Doe',
     contact: '09123457890',
+    address: 'Purok 3, Brgy. San Roque, Quezon City',
     totalOrders: 2,
     lastAppointment: 'February 2, 2025',
     lastOrderStatus: 'Completed',
@@ -100,6 +102,7 @@ const customersData = [
     id: 3,
     name: 'Sam Wilson',
     contact: '09123433456',
+    address: 'Zone 1, Brgy. Sto. Niño, Davao City',
     totalOrders: 4,
     lastAppointment: 'March 3, 2025',
     lastOrderStatus: 'Completed',
@@ -227,15 +230,16 @@ const Customers = () => {
         {profileModal.open && profileModal.customer && (
           <div className="customers-modal-bg">
             <div className="customers-modal-panel">
-            <AiOutlineClose
-    className="customers-modal-exit-icon"
-    onClick={handleCloseModal}
-  />
+              <AiOutlineClose
+                className="customers-modal-exit-icon"
+                onClick={handleCloseModal}
+              />
               <h2 className="customers-modal-title">Customer Profile</h2>
               <div className="customers-modal-customer-info">
                 <div><b>Name:</b> {profileModal.customer.name}</div>
                 <div><b>Contact:</b> {profileModal.customer.contact}</div>
                 <div><b>Total Orders:</b> {profileModal.customer.totalOrders}</div>
+                <div><b>Address:</b> {profileModal.customer.address}</div>
               </div>
               <div className="customers-modal-orders-list">
                 <h3 className="customers-modal-orders-title">Previous Orders</h3>
@@ -273,23 +277,22 @@ const Customers = () => {
                           <div className="customers-modal-detail-label">Phone Number</div>
                           <div className="customers-modal-detail-value">{order.phone}</div>
                           <div className="customers-modal-detail-label">Current Status</div>
-<div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>
-  {order.status}
-</div>
+                          <div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>
+                            {order.status}
+                          </div>
 
-{order.status === 'Completed' && (
-  <>
-    <div className="customers-modal-detail-label">Total Payment Fee</div>
-    <div className="customers-modal-detail-value">₱{order.paymentFee?.toLocaleString() || '0.00'}</div>
-  </>
-)}
-
+                          {order.status === 'Completed' && (
+                            <>
+                              <div className="customers-modal-detail-label">Total Payment Fee</div>
+                              <div className="customers-modal-detail-value">₱{order.paymentFee?.toLocaleString() || '0.00'}</div>
+                            </>
+                          )}
                         </div>
                         <div className="customers-modal-details-right">
-                        <div className="customers-modal-detail-label">Notes</div>
-                                  <div className="customers-modal-detail-value">
+                          <div className="customers-modal-detail-label">Notes</div>
+                          <div className="customers-modal-detail-value">
                             {order.notes || 'N/A'}
-                            </div>
+                          </div>
                           <div className="customers-modal-image-label">Design Image</div>
                           <img src={order.designImg} alt="Design" className="customers-modal-image" />
                           <div className="customers-modal-image-label">GCash Proof</div>
@@ -300,7 +303,6 @@ const Customers = () => {
                   </div>
                 ))}
               </div>
-             
             </div>
           </div>
         )}
@@ -309,4 +311,4 @@ const Customers = () => {
   );
 };
 
-export default Customers; 
+export default Customers;
