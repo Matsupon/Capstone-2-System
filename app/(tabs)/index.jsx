@@ -30,11 +30,11 @@ export default function HomePage() {
           <View style={styles.orderDetails}>
             <View>
               <Text style={styles.itemText}>Volleyball Jersey</Text>
-              <Text style={styles.itemDetail}>Size: M</Text>
-              <Text style={styles.itemDetail}>Items: 30</Text>
+              <Text style={styles.itemDetail}>Size: Small - 2pcs., Medium - 3pcs.</Text>
+              <Text style={styles.itemDetail}>Quantity: 5pcs.</Text>
             </View>
             <View style={styles.dateSection}>
-              <Text style={styles.dateLabel}>Estimated Completion Date</Text>
+              <Text style={styles.dateLabel}>Due Date</Text>
               <Text style={styles.date}>01/10/2025</Text>
             </View>
           </View>
