@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AiOutlineClose } from 'react-icons/ai';
 import { FaUser, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
@@ -209,7 +210,11 @@ const Dashboard = () => {
             {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
   <div className="dashboard-modal-bg">
-    <div className="dashboard-modal-panel" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+<div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+  <AiOutlineClose
+    className="dashboard-modal-exit-icon"
+    onClick={() => setShowDetails(false)}
+  />
       <h2 className="dashboard-modal-title">Appointment Details</h2>
       <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px', flexWrap: 'wrap'}}>
         <div className="dashboard-details-left">
@@ -280,7 +285,6 @@ const Dashboard = () => {
 </div>
 
       </div>
-      <button className="dashboard-modal-button" onClick={() => setShowDetails(false)}>Close</button>
     </div>
   </div>
 )}

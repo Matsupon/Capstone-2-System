@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Appointments.css';
 import { FaTrashAlt } from 'react-icons/fa';
+import { AiOutlineClose } from 'react-icons/ai';
 
 
 const initialAppointments = [
@@ -171,7 +172,7 @@ const Appointments = () => {
   <img src={details.gcashImg} alt="GCash Proof" className="modal-image" />
 </div>
                 </div>
-                <button className="modal-button" onClick={() => setShowDetails(false)}>Close</button>
+                <AiOutlineClose className="modal-exit-icon" onClick={() => setShowDetails(false)} />
               </div>
             </div>
           )}

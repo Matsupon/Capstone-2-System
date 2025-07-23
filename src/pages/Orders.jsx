@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Orders.css';
 import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { AiOutlineClose } from 'react-icons/ai';
 
 const initialOrders = [
   {
@@ -300,6 +301,10 @@ const Orders = () => {
           {showDetails && selectedOrder && (
             <div className="modal-bg">
               <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+              <AiOutlineClose
+    className="orders-modal-exit-icon"
+    onClick={() => setShowDetails(false)}
+  />
                 <h2 style={{ textAlign: 'center', marginTop: '10px', marginBottom: '-5px' }}>Order Details</h2>
                 <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
@@ -367,7 +372,6 @@ const Orders = () => {
   <img src={selectedOrder.designImg} alt="Design" className="modal-image" />
 </div>
                 </div>
-                <button className="modal-button" onClick={() => setShowDetails(false)}>Close</button>
               </div>
             </div>
           )}

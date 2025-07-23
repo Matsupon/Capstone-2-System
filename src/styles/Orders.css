@@ -156,20 +156,20 @@
   margin-bottom: 15px;
 }
 
-.modal-button {
-  margin-top: 15px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
+
+.orders-modal-exit-icon {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  color: #444;
   cursor: pointer;
-  font-size: 14px;
-  width: 100%;
+  z-index: 10;
+  transition: transform 0.2s ease;
 }
 
-.modal-button:hover {
-  background-color: #0056b3;
+.orders-modal-exit-icon:hover {
+  transform: scale(1.2);
 }
 
 /* Adjust modal height */

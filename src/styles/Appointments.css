@@ -385,6 +385,22 @@ input[type="checkbox"]:checked::before {
   background: #217dbb;
 }
 
+
+.modal-exit-icon {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  color: #333;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.modal-exit-icon:hover {
+  transform: scale(1.2);
+}
+
+
 @media (max-width: 768px) {
   .details-container {
     flex-direction: column;

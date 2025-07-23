@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Customers.css';
+import { AiOutlineClose } from 'react-icons/ai';
 
 const customersData = [
   {
@@ -226,6 +227,10 @@ const Customers = () => {
         {profileModal.open && profileModal.customer && (
           <div className="customers-modal-bg">
             <div className="customers-modal-panel">
+            <AiOutlineClose
+    className="customers-modal-exit-icon"
+    onClick={handleCloseModal}
+  />
               <h2 className="customers-modal-title">Customer Profile</h2>
               <div className="customers-modal-customer-info">
                 <div><b>Name:</b> {profileModal.customer.name}</div>
@@ -295,7 +300,7 @@ const Customers = () => {
                   </div>
                 ))}
               </div>
-              <button className="customers-modal-close-btn" onClick={handleCloseModal}>Close</button>
+             
             </div>
           </div>
         )}

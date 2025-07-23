@@ -180,26 +180,23 @@
   padding: 10px;
   box-sizing: border-box;
 }
-.customers-modal-close-btn {
-  margin-top: 18px;
-  background: #3498db;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 24px;
+
+.customers-modal-exit-icon {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  color: #444;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 16px;
-  transition: background 0.2s;
-  width: 100%;
-  max-width: 180px;
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
+  z-index: 10;
+  transition: transform 0.2s ease;
 }
-.customers-modal-close-btn:hover {
-  background: #217dbb;
+
+.customers-modal-exit-icon:hover {
+  transform: scale(1.2);
 }
+
+
 
 @media (max-width: 768px) {
   .customers-table-content {
