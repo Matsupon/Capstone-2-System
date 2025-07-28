@@ -1,16 +1,34 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import api from '../../utils/api';
+
+
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    try {
+      const response = await api.post('/login', {
+        email,
+        password,
+      });
+  
+      // Save the token
+      await AsyncStorage.setItem('authToken', response.data.access_token);
+  
+      console.log('Login success:', response.data);
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Login failed:', error.response?.data || error.message);
+      alert('Invalid credentials or server error.');
+    }
   };
 
   return (

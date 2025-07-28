@@ -2,17 +2,8 @@ import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
+import api from '../../utils/api';
 
 export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
@@ -22,8 +13,22 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [address, setAddress] = useState('');
 
-  const handleSignUp = () => {
-    router.replace('/(tabs)');
+  const handleSignUp = async () => {
+    try {
+      const response = await api.post('/register', {
+        name: fullName,
+        email,
+        phone,
+        password,
+        address,
+      });
+  
+      console.log('Registration successful:', response.data);
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Registration failed:', error.response?.data || error.message);
+      alert('Could not register. Check your inputs.');
+    }
   };
 
   return (
