@@ -1,33 +1,37 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link, router } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import api from '../../utils/api';
-
-
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const router = useRouter();
 
   const handleLogin = async () => {
     try {
-      const response = await api.post('/login', {
+      const response = await axios.post('http://192.168.10.47:8000/api/login', {
         email,
         password,
       });
   
-      // Save the token
-      await AsyncStorage.setItem('authToken', response.data.access_token);
+      const token = response.data.access_token;
   
-      console.log('Login success:', response.data);
-      router.replace('/(tabs)');
+      if (token) {
+        await AsyncStorage.setItem('authToken', token);
+        console.log('Login successful, token saved:', token);
+  
+        router.replace('/(tabs)'); // Redirect to tabs/index.jsx
+      } else {
+        console.error('Token not received from backend:', response.data);
+      }
+  
     } catch (error) {
-      console.error('Login failed:', error.response?.data || error.message);
-      alert('Invalid credentials or server error.');
+      console.error('Login error:', error.response?.data || error.message);
     }
   };
 
