@@ -1,55 +1,190 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import mime from 'mime';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
 import Header from '../../components/Header';
 
-export default function ProfilePage() {
-  const router = useRouter();  
+const API = process.env.EXPO_PUBLIC_API_URL;
 
-  const handleLogout = () => { 
-    router.replace('/auth/login');  
+export default function ProfilePage() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [tempImage, setTempImage] = useState(null);
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
+
+  const fetchUserData = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const response = await axios.get(`${API}/user`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      
+      setUser(response.data.user);
+      setProfileImageUrl(response.data.user.image_url); // ✅
+
+      if (response.data.image_url) {
+        setProfileImageUrl(response.data.image_url);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user:', error.response?.data || error.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleLogout = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      await axios.post(`${API}/logout`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await AsyncStorage.removeItem('authToken');
+      router.replace('/auth/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      await AsyncStorage.removeItem('authToken');
+      router.replace('/auth/login');
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  const pickImage = async () => {
+    console.log('Edit icon pressed');
+    if (uploading) return;
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission denied', 'Allow access to gallery to choose a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setTempImage(uri);
+      await uploadProfileImage(uri);
+    }
+  };
+
+  const uploadProfileImage = async (uri) => {
+    setUploading(true);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+  
+      const formData = new FormData();
+      const fileType = mime.getType(uri);
+      const fileName = `profile_${user.id}_${Date.now()}.${mime.getExtension(fileType)}`;
+  
+      formData.append('profile_image', {
+        uri,
+        name: fileName,
+        type: fileType,
+      });
+  
+      console.log('📦 FormData content:', { uri, name: fileName, type: fileType });
+  
+      const response = await axios.post(`${API}/profile`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+  
+      setUser(response.data.user);
+      setProfileImageUrl(response.data.image_url); // ✅ Set full image URL here
+      setTempImage(null);
+      Alert.alert('Success', 'Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Upload failed:', error.response?.data || error.message);
+      Alert.alert('Upload Failed', error.response?.data?.message || 'Could not update profile picture.');
+    } finally {
+      setUploading(false);
+    }
+  };
+  
+
+  const getProfileImageUrl = () => {
+    if (tempImage) return tempImage;
+    if (profileImageUrl) return profileImageUrl;
+    if (user?.profile_image) return `${API}/storage/${user.profile_image}`;
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#4682B4" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.background} />
-      <Header userName="Dianne" />
-      
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      <Text style={styles.pageTitle}>My Profile</Text>
-      <View style={styles.avatarContainer}>
-       <View style={styles.avatar}>
-       <MaterialIcons name="account-circle" size={80} color="#4682B4" />
-      <TouchableOpacity style={styles.editIcon}>
-       <MaterialIcons name="edit" size={20} color="#fff" />
-      </TouchableOpacity>
-      </View>
-      </View>
+      <Header userName={user?.name || "User"} />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput style={styles.input} value="Dianne Javellana" editable={false} />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>My Profile</Text>
+
+        <View style={styles.avatarContainer}>
+          <TouchableOpacity onPress={pickImage} disabled={uploading}>
+            {uploading ? (
+              <View style={styles.profileImagePlaceholder}>
+                <ActivityIndicator size="large" color="#4682B4" />
+              </View>
+            ) : tempImage ? (
+              <Image source={{ uri: tempImage }} style={styles.profileImage} />
+            ) : getProfileImageUrl() ? (
+              <Image 
+              source={{ uri: getProfileImageUrl() }} 
+              style={styles.profileImage}
+              onError={(error) => console.log('Image loading error:', error)}
+            />
+            ) : (
+              <View style={styles.profileImagePlaceholder}>
+                <MaterialIcons name="account-circle" size={100} color="#4682B4" />
+              </View>
+            )}
+            <View style={styles.editIcon}>
+              <MaterialIcons name="edit" size={20} color="#fff" />
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput style={styles.input} value="Javellana123" editable={false} />
+          <Text style={styles.label}>Name</Text>
+          <TextInput style={styles.input} value={user?.name} editable={false} />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} value="javellana@gmail.com" editable={false} />
+          <TextInput style={styles.input} value={user?.email} editable={false} />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone</Text>
+          <TextInput style={styles.input} value={user?.phone} editable={false} />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Address</Text>
-          <TextInput style={styles.input} value="Brgy. San Juan, Surigao City" editable={false} />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput style={styles.input} value="09123456789" editable={false} />
+          <TextInput style={styles.input} value={user?.address} editable={false} />
         </View>
 
         <View style={styles.inputGroup}>
@@ -61,7 +196,6 @@ export default function ProfilePage() {
           <TouchableOpacity style={styles.editButton}>
             <Text style={styles.buttonText}>EDIT PROFILE</Text>
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.buttonText}>LOGOUT</Text>
           </TouchableOpacity>
@@ -70,7 +204,6 @@ export default function ProfilePage() {
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -120,6 +253,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     alignItems: 'center',
     marginBottom: 20,
+    position: 'relative',
   },
   avatar: {
     width: 100,
@@ -175,4 +309,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#4682B4',
+  },
+  profileImagePlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#4682B4',
+  },
+});
