@@ -38,11 +38,16 @@ class AuthController extends Controller
         if (! $user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
-        return response()->json(['token' => $user->createToken('mobile')->plainTextToken]);
+        return response()->json(['access_token' => $user->createToken('mobile')->plainTextToken]);
     }
 
     public function user(Request $request) {
-        return response()->json($request->user());
+        $user = $request->user();
+        $user->image_url = $user->profile_image 
+            ? asset('storage/' . $user->profile_image) 
+            : null;
+    
+        return response()->json(['user' => $user]);
     }
 
     public function logout(Request $request) {
