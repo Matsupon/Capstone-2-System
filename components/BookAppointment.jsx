@@ -1,7 +1,12 @@
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { format } from 'date-fns';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import { Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 
 const SERVICE_TYPES = [
   'Jersey Production',
@@ -10,38 +15,66 @@ const SERVICE_TYPES = [
 ];
 
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
+const TIME_LABELS = [
+  "08:00", "09:00", "10:00", "11:00", "13:00", "14:00",
+  "15:00", "16:00", "17:00", "18:00", "19:00"
+];
 
 export default function BookAppointment({ visible, onClose }) {
   const [step, setStep] = useState(1);
   const [serviceType, setServiceType] = useState('');
   const [serviceDropdown, setServiceDropdown] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [designImage, setDesignImage] = useState(null);
   const [gcashImage, setGcashImage] = useState(null);
-  const [preferredDueDate, setPreferredDueDate] = useState('');
   const [successVisible, setSuccessVisible] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
 
-
   const [sizes, setSizes] = useState({});
   const [quantity, setQuantity] = useState('');
+
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [preferredDueDate, setPreferredDueDate] = useState('');
+  const [preferredDueDateRaw, setPreferredDueDateRaw] = useState(null);
+
+  const [isAppointmentDatePickerVisible, setAppointmentDatePickerVisibility] = useState(false);
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentDateRaw, setAppointmentDateRaw] = useState(null);
+  const [appointmentTime, setAppointmentTime] = useState('');
+  const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [timeDropdown, setTimeDropdown] = useState(false);
+
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     if (!visible) {
       setStep(1);
       setServiceType('');
-      setFullName('');
-      setPhone('');
       setNotes('');
       setDesignImage(null);
       setGcashImage(null);
       setSuccessVisible(false);
       setSizes({});
       setQuantity('');
+      setPreferredDueDate('');
+      setPreferredDueDateRaw(null);
+      setAppointmentDate('');
+      setAppointmentDateRaw(null);
+      setAppointmentTime('');
+      setAppointmentTimeRaw(null);
+      setAvailableSlots([]);
+      setTimeDropdown(false);
     }
-  }, [visible]);
+    if (appointmentDateRaw) {
+      fetchAvailableSlots();
+    }
+    const checkToken = async () => {
+      const token = await AsyncStorage.getItem('authToken');
+      console.log("Current token:", token);
+    };
+    checkToken();
+  }, [visible], [appointmentDateRaw]);
 
   useEffect(() => {
     const total = Object.values(sizes).reduce((a, b) => a + (b || 0), 0);
@@ -50,16 +83,70 @@ export default function BookAppointment({ visible, onClose }) {
     }
   }, [sizes]);
 
+  useEffect(() => {
+    if (appointmentDateRaw) {
+      fetchAvailableSlots();
+    }
+  }, [appointmentDateRaw]);
+
+  const fetchAvailableSlots = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      console.log("Retrieved token:", token); // For debugging
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch(
+        `${API_URL}/appointments/available-slots?date=${appointmentDateRaw}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      console.log("Response status:", response.status); // For debugging
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid response format');
+      }
+      
+      const data = await response.json();
+      setAvailableSlots(data.available_slots || []);
+    } catch (error) {
+      console.error('Error fetching available slots:', error);
+      setAvailableSlots([]);
+    }
+  };
+
   const pickImage = async (setImage) => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
       setImage(result.assets[0].uri);
     }
+  };
+
+  const formatTo12Hour = (time24) => {
+    const [hour, minute] = time24.split(':');
+    const hourNum = parseInt(hour);
+    const period = hourNum >= 12 ? 'PM' : 'AM';
+    const hour12 = hourNum % 12 || 12;
+    return `${hour12}:${minute} ${period}`;
   };
 
   const showSuccess = () => {
@@ -79,6 +166,83 @@ export default function BookAppointment({ visible, onClose }) {
         onClose();
       });
     }, 3000);
+  };
+
+  const showDatePicker = () => setDatePickerVisibility(true);
+  const hideDatePicker = () => setDatePickerVisibility(false);
+  const handleConfirm = (date) => {
+    setPreferredDueDate(format(date, 'MMMM d, yyyy'));
+    setPreferredDueDateRaw(format(date, 'yyyy-MM-dd'));
+    hideDatePicker();
+  };
+
+  const showAppointmentDatePicker = () => setAppointmentDatePickerVisibility(true);
+  const hideAppointmentDatePicker = () => setAppointmentDatePickerVisibility(false);
+  const handleAppointmentDateConfirm = (date) => {
+    setAppointmentDate(format(date, 'MMMM d, yyyy'));
+    setAppointmentDateRaw(format(date, 'yyyy-MM-dd'));
+    setAppointmentTime('');
+    setAppointmentTimeRaw(null);
+    hideAppointmentDatePicker();
+  };
+
+  const showAppointmentTimePicker = () => setTimeDropdown(!timeDropdown);
+  const handleTimeSelect = (time) => {
+    setAppointmentTime(formatTo12Hour(time));
+    setAppointmentTimeRaw(time);
+    setTimeDropdown(false);
+  };
+
+  const handleBookAppointment = async () => {
+    const token = await AsyncStorage.getItem('authToken');
+  
+    if (!token) {
+      alert('You must be logged in to book an appointment.');
+      return;
+    }
+  
+    const formData = new FormData();
+    formData.append('service_type', serviceType);
+    formData.append('sizes', JSON.stringify(sizes));
+    formData.append('total_quantity', quantity);
+    formData.append('notes', notes);
+  
+    if (designImage) {
+      const designImageInfo = await FileSystem.getInfoAsync(designImage);
+      formData.append('design_image', {
+        uri: designImage,
+        name: designImageInfo.uri.split('/').pop(),
+        type: 'image/jpeg',
+      });
+    }
+  
+    if (gcashImage) {
+      const gcashImageInfo = await FileSystem.getInfoAsync(gcashImage);
+      formData.append('gcash_proof', {
+        uri: gcashImage,
+        name: gcashImageInfo.uri.split('/').pop(),
+        type: 'image/jpeg',
+      });
+    }
+  
+    formData.append('preferred_due_date', preferredDueDateRaw);
+    formData.append('appointment_date', appointmentDateRaw);
+    formData.append('appointment_time', appointmentTimeRaw);
+  
+    try {
+      const response = await axios.post(`${API_URL}/appointments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+  
+      showSuccess();
+    } catch (error) {
+      console.error('Booking failed:', error.response?.data || error.message);
+      alert(error.response?.data?.message || 'Failed to book appointment.');
+    }
   };
 
   return (
@@ -161,22 +325,6 @@ export default function BookAppointment({ visible, onClose }) {
               <Text style={[styles.label, { marginTop: 18 }]}>Additional Information:</Text>
               <TextInput
                 style={styles.inputField}
-                placeholder="Full Name"
-                value={fullName}
-                onChangeText={setFullName}
-                placeholderTextColor="#aaa"
-              />
-              <TextInput
-                style={styles.inputField}
-                placeholder="Phone Number"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                placeholderTextColor="#aaa"
-              />
-              <Text style={[styles.label, { marginTop: 18 }]}>Notes:</Text>
-              <TextInput
-                style={[styles.inputField, { height: 80, textAlignVertical: 'top' }]}
                 placeholder="Type 'None' if don't have any."
                 value={notes}
                 onChangeText={setNotes}
@@ -194,7 +342,7 @@ export default function BookAppointment({ visible, onClose }) {
                 <TouchableOpacity
                   style={styles.nextBtn}
                   onPress={() => setStep(2)}
-                  disabled={!serviceType || !fullName || !quantity}
+                  disabled={!serviceType || !quantity}
                 >
                   <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 16 }}>Next</Text>
                   <MaterialIcons name="chevron-right" size={22} color="#222" />
@@ -212,30 +360,91 @@ export default function BookAppointment({ visible, onClose }) {
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
-  <View style={styles.gcashBox}>
-    <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
-    <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>0912 345 6789</Text></Text>
+              <View style={styles.gcashBox}>
+                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
+                <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>0912 345 6789</Text></Text>
+              </View>
+
+              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage)}>
+                <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
+                <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
+                {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}
+              </TouchableOpacity>
+
+              <Text style={styles.label}>Preferred Due Date (When do you want it finished?)</Text>
+              <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
+                <Text style={{ color: preferredDueDate ? '#000' : '#aaa' }}>
+                  {preferredDueDate || 'Pick a date'}
+                </Text>
+              </TouchableOpacity>
+              <DateTimePickerModal
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={handleConfirm}
+                onCancel={hideDatePicker}
+                minimumDate={new Date()}
+              />
+
+              <Text style={styles.label}>Select Date and Time to Book Appointment</Text>
+              <TouchableOpacity onPress={showAppointmentDatePicker} style={styles.inputField}>
+                <Text style={{ color: appointmentDate ? '#000' : '#aaa' }}>
+                  {appointmentDate || 'Pick appointment date'}
+                </Text>
+              </TouchableOpacity>
+              <DateTimePickerModal
+                isVisible={isAppointmentDatePickerVisible}
+                mode="date"
+                onConfirm={handleAppointmentDateConfirm}
+                onCancel={hideAppointmentDatePicker}
+                minimumDate={new Date()}
+              />
+
+              {appointmentDate && (
+                <>
+                  <Text style={styles.label}>Select Time</Text>
+                  <TouchableOpacity style={styles.inputRow} onPress={showAppointmentTimePicker}>
+                    <MaterialIcons name="schedule" size={22} color="#4682B4" style={{ marginRight: 10 }} />
+                    <Text style={{ flex: 1, color: appointmentTime ? '#000' : '#aaa' }}>
+                      {appointmentTime || 'Select time...'}
+                    </Text>
+                    <MaterialIcons name={timeDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={22} color="#222" />
+                  </TouchableOpacity>
+
+                  {timeDropdown && (
+  <View style={styles.dropdownMenu}>
+    {TIME_LABELS.map((time) => {
+      const isAvailable = availableSlots.includes(time);
+      return (
+        <TouchableOpacity
+          key={time}
+          style={[
+            styles.dropdownItem, 
+            !isAvailable && styles.unavailableSlot
+          ]}
+          onPress={() => isAvailable && handleTimeSelect(time)}
+          disabled={!isAvailable}
+        >
+          <Text style={{
+            color: isAvailable ? '#222' : '#aaa',
+            fontWeight: isAvailable ? '600' : '400'
+          }}>
+            {formatTo12Hour(time)}
+            {!isAvailable && " (Booked)"}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
   </View>
+)}
+                </>
+              )}
+            </ScrollView>
 
-  <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage)}>
-    <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
-    <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
-    {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}
-  </TouchableOpacity>
-
-  {/* 👇️ NEW: Preferred Due Date Input Field */}
-  <Text style={styles.label}>Preferred Due Date (When do you want it finished?)</Text>
-  <TextInput
-    style={styles.inputField}
-    placeholder="e.g. 2025-08-05"
-    placeholderTextColor="#aaa"
-    value={preferredDueDate}
-    onChangeText={setPreferredDueDate}
-  />
-</ScrollView>
-
-
-            <TouchableOpacity style={styles.bookBtn} onPress={showSuccess}>
+            <TouchableOpacity 
+              style={[styles.bookBtn, (!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime) && styles.bookBtnDisabled]} 
+              onPress={handleBookAppointment}
+              disabled={!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime}
+            >
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Book an Appointment</Text>
             </TouchableOpacity>
           </View>
@@ -255,6 +464,7 @@ export default function BookAppointment({ visible, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -377,6 +587,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginTop: 10,
   },
+  bookBtnDisabled: {
+    backgroundColor: '#ccc',
+  },
   successPopup: {
     position: 'absolute',
     top: '40%',
@@ -393,4 +606,8 @@ const styles = StyleSheet.create({
     elevation: 10,
     zIndex: 100,
   },
+  unavailableSlot: {
+    backgroundColor: '#f8f8f8',
+    opacity: 0.7
+  }
 });

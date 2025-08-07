@@ -4,15 +4,30 @@ import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false); // Added loading state
   const router = useRouter();
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      alert('Please enter both email and password');
+      return;
+    }
+
+    setLoading(true); // Start loading
     try {
       const response = await axios.post('http://192.168.10.47:8000/api/login', {
         email,
@@ -22,16 +37,21 @@ export default function Login() {
       const token = response.data.access_token;
   
       if (token) {
+        // Use consistent token key 'token' instead of 'authToken'
         await AsyncStorage.setItem('authToken', token);
         console.log('Login successful, token saved:', token);
   
         router.replace('/(tabs)'); // Redirect to tabs/index.jsx
       } else {
         console.error('Token not received from backend:', response.data);
+        alert('Login failed. No token received from server.');
       }
   
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
+      alert(error.response?.data?.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false); // End loading regardless of success/error
     }
   };
 
@@ -60,6 +80,7 @@ export default function Login() {
             keyboardType="email-address"
             value={email}
             onChangeText={setEmail}
+            autoCapitalize="none"
           />
         </View>
 
@@ -85,8 +106,16 @@ export default function Login() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>LOGIN</Text>
+        <TouchableOpacity 
+          style={styles.loginButton} 
+          onPress={handleLogin}
+          disabled={loading} // Disable button during loading
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" /> // Show spinner when loading
+          ) : (
+            <Text style={styles.loginButtonText}>LOGIN</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
