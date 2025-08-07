@@ -5,6 +5,7 @@ use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AppointmentController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -17,5 +18,10 @@ Route::middleware([
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile', [ProfileController::class, 'update']);
+
+    Route::post('/appointments', [AppointmentController::class, 'store']); 
+    Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
+
+
 });
 
