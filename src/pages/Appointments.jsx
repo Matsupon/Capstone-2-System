@@ -146,12 +146,20 @@ const Appointments = () => {
     setQueueConfirmId(id);
   };
 
-  const confirmAddToQueue = () => {
-    setAppointments(appointments.filter(a => a.id !== queueConfirmId));
-    setQueueConfirmId(null);
-    setQueueSuccess(true);
-    setTimeout(() => setQueueSuccess(false), 5000); // 5 seconds
+  const confirmAddToQueue = async () => {
+    try {
+      await api.post(`/orders/${queueConfirmId}`);
+      setAppointments(appointments.filter(a => a.id !== queueConfirmId));
+      setQueueConfirmId(null);
+      setQueueSuccess(true);
+      setTimeout(() => setQueueSuccess(false), 5000);
+    } catch (err) {
+      console.error("Failed to accept appointment:", err);
+      setQueueConfirmId(null);
+      setError("Failed to add appointment to queue. Please try again.");
+    }
   };
+
 
   const handleRemove = (id) => {
     setRemoveId(id);
