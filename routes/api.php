@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\OrderController;
 
 // Test endpoint to verify API is working
 Route::get('/test', function () {
@@ -34,7 +35,10 @@ Route::middleware([
     Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); // admin fetch appointment by ID
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']); // reject
     Route::delete('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); // admin reject
-    Route::post('/appointments/{id}/accept', [AppointmentController::class, 'accept']); // accept
-    Route::post('/admin/appointments/{id}/accept', [AppointmentController::class, 'adminAcceptAppointment']); // admin accept
+
+    // Orders
+    Route::get('/orders', [OrderController::class, 'index']); // list all orders
+    Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
+
 });
 

@@ -260,29 +260,7 @@ public function dashboard()
         }
     }
 
-    // Admin function to accept appointment
-    public function adminAcceptAppointment($id)
-    {
-        try {
-            $appointment = Appointment::findOrFail($id);
 
-            // Later: Create an Order here 👇
-            // Order::create([...]);
-
-            $appointment->delete(); // remove from appointments table once accepted
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Appointment accepted and moved to Orders successfully'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to accept appointment',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 
     // Legacy methods (keeping for backward compatibility)
     public function index()
@@ -315,23 +293,4 @@ public function dashboard()
         }
     }
 
-    public function accept($id)
-    {
-        try {
-            $appointment = Appointment::findOrFail($id);
-
-            // Later: Create an Order here 👇
-            // Order::create([...]);
-
-            $appointment->delete(); // remove from appointments table once accepted
-
-            return response()->json(['message' => 'Appointment accepted and moved to Orders.']);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to accept appointment',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 }
