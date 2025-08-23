@@ -1,12 +1,100 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { AiOutlineClose } from 'react-icons/ai';
 import { FaUser, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
+import api from '../api';
 import '../styles/Dashboard.css';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const [appointments, setAppointments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Check authentication on component mount
+  useEffect(() => {
+    const adminToken = localStorage.getItem('adminToken');
+    if (!adminToken) {
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  // Fetch appointments data
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+          setError('No admin token found');
+          setIsLoading(false);
+          return;
+        }
+        
+        let response;
+        try {
+          console.log('Trying admin endpoint...');
+          response = await api.get('/admin/appointments');
+          console.log('Admin endpoint raw response:', response);
+  
+          // Extract data array in one place
+          const data = response.data.data || response.data;
+          console.log('Appointments array:', data);
+  
+          if (Array.isArray(data)) {
+            data.forEach(item => console.log('Single appointment item:', item));
+            setAppointments(data);
+          } else {
+            throw new Error('Invalid response format from admin endpoint');
+          }
+  
+          setIsLoading(false);
+          setError(null);
+          return;
+  
+        } catch (adminError) {
+          console.log('Admin endpoint failed:', adminError);
+          console.log('Admin error response:', adminError.response);
+  
+          // Fallback to original endpoint
+          try {
+            console.log('Trying original endpoint...');
+            response = await api.get('/appointments');
+            console.log('Original endpoint raw response:', response);
+  
+            const data = response.data.data || response.data;
+            console.log('Appointments array:', data);
+  
+            if (Array.isArray(data)) {
+              data.forEach(item => console.log('Single appointment item:', item));
+              setAppointments(data);
+            } else {
+              throw new Error('Invalid response format from original endpoint');
+            }
+  
+            setIsLoading(false);
+            setError(null);
+            return;
+  
+          } catch (originalError) {
+            console.error('Both endpoints failed:', { adminError, originalError });
+            console.log('Original error response:', originalError.response);
+            throw new Error('Failed to fetch appointments from both endpoints');
+          }
+        }
+  
+      } catch (err) {
+        console.error('Final error in fetchAppointments:', err);
+        setError(err.message);
+        setIsLoading(false);
+      }
+    };
+  
+    fetchAppointments();
+  }, [navigate]);
+  
+
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -66,65 +154,54 @@ const Dashboard = () => {
     }
   };
 
+  // Helper function to format time in 12-hour format
+  const formatTime = (timeString) => {
+    if (!timeString) return 'N/A';
+    
+    const [hours, minutes] = timeString.split(':');
+    const hourInt = parseInt(hours, 10);
+    const period = hourInt >= 12 ? 'PM' : 'AM';
+    const formattedHour = hourInt % 12 || 12;
+    
+    return `${formattedHour}:${minutes} ${period}`;
+  };
+
+  // Helper function to format date as "Month Day" (e.g., "May 10")
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+  };
+
+  // Helper function to format date and time as "Month Day - Time" (e.g., "May 10 - 9:30 AM")
+  const formatDateTime = (dateString, timeString) => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const time = formatTime(timeString);
+    
+    return `${month} ${day} - ${time}`;
+  };
+
   // Sample data
   const quickStats = [
-    { title: "Today's Appointments", value: 3, color: "blue" },
+    { title: "Today's Appointments", value: appointments.filter(app => {
+        const appDate = new Date(app.appointment_date);
+        return appDate.toDateString() === currentDate.toDateString();
+      }).length, color: "blue" },
     { title: "Pending Orders", value: 7, color: "yellow" },
     { title: "Completed Orders", value: 3, color: "green" }
-  ];
 
-  // 1. Update recentAppointments to use sizes object
-  const recentAppointments = [
-    { 
-      time: "9:30 AM", 
-      name: "John Doe", 
-      service: "Customize Jersey", 
-      action: "View Details",
-      sizes: { Small: 2, Medium: 3 },
-      phoneNumber: "09123456789",
-      notes: "Add red collar."
-    },
-    { 
-      time: "11:00 AM", 
-      name: "Jane Smith", 
-      service: "Customize Jersey", 
-      action: "View Details",
-      sizes: { Large: 4 },
-      phoneNumber: "09987654321",
-      notes: "Add red collar."
-    },
-    { 
-      time: "1:00 PM", 
-      name: "Sam Wilson", 
-      service: "Customize Jersey", 
-      action: "View Details",
-      sizes: { Small: 1, Medium: 2, Large: 1 },
-      phoneNumber: "09011223344",
-      notes: "Add red collar."
-    }
+    
   ];
 
   const liveQueue = {
     current: { number: "001", name: "Juan Dela Cruz" },
     next: { number: "002", name: "Dianne Javellana" }
   };
-
-  const upcomingDueDates = [
-    {
-      name: "Kristine Arado",
-      service: "Full set jersey (100 pcs.)",
-      date: "10 May, 2025",
-      time: "04:00 PM",
-      initial: "K"
-    },
-    {
-      name: "Mark Cyril Villazon",
-      service: "Full set jersey (100 pcs.)", 
-      date: "15 May, 2025",
-      time: "01:00 PM",
-      initial: "M"
-    }
-  ];
 
   // Modal state for Recent Appointments
   const [showDetails, setShowDetails] = useState(false);
@@ -155,44 +232,53 @@ const Dashboard = () => {
               </div>
             </div>
 
+            
+
             {/* Recent Appointments */}
             <div className="panel recent-appointments">
               <h3>Recent Appointments</h3>
               <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Name</th>
-                      <th>Service</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentAppointments.map((appointment, index) => (
-                      <tr key={index}>
-                        <td>{appointment.time}</td>
-                        <td>{appointment.name}</td>
-                        <td>{appointment.service}</td>
-                        <td>
-                          <span
-                            className="action-link"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setSelectedAppointment(appointment);
-                              setShowDetails(true);
-                            }}
-                          >
-                            {appointment.action}
-                          </span>
-                        </td>
+                {isLoading ? (
+                  <p>Loading appointments...</p>
+                ) : error ? (
+                  <p>Error: {error}</p>
+                ) : appointments.length === 0 ? (
+                  <p>No appointments found.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date & Time</th>
+                        <th>Name</th>
+                        <th>Service</th>
+                        <th>Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {appointments.map((appointment, index) => (
+                        <tr key={index}>
+                          <td>{formatDateTime(appointment.appointment_date, appointment.appointment_time)}</td>
+                          <td>{appointment.user?.name || 'N/A'}</td>
+                          <td>{appointment.service_type}</td>
+                          <td>
+                            <span
+                              className="action-link"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setShowDetails(true);
+                              }}
+                            >
+                              View Details
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
-            
 
             {/* Live Queue */}
             <div className="panel live-queue">
@@ -209,85 +295,97 @@ const Dashboard = () => {
 
             {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
-  <div className="dashboard-modal-bg">
-<div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
-  <AiOutlineClose
-    className="dashboard-modal-exit-icon"
-    onClick={() => setShowDetails(false)}
-  />
-      <h2 className="dashboard-modal-title">Appointment Details</h2>
-      <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px', flexWrap: 'wrap'}}>
-        <div className="dashboard-details-left">
-          <div className="dashboard-detail-group">
-            <div className="dashboard-detail-label">Full Name</div>
-            <div className="dashboard-detail-value">{selectedAppointment.name}</div>
-          </div>
-          <div className="dashboard-detail-group">
-            <div className="dashboard-detail-label">Service Type</div>
-            <div className="dashboard-detail-value">{selectedAppointment.service}</div>
-          </div>
+              <div className="dashboard-modal-bg">
+                <div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
+                    onClick={() => setShowDetails(false)}
+                  />
+                  <h2 className="dashboard-modal-title">Appointment Details</h2>
+                  <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px', flexWrap: 'wrap'}}>
+                    <div className="dashboard-details-left">
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Full Name</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Service Type</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.service_type}</div>
+                      </div>
 
-          <div className="dashboard-detail-label">Size</div>
-          <div className="dashboard-detail-value">
-            {selectedAppointment.sizes && Object.keys(selectedAppointment.sizes).length > 0 ? (
-              <>
-                {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
-                  <div key={size}>{size} - {qty} pcs.</div>
-                ))}
-              </>
-            ) : 'N/A'}
-          </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Size</div>
+                        <div className="dashboard-detail-value">
+                          {selectedAppointment.sizes && typeof selectedAppointment.sizes === 'object' && Object.keys(selectedAppointment.sizes).length > 0 ? (
+                            <>
+                              {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
+                                <div key={size}>{size} - {qty} pcs.</div>
+                              ))}
+                            </>
+                          ) : selectedAppointment.sizes ? (
+                            selectedAppointment.sizes
+                          ) : 'N/A'}
+                        </div>
+                      </div>
 
-          <div className="dashboard-detail-group">
-  <div className="dashboard-detail-label">Quantity</div>
-  <div className="dashboard-detail-value">
-    {selectedAppointment.sizes && Object.keys(selectedAppointment.sizes).length > 0 ? (
-      Object.values(selectedAppointment.sizes).reduce((total, qty) => total + qty, 0) + ' pcs.'
-    ) : 'N/A'}
-  </div>
-</div>
-          <div className="dashboard-detail-group">
-            <div className="dashboard-detail-label">Phone Number</div>
-            <div className="dashboard-detail-value">{selectedAppointment.phoneNumber || '09123456789'}</div>
-          </div>
-          
-  <div className="dashboard-detail-group">
-    <div className="dashboard-detail-label">Due Date</div>
-    <div className="dashboard-detail-value">{selectedAppointment.time || 'N/A'}</div>
-  </div>
-          {/* 2. In the modal, show size breakdown and total */}
-         
-        
-        </div>
-        <div className="dashboard-details-right">
-  <div className="dashboard-detail-group">
-    <div className="dashboard-detail-label">Notes</div>
-    <div className="dashboard-detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
-  </div>
-  <div className="dashboard-image-group">
-    <div className="dashboard-image-label">Design Image</div>
-    <img 
-      src="jersey.jpg" 
-      alt="Jersey Design" 
-      className="dashboard-modal-image" 
-      style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-    />
-  </div>
-  <div className="dashboard-image-group">
-    <div className="dashboard-image-label">Gcash Downpayment</div>
-    <img 
-      src="gcash.png" 
-      alt="Gcash Payment" 
-      className="dashboard-modal-image" 
-      style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-    />
-  </div>
-</div>
-
-      </div>
-    </div>
-  </div>
-)}
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Quantity</div>
+                        <div className="dashboard-detail-value">
+                          {selectedAppointment.total_quantity ? `${selectedAppointment.total_quantity} pcs.` : 'N/A'}
+                        </div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Phone Number</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
+                      </div>
+                      
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Due Date</div>
+                        <div className="dashboard-detail-value">
+                          {selectedAppointment.preferred_due_date ? formatDate(selectedAppointment.preferred_due_date) : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="dashboard-details-right">
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Notes</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
+                      </div>
+                      <div className="dashboard-image-group">
+                        <div className="dashboard-image-label">Design Image</div>
+                        {selectedAppointment.design_image ? (
+                         <img 
+                         src={selectedAppointment.design_image} 
+                         alt="Jersey Design"
+                         className="dashboard-modal-image"
+                         style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                       />
+                        ) : (
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                            No design image uploaded
+                          </div>
+                        )}
+                      </div>
+                      <div className="dashboard-image-group">
+                        <div className="dashboard-image-label">Gcash Downpayment</div>
+                        {selectedAppointment.gcash_proof ? (
+                          <img 
+                          src={selectedAppointment.gcash_proof} 
+                          alt="Gcash Payment"
+                          className="dashboard-modal-image"
+                          style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                        />
+                        ) : (
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                            No GCash proof uploaded
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
 
@@ -334,8 +432,6 @@ const Dashboard = () => {
                 </div>
               </div>
 
-
-
               {/* Upcoming Due Dates */}
               <div className="upcoming-dates-section">
                 <div className="panel-header">
@@ -343,23 +439,26 @@ const Dashboard = () => {
                   <Link to="/orders" className="view-all-link">View All</Link>
                 </div>
                 <div className="due-dates-list">
-                  {upcomingDueDates.map((item, index) => (
-                    <div key={index} className="due-date-item">
-                      <div className="avatar">
-                        <FaUser />
+                  {appointments
+                    .filter(app => new Date(app.preferred_due_date) > new Date())
+                    .sort((a, b) => new Date(a.preferred_due_date) - new Date(b.preferred_due_date))
+                    .slice(0, 2)
+                    .map((appointment, index) => (
+                      <div key={index} className="due-date-item">
+                        <div className="avatar">
+                          <FaUser />
+                        </div>
+                        <div className="due-date-info">
+                          <div className="customer-name">{appointment.user?.name || 'N/A'}</div>
+                          <div className="service">{appointment.service_type}</div>
+                          <div className="date-time">
+                            {appointment.preferred_due_date ? formatDate(appointment.preferred_due_date) : 'N/A'} • {formatTime(appointment.appointment_time)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="due-date-info">
-                        <div className="customer-name">{item.name}</div>
-                        <div className="service">{item.service}</div>
-                        <div className="date-time">{item.date} • {item.time}</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
-
-
-              
             </div>
           </div>
         </div>
@@ -368,4 +467,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

@@ -1,59 +1,144 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Appointments.css';
 import { FaTrashAlt } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
-
-
-const initialAppointments = [
-  {
-    id: 1,
-    time: 'May 2 - 9:30 AM',
-    name: 'John Doe',
-    service: 'Customize Jersey',
-    sizes: { Small: 2, Medium: 3 },
-  },
-  {
-    id: 2,
-    time: 'May 1 - 11:00 AM',
-    name: 'Jane Smith',
-    service: 'Customize Jersey',
-    sizes: { Large: 4 },
-  },
-  {
-    id: 3,
-    time: 'May 1 - 1:00 PM',
-    name: 'Sam Wilson',
-    service: 'Customize Jersey',
-    sizes: { Small: 1, Medium: 2, Large: 1 },
-  },
-];
+import api from '../api';
 
 const Appointments = () => {
-  const [appointments, setAppointments] = useState(initialAppointments);
-  const [selected, setSelected] = useState(null);
+  const navigate = useNavigate();
+  const [appointments, setAppointments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
   const [removeId, setRemoveId] = useState(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [queueConfirmId, setQueueConfirmId] = useState(null);
 
-  // Simulated details for modal
-  const details = {
-    service: 'Customize Jersey',
-    date: selected ? appointments.find(a => a.id === selected)?.time : '',
-    name: selected ? appointments.find(a => a.id === selected)?.name : '',
-    phone: '09123456789',
-    notes: 'Sample notes for the appointment.',
-    sizes: selected ? appointments.find(a => a.id === selected)?.sizes : {},
-    dueDate: selected ? appointments.find(a => a.id === selected)?.time : '',
-    designImg: 'jersey.jpg',
-    gcashImg: 'gcash.png',
+  // Check authentication on component mount
+  useEffect(() => {
+    const adminToken = localStorage.getItem('adminToken');
+    if (!adminToken) {
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  // Fetch appointments data
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+          setError('No admin token found');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('=== DEBUGGING API CALLS ===');
+        console.log('Admin token:', token);
+        console.log('Using proxy configuration from package.json');
+        console.log('Full admin endpoint URL: /api/admin/appointments');
+        console.log('Full original endpoint URL: /api/appointments');
+        
+        // Try admin endpoint first using the configured api instance
+        let response;
+        try {
+          console.log('Trying admin endpoint...');
+          response = await api.get('/admin/appointments');
+          console.log('Admin endpoint response:', response);
+          
+          // Check if the response has the expected structure
+          if (response.data.success && response.data.data) {
+            setAppointments(response.data.data);
+          } else if (Array.isArray(response.data)) {
+            // Fallback for legacy response format
+            setAppointments(response.data);
+          } else {
+            throw new Error('Invalid response format from server');
+          }
+          
+          setIsLoading(false);
+          setError(null);
+          return;
+        } catch (adminError) {
+          console.log('Admin endpoint failed:', adminError);
+          console.log('Admin error response:', adminError.response);
+          
+          // If admin endpoint fails, try the original endpoint
+          try {
+            console.log('Trying original endpoint...');
+            response = await api.get('/appointments');
+            console.log('Original endpoint response:', response);
+            
+            if (Array.isArray(response.data)) {
+              setAppointments(response.data);
+              setIsLoading(false);
+              setError(null);
+              return;
+            } else {
+              throw new Error('Invalid response format from original endpoint');
+            }
+          } catch (originalError) {
+            console.error('Both endpoints failed:', { adminError, originalError });
+            console.log('Original error response:', originalError.response);
+            throw new Error('Failed to fetch appointments from both endpoints');
+          }
+        }
+        
+      } catch (err) {
+        console.error('Final error in fetchAppointments:', err);
+        setError(err.message);
+        setIsLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [navigate]);
+
+  // Helper function to format time in 12-hour format
+  const formatTime = (timeString) => {
+    if (!timeString) return 'N/A';
+    
+    const [hours, minutes] = timeString.split(':');
+    const hourInt = parseInt(hours, 10);
+    const period = hourInt >= 12 ? 'PM' : 'AM';
+    const formattedHour = hourInt % 12 || 12;
+    
+    return `${formattedHour}:${minutes} ${period}`;
   };
 
-  const handleViewDetails = (id) => {
-    setSelected(id);
+  // Helper function to format date as "Month Day" (e.g., "May 10")
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    const monthNames = ["January", "February", "March", "April", "May", "June", 
+      "July", "August", "September", "October", "November", "December"];
+    
+    const date = new Date(dateString);
+    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+  };
+
+  // Helper function to format date and time as "Month Day - Time" (e.g., "May 10 - 9:30 AM")
+  const formatDateTime = (dateString, timeString) => {
+    if (!dateString) return 'N/A';
+    
+    const monthNames = ["January", "February", "March", "April", "May", "June", 
+      "July", "August", "September", "October", "November", "December"];
+    
+    const date = new Date(dateString);
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const time = formatTime(timeString);
+    
+    return `${month} ${day} - ${time}`;
+  };
+
+  const handleViewDetails = (appointment) => {
+    setSelectedAppointment(appointment);
     setShowDetails(true);
   };
 
@@ -91,86 +176,120 @@ const Appointments = () => {
         
         <div className="appointments-content">
           <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#e8f4fd' }}>
-                  <th>Time</th>
-                  <th>Name</th>
-                  <th>Service</th>
-                  <th>Action</th>
-                  <th>Add to Queue</th>
-                  <th>Remove</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointments.map((appt) => (
-                  <tr key={appt.id}>
-                    <td>{appt.time}</td>
-                    <td>{appt.name}</td>
-                    <td>{appt.service}</td>
-                    <td>
-                      <span className="action-link" onClick={() => handleViewDetails(appt.id)}>View Details</span>
-                    </td>
-                    <td>
-                      <input 
-                        type="checkbox" 
-                        onChange={() => handleAddToQueue(appt.id)}
-                        checked={queueConfirmId === appt.id}
-                      />
-                    </td>
-                    <td>
-                      <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} />
-                    </td>
+            {isLoading ? (
+              <p>Loading appointments...</p>
+            ) : error ? (
+              <p>Error: {error}</p>
+            ) : appointments.length === 0 ? (
+              <p>No appointments found.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#e8f4fd' }}>
+                    <th>Date & Time</th>
+                    <th>Name</th>
+                    <th>Service</th>
+                    <th>Action</th>
+                    <th>Add to Queue</th>
+                    <th>Remove</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {appointments.map((appt) => (
+                    <tr key={appt.id}>
+                      <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
+                      <td>{appt.user?.name || 'N/A'}</td>
+                      <td>{appt.service_type}</td>
+                      <td>
+                        <span className="action-link" onClick={() => handleViewDetails(appt)}>View Details</span>
+                      </td>
+                      <td>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => handleAddToQueue(appt.id)}
+                          checked={queueConfirmId === appt.id}
+                        />
+                      </td>
+                      <td>
+                        <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* View Details Modal */}
-          {showDetails && (
+          {showDetails && selectedAppointment && (
             <div className="modal-bg">
               <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
                 <h2 style={{textAlign: 'center'}}>Appointment Details</h2>
                 <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
                     <div className="detail-label">Service Type</div>
-                    <div className="detail-value">{details.service}</div>
+                    <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
                     <div className="detail-label">Date</div>
-                    <div className="detail-value">{details.date}</div>
+                    <div className="detail-value">{formatDateTime(selectedAppointment.appointment_date, selectedAppointment.appointment_time)}</div>
                     <div className="detail-label">Full Name</div>
-                    <div className="detail-value">{details.name}</div>
+                    <div className="detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
                     <div className="detail-label">Phone Number</div>
-                    <div className="detail-value">{details.phone}</div>
+                    <div className="detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
                     <div className="detail-label">Size</div>
                     <div className="detail-value">
-  {details.sizes && Object.keys(details.sizes).length > 0 ? (
-    <>
-      {Object.entries(details.sizes).map(([size, qty]) => (
-        <div key={size}>{size} - {qty} pcs.</div>
-      ))}
-    </>
-  ) : 'N/A'}
-</div>
-<div className="detail-label">Quantity</div>
-<div className="detail-value">
-  {details.sizes ? Object.values(details.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
-</div>
+                      {selectedAppointment.sizes && typeof selectedAppointment.sizes === 'object' && Object.keys(selectedAppointment.sizes).length > 0 ? (
+                        <>
+                          {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
+                            <div key={size}>{size} - {qty} pcs.</div>
+                          ))}
+                        </>
+                      ) : selectedAppointment.sizes ? (
+                        selectedAppointment.sizes
+                      ) : 'N/A'}
+                    </div>
+                    <div className="detail-label">Quantity</div>
+                    <div className="detail-value">
+                      {selectedAppointment.total_quantity ? `${selectedAppointment.total_quantity} pcs.` : 'N/A'}
+                    </div>
                   </div>
                   <div className="details-right">
-  <div className="detail-group">
-    <div className="detail-label">Due Date</div>
-    <div className="detail-value">{details.dueDate}</div>
-  </div>
-  <div className="detail-group">
-    <div className="detail-label">Notes</div>
-    <div className="detail-value">{details.notes || 'No notes provided.'}</div>
-  </div>
-  <div className="image-label">Design Image</div>
-  <img src={details.designImg} alt="Design" className="modal-image" />
-  <div className="image-label">GCash Proof</div>
-  <img src={details.gcashImg} alt="GCash Proof" className="modal-image" />
-</div>
+                    <div className="detail-group">
+                      <div className="detail-label">Due Date</div>
+                      <div className="detail-value">
+                        {selectedAppointment.preferred_due_date ? formatDate(selectedAppointment.preferred_due_date) : 'N/A'}
+                      </div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Notes</div>
+                      <div className="detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
+                    </div>
+                    <div className="image-label">Design Image</div>
+                    {selectedAppointment.design_image ? (
+                      <img 
+                        src={selectedAppointment.design_image} 
+                        alt="Jersey Design"
+                        className="modal-image"
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                      />
+                    ) : (
+                      <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                        No design image uploaded
+                      </div>
+                    )}
+                    <div className="image-label">GCash Proof</div>
+                    {selectedAppointment.gcash_proof ? (
+                      <img 
+                        src={selectedAppointment.gcash_proof} 
+                        alt="GCash Payment"
+                        className="modal-image"
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                      />
+                    ) : (
+                      <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                        No GCash proof uploaded
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <AiOutlineClose className="modal-exit-icon" onClick={() => setShowDetails(false)} />
               </div>
@@ -192,11 +311,11 @@ const Appointments = () => {
 
           {/* Add to Queue Success Popup */}
           {queueSuccess && (
-  <div className="popup-queue-success">
-    <h3>User appointment successfully accepted!</h3>
-    <div>View appointment details at the Orders Page</div>
-  </div>
-)}
+            <div className="popup-queue-success">
+              <h3>User appointment successfully accepted!</h3>
+              <div>View appointment details at the Orders Page</div>
+            </div>
+          )}
 
           {/* Remove Confirmation Modal */}
           {removeId !== null && (
@@ -213,14 +332,14 @@ const Appointments = () => {
 
           {/* Delete Success Popup */}
           {deleteSuccess && (
-  <div className="popup-delete-success">
-    <h3>Appointment Successfully Deleted!</h3>
-  </div>
-)}
+            <div className="popup-delete-success">
+              <h3>Appointment Successfully Deleted!</h3>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default Appointments; 
+export default Appointments;

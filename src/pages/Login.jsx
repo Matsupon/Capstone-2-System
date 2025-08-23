@@ -2,20 +2,49 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import api from '../api';
 import '../styles/Login.css';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    console.log('Email:', email);
-    console.log('Password:', password);
-    // Navigate to dashboard after successful login
-    navigate('/dashboard');
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await api.post('/admin/login', {
+        email,
+        password
+      });
+
+      if (response.data.token) {
+        // Store admin data and token
+        localStorage.setItem('adminToken', response.data.token);
+        localStorage.setItem('adminData', JSON.stringify({
+          email: response.data.admin.email,
+          fullname: response.data.admin.fullname
+        }));
+        
+        // Navigate to dashboard after successful login
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,6 +64,19 @@ const Login = () => {
           <h1>Welcome Back!</h1>
           <p className="subtitle">Sign in to continue to your account</p>
           
+          {error && (
+            <div className="error-message" style={{
+              backgroundColor: '#fee',
+              color: '#c33',
+              padding: '10px',
+              borderRadius: '5px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}>
+              {error}
+            </div>
+          )}
+          
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label htmlFor="email">Email Address</label>
@@ -45,6 +87,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
             
@@ -60,19 +103,26 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
                 <button 
                   type="button" 
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
                 >
                   {showPassword ? <FaEye /> : < FaEyeSlash />}
                 </button>
               </div>
             </div>
         
-            
-            <button type="submit" className="login-button">Login</button>
+            <button 
+              type="submit" 
+              className="login-button"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Logging in...' : 'Login'}
+            </button>
           </form>
           
         </div>
