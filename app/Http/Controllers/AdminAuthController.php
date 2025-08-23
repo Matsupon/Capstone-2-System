@@ -15,6 +15,15 @@ class AdminAuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        return response()->json(['token' => $admin->createToken('admin')->plainTextToken]);
+        $token = $admin->createToken('admin')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'admin' => [
+                'id' => $admin->id,
+                'fullname' => $admin->fullname,
+                'email' => $admin->email
+            ]
+        ]);
     }
 }

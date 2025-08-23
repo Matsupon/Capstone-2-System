@@ -7,6 +7,11 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AppointmentController;
 
+// Test endpoint to verify API is working
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
+});
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
@@ -19,9 +24,17 @@ Route::middleware([
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile', [ProfileController::class, 'update']);
 
+    //customer side appointments
     Route::post('/appointments', [AppointmentController::class, 'store']); 
     Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
 
-
+    //admin side appointments
+    Route::get('/appointments', [AppointmentController::class, 'index']); // fetch all appointments
+    Route::get('/admin/appointments', [AppointmentController::class, 'adminGetAllAppointments']); // admin fetch all appointments
+    Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); // admin fetch appointment by ID
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']); // reject
+    Route::delete('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); // admin reject
+    Route::post('/appointments/{id}/accept', [AppointmentController::class, 'accept']); // accept
+    Route::post('/admin/appointments/{id}/accept', [AppointmentController::class, 'adminAcceptAppointment']); // admin accept
 });
 

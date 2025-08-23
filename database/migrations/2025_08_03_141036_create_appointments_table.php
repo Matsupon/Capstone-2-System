@@ -10,6 +10,7 @@ class CreateAppointmentsTable extends Migration
     {
         Schema::create('appointments', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade'); // Required field linking to users table
             $table->string('service_type');
             $table->json('sizes'); // { "Extra Small": 1, "Small": 2, ... }
             $table->integer('total_quantity');
