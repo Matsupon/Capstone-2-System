@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
+use App\Models\Notification;
 
 class AppointmentController extends Controller
 {
@@ -66,6 +67,21 @@ class AppointmentController extends Controller
             'appointment_date' => $validated['appointment_date'],
             'appointment_time' => $validated['appointment_time'],
         ]);
+
+    
+        // ✅ Notification: appointment booked
+        Notification::create([
+            'user_id' => $appointment->user_id,
+            'type'    => 'appointment_booked',
+            'title'   => 'You have successfully booked an appointment!',
+            'body'    => null,
+            'data'    => [
+                'appointment_id'  => $appointment->id,
+                'appointment_date'=> $appointment->appointment_date,
+                'appointment_time'=> $appointment->appointment_time,
+                'created_by'      => 'customer',
+            ],
+        ]);
     
         return response()->json([
             'message' => 'Appointment booked successfully',
@@ -107,42 +123,41 @@ public function adminGetAllAppointments()
 {
     try {
         $appointments = Appointment::with('user')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'service_type' => $appointment->service_type,
-                    'sizes' => json_decode($appointment->sizes, true),
-                    'total_quantity' => $appointment->total_quantity ?? 'N/A',
-                    'preferred_due_date' => $appointment->preferred_due_date 
-                        ? \Carbon\Carbon::parse($appointment->preferred_due_date)->format('Y-m-d H:i:s') 
-                        : 'N/A',
-                    'appointment_date' => $appointment->appointment_date 
-                        ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') 
-                        : 'N/A',
-                    'appointment_time' => $appointment->appointment_time 
-                        ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i')
-                        : 'N/A',
-                    'notes' => $appointment->notes ?? 'No notes provided.',
-                    'design_image' => $appointment->design_image 
-                        ? asset('storage/' . $appointment->design_image) 
-                        : null,
-                    'gcash_proof' => $appointment->gcash_proof 
-                        ? asset('storage/' . $appointment->gcash_proof) 
-                        : null,
-                    'status' => $appointment->status,
-                    'created_at' => $appointment->created_at->toDateTimeString(),
-                    'user' => [
-                        'id' => $appointment->user->id,
-                        'name' => $appointment->user->name,
-                        'phone' => $appointment->user->phone,
-                        'email' => $appointment->user->email,
-                    ]
-                ];
-            });
-
-            
+    ->where('status', 'pending') // ✅ only show pending ones
+    ->orderBy('created_at', 'desc')
+    ->get()
+    ->map(function ($appointment) {
+        return [
+            'id' => $appointment->id,
+            'service_type' => $appointment->service_type,
+            'sizes' => json_decode($appointment->sizes, true),
+            'total_quantity' => $appointment->total_quantity ?? 'N/A',
+            'preferred_due_date' => $appointment->preferred_due_date 
+                ? \Carbon\Carbon::parse($appointment->preferred_due_date)->format('Y-m-d H:i:s') 
+                : 'N/A',
+            'appointment_date' => $appointment->appointment_date 
+                ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') 
+                : 'N/A',
+            'appointment_time' => $appointment->appointment_time 
+                ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i')
+                : 'N/A',
+            'notes' => $appointment->notes ?? 'No notes provided.',
+            'design_image' => $appointment->design_image 
+                ? asset('storage/' . $appointment->design_image) 
+                : null,
+            'gcash_proof' => $appointment->gcash_proof 
+                ? asset('storage/' . $appointment->gcash_proof) 
+                : null,
+            'status' => $appointment->status,
+            'created_at' => $appointment->created_at->toDateTimeString(),
+            'user' => [
+                'id' => $appointment->user->id,
+                'name' => $appointment->user->name,
+                'phone' => $appointment->user->phone,
+                'email' => $appointment->user->email,
+            ]
+        ];
+    });
 
         return response()->json([
             'success' => true,

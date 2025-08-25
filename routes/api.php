@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\NotificationController;
 
 // Test endpoint to verify API is working
 Route::get('/test', function () {
@@ -40,5 +41,13 @@ Route::middleware([
     Route::get('/orders', [OrderController::class, 'index']); // list all orders
     Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
 
+    
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+    // Orders: update status (Ready to Check / Completed, etc.)
+    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
 });
 
