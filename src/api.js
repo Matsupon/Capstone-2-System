@@ -3,7 +3,7 @@ import axios from "axios";
 // Dynamically set baseURL depending on environment
 const baseURL =
   process.env.NODE_ENV === "development"
-    ? "http://192.168.1.223:8000/api" // Laravel backend during local dev
+    ? "http://192.168.10.47:8000/api" // Laravel backend during local dev
     : "/api"; // In production, let the server (Nginx/Apache) handle it
 
 const api = axios.create({
