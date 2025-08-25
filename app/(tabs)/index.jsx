@@ -1,21 +1,129 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import BookAppointment from '../../components/BookAppointment';
 import Header from '../../components/Header';
+import api from '../../utils/api'; // ensure path is correct
 
 export default function HomePage() {
   const userName = "Dianne";
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
 
+  // notifications
+  const [notifications, setNotifications] = useState([]);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [details, setDetails] = useState(null);
+
+  // refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications'); // GET user's notifications
+      if (res.data?.success) {
+        // ensure latest-first
+        const list = res.data.data || [];
+        list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setNotifications(list);
+      }
+    } catch (e) {
+      console.log('Failed to load notifications', e?.message || e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadNotifications();
+    setRefreshing(false);
+  }, [loadNotifications]);
+
+  const formatMonthDay = (iso) => {
+    const d = new Date(iso);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${mm}/${dd}`;
+  };
+
+  const formatTime12 = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const formatDateTime12 = (iso) => {
+    const d = new Date(iso);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${mm}/${dd}/${yyyy} ${time}`;
+  };
+
+  const openDetails = (n) => {
+    let extra = '';
+    if (n.type === 'ready_to_check' && n.data?.scheduled_at) {
+      extra = `Your next appointment date is ${formatDateTime12(n.data.scheduled_at)}.`;
+    } else if (n.type === 'order_completed') {
+      const when = n.data?.scheduled_at ? `Your next appointment date is ${formatDateTime12(n.data.scheduled_at)}.` : '';
+      const amount = (n.data?.total_amount != null)
+        ? `Please prepare ${Number(n.data.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for your next appointment to get your order.`
+        : '';
+      extra = [when, amount].filter(Boolean).join('\n');
+    }
+
+    setDetails({
+      title: n.title,
+      body: extra || (n.body ?? ''),
+    });
+    setDetailsVisible(true);
+  };
+
+  const renderActivityItem = (n) => {
+    const showViewMore = (n.type === 'ready_to_check') || (n.type === 'order_completed');
+    return (
+      <View key={n.id} style={styles.activityItem}>
+        <Text style={styles.activityDate}>{formatMonthDay(n.created_at)}</Text>
+        <View style={styles.activityContent}>
+          <Text style={styles.activityText}>{n.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.activityTime}>{formatTime12(n.created_at)}</Text>
+            {showViewMore && (
+              <TouchableOpacity onPress={() => openDetails(n)} style={{ marginLeft: 12 }}>
+                <Text style={styles.viewMore}>View More</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.background} />
       <Header userName={userName} />
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 90 }}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 90 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Rest of UI (kept same as your placeholders) */}
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeText}>Welcome back, {userName}!</Text>
           <Text style={styles.welcomeSubtext}>
@@ -23,10 +131,8 @@ export default function HomePage() {
           </Text>
         </View>
 
-        {/* Updated Order Card */}
         <View style={styles.orderCard}>
           <Text style={styles.orderTitle}><Text style={styles.boldText}>Current Order</Text> - Queue #002</Text>
-
           <View style={styles.orderDetails}>
             <View>
               <Text style={styles.itemText}>Volleyball Jersey</Text>
@@ -39,15 +145,14 @@ export default function HomePage() {
             </View>
           </View>
 
-
           <View style={styles.orderProgressContainer}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressStep, styles.stepDone]} />
-            <View style={[styles.progressStep, styles.stepCurrent]} />
-            <View style={[styles.progressStep, styles.stepPending]} />
+            <View style={styles.progressBar}>
+              <View style={[styles.progressStep, styles.stepDone]} />
+              <View style={[styles.progressStep, styles.stepCurrent]} />
+              <View style={[styles.progressStep, styles.stepPending]} />
+            </View>
+            <Text style={styles.progressText}>Queued → In Progress → Ready</Text>
           </View>
-          <Text style={styles.progressText}>Queued → In Progress → Ready</Text>
-        </View>
         </View>
 
         <Text style={styles.sectionTitle}>Announcements</Text>
@@ -75,37 +180,43 @@ export default function HomePage() {
         <Text style={styles.sectionTitle}>Recent Activity</Text>
 
         <View style={styles.activityList}>
-          <View style={styles.activityItem}>
-            <Text style={styles.activityDate}>01/03</Text>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityText}>Your layout has been processed</Text>
-              <Text style={styles.activityTime}>10:00 AM</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityItem}>
-            <Text style={styles.activityDate}>01/02</Text>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityText}>Appointment Confirmed</Text>
-              <Text style={styles.activityTime}>11:00 AM</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityItem}>
-            <Text style={styles.activityDate}>01/01</Text>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityText}>Downpayment validated (Gcash)</Text>
-              <Text style={styles.activityTime}>12:00 PM</Text>
-            </View>
-          </View>
+          {notifications.length === 0 ? (
+            <Text style={{ color: '#687076', padding: 10 }}>No recent activity yet.</Text>
+          ) : (
+            notifications.map(renderActivityItem)
+          )}
         </View>
       </ScrollView>
- 
+
       <BookAppointment visible={modalVisible} onClose={() => setModalVisible(false)} />
 
-       <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-       <MaterialIcons name="add" size={30} color="#fff" />
-       </TouchableOpacity>
+      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+        <MaterialIcons name="add" size={30} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Details Modal */}
+      <Modal
+        visible={detailsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailsVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{details?.title || 'Details'}</Text>
+              <TouchableOpacity onPress={() => setDetailsVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            {details?.body ? (
+              <Text style={styles.modalBody}>{details.body}</Text>
+            ) : (
+              <Text style={styles.modalBody}>No additional information.</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -356,4 +467,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
     elevation: 8,
   },
+
+   // Modal
+   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
+   modalCard: { width: '85%', backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 8 },
+   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
+   modalBody: { fontSize: 14, color: '#000', lineHeight: 20 },
 });
