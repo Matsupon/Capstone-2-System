@@ -143,9 +143,21 @@
 
 .image-label {
   font-weight: 600;
-  color: #666;
-  margin-bottom: 10px;
+  color: #333;  
   font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+  position: relative;
+}
+
+.image-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
 }
 
 .modal-image {
@@ -154,6 +166,43 @@
   height: auto;
   border-radius: 4px;
   margin-bottom: 15px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.modal-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Error message styling */
+.modal-image + p {
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Image modal styling */
+.modal-image {
+  cursor: pointer;
+}
+
+.modal-image:hover::after {
+  content: 'Click to zoom';
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.modal-image:hover:hover::after {
+  opacity: 1;
 }
 
 
@@ -241,6 +290,11 @@
   .orders-content {
     padding: 10px;
   }
+
+  .modal-image {
+    max-width: 150px;
+  }
+}
   
   .orders-content table {
     font-size: 14px;
@@ -257,7 +311,6 @@
     transform: translateX(-50%);
     width: auto;
   }
-}
 
 /* Calendar/Time Picker Modal Styles */
 .orders-calendar-modal-bg {

@@ -237,7 +237,7 @@ const Appointments = () => {
                   <div className="details-left">
                     <div className="detail-label">Service Type</div>
                     <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
-                    <div className="detail-label">Date</div>
+                    <div className="detail-label">Appointment Date</div>
                     <div className="detail-value">{formatDateTime(selectedAppointment.appointment_date, selectedAppointment.appointment_time)}</div>
                     <div className="detail-label">Full Name</div>
                     <div className="detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
