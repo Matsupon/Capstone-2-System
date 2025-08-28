@@ -14,6 +14,15 @@ Route::get('/test', function () {
     return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
 });
 
+// Test endpoint for appointments (no auth required for debugging)
+Route::get('/test-appointments', function () {
+    return response()->json([
+        'message' => 'Appointments endpoint is accessible!',
+        'timestamp' => now(),
+        'auth_required' => true
+    ]);
+});
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
@@ -25,6 +34,12 @@ Route::middleware([
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile', [ProfileController::class, 'update']);
+
+    // Test appointment controller
+    Route::get('/appointments/test', [AppointmentController::class, 'test']);
+    
+    // Test the new method
+    Route::get('/appointments/test-next', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
 
     //customer side appointments
     Route::post('/appointments', [AppointmentController::class, 'store']); 
@@ -49,5 +64,16 @@ Route::middleware([
 
     // Orders: update status (Ready to Check / Completed, etc.)
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    // Orders: get booked times for a given date and kind
+    Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
+
+    // Mobile: fetch latest order for current user
+    Route::get('/me/orders/latest', [OrderController::class, 'myLatest']);
+
+    //Mobile: fetch next appointment based on order status (more specific route first)
+    Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
+    
+    //Mobile: fetch latest appointment date (less specific route last)
+    Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
 });
 

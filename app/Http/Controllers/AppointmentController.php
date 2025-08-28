@@ -12,9 +12,28 @@ use App\Models\Notification;
 
 class AppointmentController extends Controller
 {
+    // Test method for debugging
+    public function test()
+    {
+        return response()->json([
+            'message' => 'AppointmentController is working!',
+            'timestamp' => now(),
+            'user_id' => auth()->id(),
+            'authenticated' => auth()->check()
+        ]);
+    }
+
     public function store(Request $request)
     {
         try {
+            // Log the incoming request data for debugging
+            \Log::info('Appointment booking request received', [
+                'headers' => $request->headers->all(),
+                'data' => $request->all(),
+                'files' => $request->allFiles(),
+                'user_id' => auth()->id()
+            ]);
+
             $validated = $request->validate([
                 'service_type' => 'required|string',
                 'sizes' => 'required|string', // ✅ stored as string
@@ -26,7 +45,14 @@ class AppointmentController extends Controller
                 'appointment_date' => 'required|date|after:today',
                 'appointment_time' => 'required|date_format:H:i',
             ]);
+
+            \Log::info('Validation passed', $validated);
         } catch (ValidationException $e) {
+            \Log::error('Validation failed', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+            
             return response()->json([
                 'message' => 'Validation error',
                 'errors' => $e->errors()
@@ -39,54 +65,79 @@ class AppointmentController extends Controller
             ->exists();
     
         if ($conflict) {
+            \Log::warning('Double booking attempt', [
+                'date' => $validated['appointment_date'],
+                'time' => $validated['appointment_time']
+            ]);
+            
             return response()->json([
                 'message' => 'This time slot is already taken.',
                 'errors' => ['appointment_time' => ['Already booked.']]
             ], 422);
         }
     
-        // ✅ Handle optional design image upload
-        $designImagePath = null;
-        if ($request->hasFile('design_image')) {
-            $designImagePath = $request->file('design_image')->store('designs', 'public');
-        }
-    
-        // ✅ Handle required gcash proof upload
-        $gcashProofPath = $request->file('gcash_proof')->store('gcash_proofs', 'public');
-    
-        // ✅ Create appointment with logged-in user's ID
-        $appointment = Appointment::create([
-            'user_id' => auth()->id(), // 👈 automatically links to logged-in user
-            'service_type' => $validated['service_type'],
-            'sizes' => $validated['sizes'],
-            'total_quantity' => $validated['total_quantity'],
-            'notes' => $validated['notes'] ?? null,
-            'design_image' => $designImagePath,
-            'gcash_proof' => $gcashProofPath,
-            'preferred_due_date' => $validated['preferred_due_date'],
-            'appointment_date' => $validated['appointment_date'],
-            'appointment_time' => $validated['appointment_time'],
-        ]);
+        try {
+            // ✅ Handle optional design image upload
+            $designImagePath = null;
+            if ($request->hasFile('design_image')) {
+                $designImagePath = $request->file('design_image')->store('designs', 'public');
+                \Log::info('Design image uploaded', ['path' => $designImagePath]);
+            }
+        
+            // ✅ Handle required gcash proof upload
+            $gcashProofPath = $request->file('gcash_proof')->store('gcash_proofs', 'public');
+            \Log::info('GCash proof uploaded', ['path' => $gcashProofPath]);
+        
+            // ✅ Create appointment with logged-in user's ID
+            $appointment = Appointment::create([
+                'user_id' => auth()->id(), // 👈 automatically links to logged-in user
+                'service_type' => $validated['service_type'],
+                'sizes' => $validated['sizes'],
+                'total_quantity' => $validated['total_quantity'],
+                'notes' => $validated['notes'] ?? null,
+                'design_image' => $designImagePath,
+                'gcash_proof' => $gcashProofPath,
+                'preferred_due_date' => $validated['preferred_due_date'],
+                'appointment_date' => $validated['appointment_date'],
+                'appointment_time' => $validated['appointment_time'],
+            ]);
 
-    
-        // ✅ Notification: appointment booked
-        Notification::create([
-            'user_id' => $appointment->user_id,
-            'type'    => 'appointment_booked',
-            'title'   => 'You have successfully booked an appointment!',
-            'body'    => null,
-            'data'    => [
-                'appointment_id'  => $appointment->id,
-                'appointment_date'=> $appointment->appointment_date,
-                'appointment_time'=> $appointment->appointment_time,
-                'created_by'      => 'customer',
-            ],
-        ]);
-    
-        return response()->json([
-            'message' => 'Appointment booked successfully',
-            'appointment' => $appointment
-        ], 201);
+            \Log::info('Appointment created successfully', [
+                'appointment_id' => $appointment->id,
+                'user_id' => $appointment->user_id
+            ]);
+        
+            // ✅ Notification: appointment booked
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'type'    => 'appointment_booked',
+                'title'   => 'You have successfully booked an appointment!',
+                'body'    => null,
+                'data'    => [
+                    'appointment_id'  => $appointment->id,
+                    'appointment_date'=> $appointment->appointment_date,
+                    'appointment_time'=> $appointment->appointment_time,
+                    'created_by'      => 'customer',
+                ],
+            ]);
+        
+            return response()->json([
+                'message' => 'Appointment booked successfully',
+                'appointment' => $appointment
+            ], 201);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error creating appointment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'validated_data' => $validated
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to create appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
     
     
@@ -94,7 +145,7 @@ class AppointmentController extends Controller
 
     public function getAvailableSlots(Request $request)
     {
-        $validated = $request->validate(['date' => 'required|date|after:today']);
+        $validated = $request->validate(['date' => 'required|date|after_or_equal:today']);
         $date = $validated['date'];
     
         // Generate all possible time slots
@@ -117,7 +168,6 @@ class AppointmentController extends Controller
         ]);
     }
 
-    // Admin function to get all appointments with user data
 // Admin function to get all appointments with user data
 public function adminGetAllAppointments()
 {
@@ -307,5 +357,81 @@ public function dashboard()
             ], 500);
         }
     }
+
+
+    public function getNextAppointment(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        $appointment = \App\Models\Appointment::where('user_id', $userId)
+            ->whereDate('appointment_date', '>=', now()->toDateString())
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->first();
+
+        if (!$appointment) {
+            // Return 200 with empty payload so clients don't treat as error
+            return response()->json([]);
+        }
+
+        return response()->json([
+            'id' => $appointment->id,
+            'service_type' => $appointment->service_type,
+            // force simple formats React Native can parse
+            'appointment_date' => \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d'),
+            'appointment_time' => \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i:s'),
+        ]);
+    }
+
+    public function getNextAppointmentByOrderStatus(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        // First, try to get the latest order for this user
+        $latestOrder = \App\Models\Order::with('appointment')
+            ->whereHas('appointment', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$latestOrder) {
+            // No order exists, fall back to original appointment
+            return $this->getNextAppointment($request);
+        }
+
+        $status = $latestOrder->status;
+        $appointmentDate = null;
+        $appointmentTime = null;
+
+        if ($status === 'Pending') {
+            // Show original appointment date/time
+            $appointmentDate = $latestOrder->appointment->appointment_date;
+            $appointmentTime = $latestOrder->appointment->appointment_time;
+        } elseif ($status === 'Ready to Check') {
+            // Show admin-set check appointment
+            $appointmentDate = $latestOrder->check_appointment_date;
+            $appointmentTime = $latestOrder->check_appointment_time;
+        } elseif ($status === 'Completed') {
+            // Show admin-set pickup appointment
+            $appointmentDate = $latestOrder->pickup_appointment_date;
+            $appointmentTime = $latestOrder->pickup_appointment_time;
+        }
+
+        if (!$appointmentDate || !$appointmentTime) {
+            // Return 200 with empty payload so clients don't treat as error
+            return response()->json([]);
+        }
+
+        return response()->json([
+            'id' => $latestOrder->appointment->id,
+            'service_type' => $latestOrder->appointment->service_type,
+            'appointment_date' => \Carbon\Carbon::parse($appointmentDate)->format('Y-m-d'),
+            'appointment_time' => \Carbon\Carbon::parse($appointmentTime)->format('H:i:s'),
+            'order_status' => $status,
+        ]);
+    }
+
+
 
 }

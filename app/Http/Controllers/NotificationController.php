@@ -10,14 +10,36 @@ class NotificationController extends Controller
     // GET /notifications - list for the logged-in user (newest first)
     public function index(Request $request)
     {
-        $notifications = Notification::where('user_id', $request->user()->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        try {
+            $userId = $request->user()->id;
+            \Log::info('Fetching notifications for user', ['user_id' => $userId]);
+            
+            $notifications = Notification::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $notifications,
-        ]);
+            \Log::info('Notifications fetched successfully', [
+                'user_id' => $userId,
+                'count' => $notifications->count()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $notifications,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch notifications', [
+                'error' => $e->getMessage(),
+                'user_id' => $request->user()->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch notifications',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     // PATCH /notifications/{id}/read - mark as read
