@@ -1,12 +1,12 @@
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { format } from 'date-fns';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import api from '../utils/api';
 
 const SERVICE_TYPES = [
   'Jersey Production',
@@ -29,6 +29,7 @@ export default function BookAppointment({ visible, onClose }) {
   const [gcashImage, setGcashImage] = useState(null);
   const [successVisible, setSuccessVisible] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [isLoading, setIsLoading] = useState(false);
 
   const [sizes, setSizes] = useState({});
   const [quantity, setQuantity] = useState('');
@@ -45,7 +46,77 @@ export default function BookAppointment({ visible, onClose }) {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
 
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  // Test function to debug API connection
+  const testAPIConnection = async () => {
+    try {
+      console.log("Testing API connection...");
+      
+      // Test basic API endpoint
+      const testResponse = await api.get('/test');
+      console.log("Test endpoint response:", testResponse.status);
+      
+      // Test authenticated endpoint
+      const authResponse = await api.get('/appointments/test');
+      console.log("Auth test response:", authResponse.status);
+      
+      if (authResponse.data) {
+        console.log("Auth test data:", authResponse.data);
+      }
+      
+    } catch (error) {
+      console.error("API connection test failed:", error);
+      
+      // Provide specific guidance based on error type
+      if (error.message === 'Network Error') {
+        Alert.alert(
+          'Network Connection Failed',
+          'Cannot connect to the server. Please check:\n\n' +
+          '1. Backend server is running\n' +
+          '2. Network connection is stable\n' +
+          '3. IP address 192.168.137.170:8000 is correct\n' +
+          '4. Firewall allows the connection',
+          [{ text: 'OK' }]
+        );
+      } else if (error.code === 'ECONNABORTED') {
+        Alert.alert(
+          'Connection Timeout',
+          'Server is not responding. Please check if the backend is running.',
+          [{ text: 'OK' }]
+        );
+      }
+    }
+  };
+
+  // Test network connectivity specifically
+  const testNetworkConnectivity = async () => {
+    try {
+      console.log("Testing network connectivity...");
+      
+      // Test with a simple GET request first
+      const response = await api.get('/test', { timeout: 5000 });
+      console.log("Network test successful:", response.status);
+      
+      Alert.alert('Success', 'Network connection is working!');
+      
+    } catch (error) {
+      console.error("Network test failed:", error);
+      
+      let errorMessage = 'Network test failed.';
+      
+      if (error.message === 'Network Error') {
+        errorMessage = 'Cannot reach the server. Please check:\n\n' +
+                      '• Backend server is running on 192.168.137.170:8000\n' +
+                      '• Both devices are on the same network\n' +
+                      '• No firewall blocking the connection';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Connection timed out. Server may be down or unreachable.';
+      } else if (error.response) {
+        errorMessage = `Server responded with error: ${error.response.status}`;
+      }
+      
+      Alert.alert('Network Test Failed', errorMessage, [{ text: 'OK' }]);
+    }
+  };
 
   useEffect(() => {
     if (!visible) {
@@ -65,6 +136,7 @@ export default function BookAppointment({ visible, onClose }) {
       setAppointmentTimeRaw(null);
       setAvailableSlots([]);
       setTimeDropdown(false);
+      setIsLoading(false);
     }
     if (appointmentDateRaw) {
       fetchAvailableSlots();
@@ -74,7 +146,7 @@ export default function BookAppointment({ visible, onClose }) {
       console.log("Current token:", token);
     };
     checkToken();
-  }, [visible], [appointmentDateRaw]);
+  }, [visible]);
 
   useEffect(() => {
     const total = Object.values(sizes).reduce((a, b) => a + (b || 0), 0);
@@ -91,39 +163,15 @@ export default function BookAppointment({ visible, onClose }) {
 
   const fetchAvailableSlots = async () => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      console.log("Retrieved token:", token); // For debugging
+      console.log("Fetching slots for date:", appointmentDateRaw);
       
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
+      const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}`);
       
-      const response = await fetch(
-        `${API_URL}/appointments/available-slots?date=${appointmentDateRaw}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          }
-        }
-      );
-      
-      console.log("Response status:", response.status); // For debugging
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error: ${response.status} - ${errorText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Invalid response format');
-      }
-      
-      const data = await response.json();
-      setAvailableSlots(data.available_slots || []);
+      console.log("Available slots data:", response.data);
+      setAvailableSlots(response.data.available_slots || []);
     } catch (error) {
       console.error('Error fetching available slots:', error);
+      Alert.alert('Error', 'Failed to fetch available time slots. Please try again.');
       setAvailableSlots([]);
     }
   };
@@ -194,54 +242,101 @@ export default function BookAppointment({ visible, onClose }) {
   };
 
   const handleBookAppointment = async () => {
-    const token = await AsyncStorage.getItem('authToken');
-  
-    if (!token) {
-      alert('You must be logged in to book an appointment.');
-      return;
-    }
-  
-    const formData = new FormData();
-    formData.append('service_type', serviceType);
-    formData.append('sizes', JSON.stringify(sizes));
-    formData.append('total_quantity', quantity);
-    formData.append('notes', notes);
-  
-    if (designImage) {
-      const designImageInfo = await FileSystem.getInfoAsync(designImage);
-      formData.append('design_image', {
-        uri: designImage,
-        name: designImageInfo.uri.split('/').pop(),
-        type: 'image/jpeg',
-      });
-    }
-  
-    if (gcashImage) {
-      const gcashImageInfo = await FileSystem.getInfoAsync(gcashImage);
-      formData.append('gcash_proof', {
-        uri: gcashImage,
-        name: gcashImageInfo.uri.split('/').pop(),
-        type: 'image/jpeg',
-      });
-    }
-  
-    formData.append('preferred_due_date', preferredDueDateRaw);
-    formData.append('appointment_date', appointmentDateRaw);
-    formData.append('appointment_time', appointmentTimeRaw);
-  
     try {
-      const response = await axios.post(`${API_URL}/appointments`, formData, {
+      setIsLoading(true);
+    
+      // Validate required fields
+      if (!serviceType || !quantity || !gcashImage || !preferredDueDateRaw || !appointmentDateRaw || !appointmentTimeRaw) {
+        Alert.alert('Error', 'Please fill in all required fields.');
+        return;
+      }
+    
+      const formData = new FormData();
+      formData.append('service_type', serviceType);
+      formData.append('sizes', JSON.stringify(sizes));
+      formData.append('total_quantity', quantity);
+      formData.append('notes', notes || 'None');
+    
+      if (designImage) {
+        const designImageInfo = await FileSystem.getInfoAsync(designImage);
+        formData.append('design_image', {
+          uri: designImage,
+          name: designImageInfo.uri.split('/').pop(),
+          type: 'image/jpeg',
+        });
+      }
+    
+      if (gcashImage) {
+        const gcashImageInfo = await FileSystem.getInfoAsync(gcashImage);
+        formData.append('gcash_proof', {
+          uri: gcashImage,
+          name: gcashImageInfo.uri.split('/').pop(),
+          type: 'image/jpeg',
+        });
+      }
+    
+      formData.append('preferred_due_date', preferredDueDateRaw);
+      formData.append('appointment_date', appointmentDateRaw);
+      formData.append('appointment_time', appointmentTimeRaw);
+    
+      console.log("Sending appointment data:", {
+        service_type: serviceType,
+        sizes: JSON.stringify(sizes),
+        total_quantity: quantity,
+        notes: notes || 'None',
+        preferred_due_date: preferredDueDateRaw,
+        appointment_date: appointmentDateRaw,
+        appointment_time: appointmentTimeRaw
+      });
+      
+      // Log the FormData contents
+      for (let [key, value] of formData.entries()) {
+        console.log(`FormData ${key}:`, value);
+      }
+      
+      const response = await api.post('/appointments', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
         },
+        timeout: 30000, // 30 second timeout
       });
-  
+      
+      console.log("Booking response:", response.data);
       showSuccess();
+      
     } catch (error) {
-      console.error('Booking failed:', error.response?.data || error.message);
-      alert(error.response?.data?.message || 'Failed to book appointment.');
+      console.error('Booking failed:', error);
+      
+      let errorMessage = 'Failed to book appointment.';
+      let errorTitle = 'Booking Failed';
+      
+      if (error.message === 'Network Error') {
+        errorTitle = 'Network Connection Failed';
+        errorMessage = 'Cannot connect to the server. Please check:\n\n' +
+                      '1. Backend server is running on 192.168.137.170:8000\n' +
+                      '2. Both devices are on the same network\n' +
+                      '3. No firewall blocking the connection\n' +
+                      '4. Try using the "Test Network" button first';
+      } else if (error.code === 'ECONNABORTED') {
+        errorTitle = 'Connection Timeout';
+        errorMessage = 'Server is not responding. Please check if the backend is running.';
+      } else if (error.response) {
+        // Server responded with error
+        console.error('Error response:', error.response.data);
+        errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Request was made but no response
+        console.error('No response received:', error.request);
+        errorMessage = 'No response from server. Please check your internet connection.';
+      } else {
+        // Something else happened
+        console.error('Request setup error:', error.message);
+        errorMessage = `Request error: ${error.message}`;
+      }
+      
+      Alert.alert(errorTitle, errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -260,6 +355,14 @@ export default function BookAppointment({ visible, onClose }) {
                 <Ionicons name="arrow-back" size={24} color="#222" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Book an Appointment</Text>
+              <View style={styles.testButtons}>
+                <TouchableOpacity onPress={testAPIConnection} style={styles.testBtn}>
+                  <Text style={{ color: '#4682B4', fontSize: 12 }}>Test API</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={testNetworkConnectivity} style={[styles.testBtn, { marginLeft: 8, backgroundColor: '#f0fff0', borderColor: '#22C55E' }]}>
+                  <Text style={{ color: '#22C55E', fontSize: 12 }}>Test Network</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -357,6 +460,14 @@ export default function BookAppointment({ visible, onClose }) {
                 <Ionicons name="arrow-back" size={24} color="#222" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Gcash Downpayment</Text>
+              <View style={styles.testButtons}>
+                <TouchableOpacity onPress={testAPIConnection} style={styles.testBtn}>
+                  <Text style={{ color: '#4682B4', fontSize: 12 }}>Test API</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={testNetworkConnectivity} style={[styles.testBtn, { marginLeft: 8, backgroundColor: '#f0fff0', borderColor: '#22C55E' }]}>
+                  <Text style={{ color: '#22C55E', fontSize: 12 }}>Test Network</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
@@ -441,11 +552,13 @@ export default function BookAppointment({ visible, onClose }) {
             </ScrollView>
 
             <TouchableOpacity 
-              style={[styles.bookBtn, (!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime) && styles.bookBtnDisabled]} 
+              style={[styles.bookBtn, (!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime || isLoading) && styles.bookBtnDisabled]} 
               onPress={handleBookAppointment}
-              disabled={!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime}
+              disabled={!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime || isLoading}
             >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Book an Appointment</Text>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                {isLoading ? 'Booking...' : 'Book an Appointment'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -484,6 +597,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#222',
+    flex: 1,
+  },
+  testButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  testBtn: {
+    padding: 8,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#4682B4',
   },
   label: {
     fontWeight: 'bold',

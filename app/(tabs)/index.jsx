@@ -15,23 +15,41 @@ import Header from '../../components/Header';
 import api from '../../utils/api'; // ensure path is correct
 
 export default function HomePage() {
-  const userName = "Dianne";
+  const [userFirstName, setUserFirstName] = useState('User');
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
+
+  // next appointment
+  const [nextAppointment, setNextAppointment] = useState(null);
+
+  // refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
+  // latest order data
+  const [latestOrder, setLatestOrder] = useState(null);
+  const [orderLoading, setOrderLoading] = useState(false);
 
   // notifications
   const [notifications, setNotifications] = useState([]);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [details, setDetails] = useState(null);
 
-  // refresh state
-  const [refreshing, setRefreshing] = useState(false);
+  // load current user and derive first name
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const res = await api.get('/user');
+      const fullName = res?.data?.user?.name || '';
+      const first = fullName.trim().split(/\s+/)[0] || 'User';
+      setUserFirstName(first);
+    } catch (_) {
+      setUserFirstName('User');
+    }
+  }, []);
 
   const loadNotifications = useCallback(async () => {
     try {
       const res = await api.get('/notifications'); // GET user's notifications
       if (res.data?.success) {
-        // ensure latest-first
         const list = res.data.data || [];
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setNotifications(list);
@@ -41,15 +59,59 @@ export default function HomePage() {
     }
   }, []);
 
+  const loadLatestOrder = useCallback(async () => {
+    try {
+      setOrderLoading(true);
+      const res = await api.get('/me/orders/latest');
+      if (res.data?.success) {
+        setLatestOrder(res.data.data || null);
+      }
+    } catch (e) {
+      console.log('Failed to load latest order', e?.message || e);
+    } finally {
+      setOrderLoading(false);
+    }
+  }, []);
+
+  const loadNextAppointment = useCallback(async () => {
+    try {
+      const res = await api.get('/appointments/next-appointment');
+      const data = res.data;
+  
+      if (data?.appointment_date && data?.appointment_time) {
+        const iso = `${data.appointment_date}T${data.appointment_time}`;
+        const dateTime = new Date(iso);
+  
+        if (!isNaN(dateTime.getTime())) {
+          setNextAppointment(formatDateTime12(dateTime)); // ✅ pass Date object
+        } else {
+          console.log("Invalid date from API:", iso);
+          setNextAppointment(null);
+        }
+      } else {
+        setNextAppointment(null);
+      }
+    } catch (err) {
+      if (err?.response?.status !== 404) {
+        console.log('Error fetching appointment', err);
+      }
+      setNextAppointment(null);
+    }
+  }, []);
+  
+
   useEffect(() => {
     loadNotifications();
-  }, [loadNotifications]);
+    loadCurrentUser();
+    loadLatestOrder();
+    loadNextAppointment();
+  }, [loadNotifications, loadCurrentUser, loadLatestOrder, loadNextAppointment]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadNotifications();
+    await Promise.all([loadNotifications(), loadLatestOrder(), loadNextAppointment()]);
     setRefreshing(false);
-  }, [loadNotifications]);
+  }, [loadNotifications, loadLatestOrder, loadNextAppointment]);
 
   const formatMonthDay = (iso) => {
     const d = new Date(iso);
@@ -65,39 +127,89 @@ export default function HomePage() {
 
   const formatDateTime12 = (iso) => {
     const d = new Date(iso);
+    if (isNaN(d.getTime())) return "Invalid date";  // debug guard
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     const yyyy = d.getFullYear();
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
     return `${mm}/${dd}/${yyyy} ${time}`;
+  };  
+  
+
+  const parseSizesToText = (sizes) => {
+    try {
+      let obj = sizes;
+      if (!obj) return '';
+      if (typeof obj === 'string') {
+        obj = JSON.parse(obj);
+      }
+      if (Array.isArray(obj)) {
+        return obj.join(', ');
+      }
+      if (obj && typeof obj === 'object') {
+        return Object.entries(obj)
+          .filter(([, qty]) => Number(qty) > 0)
+          .map(([size, qty]) => `${size} - ${qty} pcs.`)
+          .join('\n');
+      }
+      return '';
+    } catch (_) {
+      return '';
+    }
   };
 
   const openDetails = (n) => {
-    let extra = '';
-    if (n.type === 'ready_to_check' && n.data?.scheduled_at) {
-      extra = `Your next appointment date is ${formatDateTime12(n.data.scheduled_at)}.`;
-    } else if (n.type === 'order_completed') {
-      const when = n.data?.scheduled_at ? `Your next appointment date is ${formatDateTime12(n.data.scheduled_at)}.` : '';
-      const amount = (n.data?.total_amount != null)
-        ? `Please prepare ${Number(n.data.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for your next appointment to get your order.`
+    if (n.type === 'ready_to_check') {
+      const scheduledText = n.data?.scheduled_at
+        ? `Your next appointment is at ${formatDateTime12(n.data.scheduled_at)}.`
         : '';
-      extra = [when, amount].filter(Boolean).join('\n');
+      setDetails({
+        title: 'Your order is now ready to check',
+        body: ['Your order is now ready to check.', scheduledText].filter(Boolean).join('\n'),
+      });
+      setDetailsVisible(true);
+      return;
+    }
+
+    if (n.type === 'order_completed') {
+      const when = n.data?.scheduled_at
+        ? `Your next appointment will be on ${formatDateTime12(n.data.scheduled_at)}.`
+        : '';
+      const amount =
+        n.data?.total_amount != null
+          ? `Please prepare ${Number(n.data.total_amount).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} to get your order.`
+          : '';
+      setDetails({
+        title: 'Your order is now completed',
+        body: [when, amount].filter(Boolean).join('\n'),
+      });
+      setDetailsVisible(true);
+      return;
     }
 
     setDetails({
       title: n.title,
-      body: extra || (n.body ?? ''),
+      body: n.body ?? '',
     });
     setDetailsVisible(true);
   };
 
   const renderActivityItem = (n) => {
-    const showViewMore = (n.type === 'ready_to_check') || (n.type === 'order_completed');
+    const isReadyToCheck = n.type === 'ready_to_check';
+    const showViewMore = isReadyToCheck || n.type === 'order_completed';
+    const title = isReadyToCheck
+      ? 'Your order is now ready to check'
+      : n.type === 'order_completed'
+      ? 'Your order is now completed'
+      : n.title;
     return (
       <View key={n.id} style={styles.activityItem}>
         <Text style={styles.activityDate}>{formatMonthDay(n.created_at)}</Text>
         <View style={styles.activityContent}>
-          <Text style={styles.activityText}>{n.title}</Text>
+          <Text style={styles.activityText}>{title}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.activityTime}>{formatTime12(n.created_at)}</Text>
             {showViewMore && (
@@ -114,66 +226,150 @@ export default function HomePage() {
   return (
     <View style={styles.container}>
       <View style={styles.background} />
-      <Header userName={userName} />
+      <Header userName={userFirstName} />
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 90 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Rest of UI (kept same as your placeholders) */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeText}>Welcome back, {userName}!</Text>
+          <Text style={styles.welcomeText}>Welcome back, {userFirstName}!</Text>
           <Text style={styles.welcomeSubtext}>
             "We're tailoring your orders with care.{'\n'}Here's what's happening today."
           </Text>
         </View>
 
-        <View style={styles.orderCard}>
-          <Text style={styles.orderTitle}><Text style={styles.boldText}>Current Order</Text> - Queue #002</Text>
-          <View style={styles.orderDetails}>
-            <View>
-              <Text style={styles.itemText}>Volleyball Jersey</Text>
-              <Text style={styles.itemDetail}>Size: Small - 2pcs., Medium - 3pcs.</Text>
-              <Text style={styles.itemDetail}>Quantity: 5pcs.</Text>
+        {latestOrder ? (
+          <View style={styles.orderCard}>
+            <Text style={styles.orderTitle}>
+              <Text style={styles.boldText}>Current Order</Text>
+              {latestOrder?.queue_number ? ` - Queue #${latestOrder.queue_number}` : ''}
+            </Text>
+            <View style={styles.orderDetails}>
+              <View style={styles.orderInfo}>
+                <Text style={styles.itemText}>
+                  {latestOrder?.appointment?.service_type || 'N/A'}
+                </Text>
+                <View style={styles.sizeDetails}>
+                  <Text style={styles.sizeLabel}>Size:</Text>
+                  <Text style={styles.sizeText}>
+                    {parseSizesToText(latestOrder?.appointment?.sizes) || 'N/A'}
+                  </Text>
+                </View>
+                <Text style={styles.itemDetail}>
+                  {`Quantity: ${latestOrder?.appointment?.total_quantity ?? 'N/A'} pcs.`}
+                </Text>
+              </View>
+              <View style={styles.dateSection}>
+                <Text style={styles.dateLabel}>Due Date</Text>
+                <Text style={styles.date}>
+                  {(() => {
+                    const status = latestOrder?.status;
+                    const pref = latestOrder?.appointment?.preferred_due_date;
+                    const sched = latestOrder?.scheduled_at;
+                    const apptDate = latestOrder?.appointment?.appointment_date;
+                    const dateSrc =
+                      status === 'Ready to Check' && sched ? sched : pref || apptDate;
+                    return dateSrc ? new Date(dateSrc).toLocaleDateString() : 'N/A';
+                  })()}
+                </Text>
+              </View>
             </View>
-            <View style={styles.dateSection}>
-              <Text style={styles.dateLabel}>Due Date</Text>
-              <Text style={styles.date}>01/10/2025</Text>
-            </View>
-          </View>
 
-          <View style={styles.orderProgressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressStep, styles.stepDone]} />
-              <View style={[styles.progressStep, styles.stepCurrent]} />
-              <View style={[styles.progressStep, styles.stepPending]} />
+            <View style={styles.orderProgressContainer}>
+              <View style={styles.progressBar}>
+                {['Pending', 'Ready to Check', 'Completed'].map((step, idx) => {
+                  const status = latestOrder?.status || 'Pending';
+                  const activeIdx =
+                    status === 'Pending' ? 0 : status === 'Ready to Check' ? 1 : 2;
+                  const isActive = idx === activeIdx;
+                  return (
+                    <View
+                      key={step}
+                      style={[
+                        styles.progressStep,
+                        isActive ? styles.stepCurrent : styles.stepDone,
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+              <Text style={styles.progressText}>Pending → Ready to Check → Completed</Text>
             </View>
-            <Text style={styles.progressText}>Queued → In Progress → Ready</Text>
           </View>
-        </View>
+        ) : (
+          <View style={styles.orderCard}>
+            <Text style={styles.orderTitle}>
+              <Text style={styles.boldText}>You have no orders yet</Text>
+            </Text>
+            <Text style={{ color: '#687076' }}>
+              Press on the blue button at the bottom left to book an appointment!
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Announcements</Text>
 
+        {/* ✅ Next Appointment card uses API state */}
         <View style={styles.announcementCard}>
           <View style={[styles.indicator, styles.indicatorGreen]} />
-          <MaterialIcons name="access-time" size={24} color="#16A34A" style={styles.announcementIcon} />
+          <MaterialIcons
+            name="access-time"
+            size={24}
+            color="#16A34A"
+            style={styles.announcementIcon}
+          />
           <View>
             <Text style={styles.announcementTitle}>Next Appointment</Text>
-            <Text style={styles.announcementDate}>01/05/2025</Text>
+            <Text style={styles.announcementDate}>
+              {nextAppointment ? nextAppointment : 'No appointment set for now'}
+            </Text>
           </View>
         </View>
 
         <View style={styles.announcementCard}>
           <View style={[styles.indicator, styles.indicatorYellow]} />
-          <MaterialCommunityIcons name="file-document-outline" size={24} color="#FFA500" style={styles.announcementIcon} />
+          <MaterialCommunityIcons
+            name="file-document-outline"
+            size={24}
+            color="#FFA500"
+            style={styles.announcementIcon}
+          />
           <View>
             <Text style={styles.announcementTitle}>Order Status</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>Pending</Text>
-            </View>
+            {latestOrder?.status ? (
+              <View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor:
+                      latestOrder?.status === 'Completed'
+                        ? '#E8F5E9'
+                        : latestOrder?.status === 'Ready to Check'
+                        ? '#FFEBEE'
+                        : '#FFF3E0',
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color:
+                      latestOrder?.status === 'Completed'
+                        ? '#4caf50'
+                        : latestOrder?.status === 'Ready to Check'
+                        ? '#e91e63'
+                        : '#FFA500',
+                    fontSize: 12,
+                    fontWeight: '500',
+                  }}
+                >
+                  {latestOrder?.status}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.announcementDate}>No order status set for now</Text>
+            )}
           </View>
         </View>
 
@@ -220,6 +416,7 @@ export default function HomePage() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -269,6 +466,63 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  orderDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  orderInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  sizeDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginVertical: 5,
+  },
+  sizeLabel: {
+    fontSize: 14,
+    color: '#687076',
+    marginRight: 5,
+  },
+  sizeText: {
+    fontSize: 14,
+    color: '#687076',
+    flex: 1,
+  },
+  boldText: {
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  orderTitle: {
+    fontSize: 16,
+    color: '#000',
+    marginBottom: 13,
+  },
+  itemText: {
+    fontWeight: 'bold',
+    fontSize: 15,
+    color: '#000',
+    marginBottom: 5,
+  },
+  itemDetail: {
+    fontSize: 14,
+    color: '#687076',
+  },
+  dateSection: {
+    alignItems: 'flex-end',
+    minWidth: 100,
+  },
+  dateLabel: {
+    fontSize: 13,
+    color: '#000',
+    marginBottom: 2,
+  },
+  date: {
+    fontSize: 14,
+    color: '#000',
+    fontWeight: '500',
+  },
   orderProgressContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -296,68 +550,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#687076',
     textAlign: 'right',
-  },
-  
-  boldText: {
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  orderTitle: {
-    fontSize: 16,
-    color: '#000',
-    marginBottom: 13,
-  },
-  orderDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  itemText: {
-    fontWeight: 'bold',
-    fontSize: 15,
-    color: '#000',
-    marginBottom: 5,
-  },
-  itemDetail: {
-    fontSize: 14,
-    color: '#687076',
-  },
-  dateSection: {
-    alignItems: 'flex-end',
-  },
-  dateLabel: {
-    fontSize: 13,
-    color: '#000',
-    marginBottom: 2,
-  },
-  date: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '500',
-  },
-  progressBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  progressStep: {
-    width: 16,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  stepDone: {
-    backgroundColor: '#A9A9A9',
-  },
-  stepCurrent: {
-    backgroundColor: '#2E8B57',
-  },
-  stepPending: {
-    backgroundColor: '#A9A9A9',
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#687076',
-    textAlign: 'center',
   },
   sectionTitle: {
     fontSize: 18,
@@ -467,11 +659,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
     elevation: 8,
   },
-
-   // Modal
-   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-   modalCard: { width: '85%', backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 8 },
-   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
-   modalBody: { fontSize: 14, color: '#000', lineHeight: 20 },
+  viewMore: {
+    color: '#4682B4',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Modal
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
+  modalCard: { width: '85%', backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
+  modalBody: { fontSize: 14, color: '#000', lineHeight: 20 },
 });

@@ -1,6 +1,5 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import api from '../../utils/api';
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +29,7 @@ export default function Login() {
 
     setLoading(true); // Start loading
     try {
-      const response = await axios.post('http://192.168.10.47:8000/api/login', {
+      const response = await api.post('/login', {
         email,
         password,
       });

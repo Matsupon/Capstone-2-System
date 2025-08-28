@@ -1,4 +1,5 @@
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import React, { useState } from 'react';
@@ -22,9 +23,26 @@ export default function SignUp() {
         password,
         address,
       });
-  
+
       console.log('Registration successful:', response.data);
-      router.replace('/(tabs)');
+
+      // If backend returns access token on register, store and proceed
+      const token = response.data?.access_token;
+      if (token) {
+        await AsyncStorage.setItem('authToken', token);
+        router.replace('/(tabs)');
+        return;
+      }
+
+      // If no token, log in immediately after register
+      const loginRes = await api.post('/login', { email, password });
+      const loginToken = loginRes.data?.access_token;
+      if (loginToken) {
+        await AsyncStorage.setItem('authToken', loginToken);
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/auth/login');
+      }
     } catch (error) {
       console.error('Registration failed:', error.response?.data || error.message);
       alert('Could not register. Check your inputs.');
