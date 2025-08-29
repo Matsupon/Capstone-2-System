@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import mime from 'mime';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
 
 const API = process.env.EXPO_PUBLIC_API_URL;
@@ -17,6 +17,35 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [tempImage, setTempImage] = useState(null);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', password: '' });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [fadeAnim] = useState(new Animated.Value(0));
+
+  const showSuccessMessage = () => {
+    setShowSuccessModal(true);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.ease,
+      useNativeDriver: true,
+    }).start();
+
+    setTimeout(() => {
+      hideSuccessMessage();
+    }, 2000);
+  };
+
+  const hideSuccessMessage = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      easing: Easing.ease,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowSuccessModal(false);
+    });
+  };
 
   const fetchUserData = async () => {
     try {
@@ -32,10 +61,44 @@ export default function ProfilePage() {
       if (response.data.image_url) {
         setProfileImageUrl(response.data.image_url);
       }
+
+      // initialize form fields
+      const u = response.data.user || {};
+      setForm({
+        name: u.name || '',
+        email: u.email || '',
+        phone: u.phone || '',
+        address: u.address || '',
+        password: '',
+      });
     } catch (error) {
       console.error('Failed to fetch user:', error.response?.data || error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const formData = new FormData();
+      if (form.name) formData.append('name', form.name);
+      if (form.email) formData.append('email', form.email);
+      if (form.phone) formData.append('phone', form.phone);
+      if (form.address) formData.append('address', form.address);
+      if (form.password) formData.append('password', form.password);
+
+      const response = await axios.post(`${API}/profile`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+      });
+
+      setUser(response.data.user);
+      setProfileImageUrl(response.data.image_url);
+      setIsEditing(false);
+      showSuccessMessage();
+    } catch (error) {
+      console.error('Profile save failed:', error.response?.data || error.message);
+      Alert.alert('Update Failed', error.response?.data?.message || 'Could not update profile.');
     }
   };
 
@@ -109,7 +172,7 @@ export default function ProfilePage() {
       setUser(response.data.user);
       setProfileImageUrl(response.data.image_url); // ✅ Set full image URL here
       setTempImage(null);
-      Alert.alert('Success', 'Profile picture updated successfully!');
+      showSuccessMessage();
     } catch (error) {
       console.error('Upload failed:', error.response?.data || error.message);
       Alert.alert('Upload Failed', error.response?.data?.message || 'Could not update profile picture.');
@@ -169,38 +232,94 @@ export default function ProfilePage() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Name</Text>
-          <TextInput style={styles.input} value={user?.name} editable={false} />
+          <TextInput
+            style={[styles.input, isEditing && styles.inputEditing]}
+            value={isEditing ? form.name : user?.name}
+            editable={isEditing}
+            onChangeText={(t) => setForm((p) => ({ ...p, name: t }))}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} value={user?.email} editable={false} />
+          <TextInput
+            style={[styles.input, isEditing && styles.inputEditing]}
+            value={isEditing ? form.email : user?.email}
+            editable={isEditing}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            onChangeText={(t) => setForm((p) => ({ ...p, email: t }))}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Phone</Text>
-          <TextInput style={styles.input} value={user?.phone} editable={false} />
+          <TextInput
+            style={[styles.input, isEditing && styles.inputEditing]}
+            value={isEditing ? form.phone : user?.phone}
+            editable={isEditing}
+            keyboardType="phone-pad"
+            onChangeText={(t) => setForm((p) => ({ ...p, phone: t }))}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Address</Text>
-          <TextInput style={styles.input} value={user?.address} editable={false} />
+          <TextInput
+            style={[styles.input, isEditing && styles.inputEditing]}
+            value={isEditing ? form.address : user?.address}
+            editable={isEditing}
+            onChangeText={(t) => setForm((p) => ({ ...p, address: t }))}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password</Text>
-          <TextInput style={styles.input} value="********" secureTextEntry editable={false} />
+          <TextInput
+            style={[styles.input, isEditing && styles.inputEditing]}
+            value={isEditing ? form.password : '********'}
+            secureTextEntry
+            editable={isEditing}
+            onChangeText={(t) => setForm((p) => ({ ...p, password: t }))}
+            placeholder={isEditing ? 'Leave blank to keep current password' : undefined}
+          />
         </View>
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.editButton}>
-            <Text style={styles.buttonText}>EDIT PROFILE</Text>
-          </TouchableOpacity>
+          {isEditing ? (
+            <>
+              <TouchableOpacity style={styles.editButton} onPress={saveProfile}>
+                <Text style={styles.buttonText}>SAVE CHANGES</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => { setIsEditing(false); setForm((p) => ({...p, password: ''})); }}>
+                <Text style={styles.cancelButtonText}>CANCEL</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity style={styles.editButton} onPress={() => setIsEditing(true)}>
+              <Text style={styles.buttonText}>EDIT PROFILE</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.buttonText}>LOGOUT</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Success Modal */}
+      <Modal
+        transparent={true}
+        visible={showSuccessModal}
+        animationType="none"
+        onRequestClose={hideSuccessMessage}
+      >
+        <View style={styles.modalContainer}>
+          <Animated.View style={[styles.successModal, { opacity: fadeAnim }]}>
+            <MaterialIcons name="check-circle" size={50} color="#4CAF50" />
+            <Text style={styles.successText}>Profile Updated Successfully!</Text>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -288,6 +407,18 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#f9f9f9',
   },
+  inputEditing: {
+    borderColor: '#4682B4',
+    backgroundColor: '#fff',
+    shadowColor: '#4682B4',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
   buttonContainer: {
     marginTop: 30,
     gap: 10,
@@ -297,6 +428,18 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  cancelButton: {
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4682B4',
+  },
+  cancelButtonText: {
+    color: '#4682B4',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   logoutButton: {
     backgroundColor: '#FF6B6B',
@@ -325,5 +468,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderWidth: 2,
     borderColor: '#4682B4',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  successModal: {
+    backgroundColor: 'white',
+    padding: 25,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  successText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
   },
 });
