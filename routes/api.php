@@ -27,13 +27,10 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
-Route::middleware([
-    EnsureFrontendRequestsAreStateful::class,
-    'auth:sanctum',
-])->group(function () {
-    Route::get('/user', [AuthController::class, 'user']);
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::post('/profile', [ProfileController::class, 'update']);
+Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/profile', [ProfileController::class, 'update']);
 
     // Test appointment controller
     Route::get('/appointments/test', [AppointmentController::class, 'test']);

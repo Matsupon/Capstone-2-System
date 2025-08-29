@@ -294,7 +294,7 @@ class OrderController extends Controller
             $userId = $request->user()->id;
             \Log::info('Fetching latest order for user', ['user_id' => $userId]);
     
-            $order = Order::with('appointment')
+            $order = Order::with('appointment.user')
                 ->whereHas('appointment', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
                 })
@@ -330,11 +330,21 @@ class OrderController extends Controller
                         'total_quantity'   => $order->appointment->total_quantity,
                         'preferred_due_date' => $order->appointment->preferred_due_date,
                         'notes'            => $order->appointment->notes,
-                        'design_image'     => $order->appointment->design_image,
-                        'gcash_proof'      => $order->appointment->gcash_proof,
+                        'design_image'     => $order->appointment->design_image
+                            ? asset('storage/' . $order->appointment->design_image)
+                            : null,
+                        'gcash_proof'      => $order->appointment->gcash_proof
+                            ? asset('storage/' . $order->appointment->gcash_proof)
+                            : null,
                         // 👇 these two are what your mobile app needs
                         'appointment_date' => $order->appointment->appointment_date,
                         'appointment_time' => $order->appointment->appointment_time,
+                        'user' => $order->appointment->relationLoaded('user') && $order->appointment->user ? [
+                            'id' => $order->appointment->user->id,
+                            'name' => $order->appointment->user->name,
+                            'phone' => $order->appointment->user->phone,
+                            'email' => $order->appointment->user->email,
+                        ] : null,
                     ],
                     // Add the new appointment fields
                     'check_appointment_date' => $order->check_appointment_date,
