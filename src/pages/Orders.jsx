@@ -45,6 +45,8 @@ const Orders = () => {
   const [error, setError] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [showFinishConfirmation, setShowFinishConfirmation] = useState(false);
+  const [orderToFinish, setOrderToFinish] = useState(null);
   // Note: Removed bookedSlots fetching since backend endpoint requires a date param
   
   // New states for completion calendar
@@ -249,6 +251,8 @@ const Orders = () => {
         return '#ff9800';
       case 'Completed':
         return '#4caf50';
+      case 'Finished':
+        return '#4caf50';
       default:
         return '#333';
     }
@@ -267,6 +271,13 @@ const Orders = () => {
     }
     if (newStatus === 'Completed') {
       openCompletionCalendarModal(orderId);
+      setShowUpdateDropdown(null);
+      return;
+    }
+    if (newStatus === 'Finished') {
+      const order = orders.find(o => o.id === orderId);
+      setOrderToFinish(order);
+      setShowFinishConfirmation(true);
       setShowUpdateDropdown(null);
       return;
     }
@@ -289,6 +300,28 @@ const Orders = () => {
     } catch (err) {
       console.error('Error updating order status:', err);
       setError('Failed to update order status');
+    }
+  };
+
+  const handleFinishOrder = async () => {
+    if (!orderToFinish) return;
+    
+    try {
+      const response = await api.patch(`/orders/${orderToFinish.id}/status`, {
+        status: 'Finished'
+      });
+
+      if (response.data.success) {
+        // Remove the order from the list since it's now finished
+        setOrders(orders.filter(order => order.id !== orderToFinish.id));
+        setShowFinishConfirmation(false);
+        setOrderToFinish(null);
+        setUpdateSuccess(true);
+        setTimeout(() => setUpdateSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Error finishing order:', err);
+      setError('Failed to finish order');
     }
   };
 
@@ -576,6 +609,12 @@ const Orders = () => {
                               onClick={() => handleUpdateStatus(order.id, 'Completed')}
                             >
                               Completed
+                            </div>
+                            <div
+                              className="dropdown-item"
+                              onClick={() => handleUpdateStatus(order.id, 'Finished')}
+                            >
+                              Finished
                             </div>
                           </div>
                         )}
@@ -878,6 +917,34 @@ const Orders = () => {
                 >
                   Submit Payment
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Finish Confirmation Modal */}
+          {showFinishConfirmation && orderToFinish && (
+            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }}>
+              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure the Order is Finished?</h3>
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => {
+                      setShowFinishConfirmation(false);
+                      setOrderToFinish(null);
+                    }}
+                  >
+                    No
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={handleFinishOrder}
+                  >
+                    Yes
+                  </button>
+                </div>
               </div>
             </div>
           )}

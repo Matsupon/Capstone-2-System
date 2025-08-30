@@ -240,7 +240,7 @@ export default function HomePage() {
           </Text>
         </View>
 
-        {latestOrder ? (
+        {latestOrder && latestOrder.status !== 'Finished' ? (
           <View style={styles.orderCard}>
             <Text style={styles.orderTitle}>
               <Text style={styles.boldText}>Current Order</Text>
@@ -323,7 +323,9 @@ export default function HomePage() {
           <View>
             <Text style={styles.announcementTitle}>Next Appointment</Text>
             <Text style={styles.announcementDate}>
-              {nextAppointment ? nextAppointment : 'No appointment set for now'}
+              {latestOrder && latestOrder.status !== 'Finished' && nextAppointment 
+                ? nextAppointment 
+                : 'No recent appointment for now'}
             </Text>
           </View>
         </View>
@@ -338,7 +340,7 @@ export default function HomePage() {
           />
           <View>
             <Text style={styles.announcementTitle}>Order Status</Text>
-            {latestOrder?.status ? (
+            {latestOrder && latestOrder.status !== 'Finished' && latestOrder?.status ? (
               <View
                 style={[
                   styles.statusBadge,
@@ -368,7 +370,7 @@ export default function HomePage() {
                 </Text>
               </View>
             ) : (
-              <Text style={styles.announcementDate}>No order status set for now</Text>
+              <Text style={styles.announcementDate}>No recent status for now</Text>
             )}
           </View>
         </View>
@@ -376,10 +378,18 @@ export default function HomePage() {
         <Text style={styles.sectionTitle}>Recent Activity</Text>
 
         <View style={styles.activityList}>
-          {notifications.length === 0 ? (
-            <Text style={{ color: '#687076', padding: 10 }}>No recent activity yet.</Text>
+          {notifications.length === 0 || (latestOrder && latestOrder.status === 'Finished') ? (
+            <Text style={{ color: '#687076', padding: 10 }}>No new notifications for now.</Text>
           ) : (
-            notifications.map(renderActivityItem)
+            notifications
+              .filter(notification => {
+                // Filter out notifications related to finished orders
+                if (latestOrder && latestOrder.status === 'Finished') {
+                  return false;
+                }
+                return true;
+              })
+              .map(renderActivityItem)
           )}
         </View>
       </ScrollView>

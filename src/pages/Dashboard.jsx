@@ -10,6 +10,7 @@ import '../styles/Dashboard.css';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  const [orderStats, setOrderStats] = useState({ pending_orders: 0, finished_orders: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -90,8 +91,21 @@ const Dashboard = () => {
         setIsLoading(false);
       }
     };
+
+    // Fetch order statistics
+    const fetchOrderStats = async () => {
+      try {
+        const response = await api.get('/orders/stats');
+        if (response.data?.success) {
+          setOrderStats(response.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch order stats:', err);
+      }
+    };
   
     fetchAppointments();
+    fetchOrderStats();
   }, [navigate]);
   
 
@@ -192,10 +206,8 @@ const Dashboard = () => {
         const appDate = new Date(app.appointment_date);
         return appDate.toDateString() === currentDate.toDateString();
       }).length, color: "blue" },
-    { title: "Pending Orders", value: 7, color: "yellow" },
-    { title: "Completed Orders", value: 3, color: "green" }
-
-    
+    { title: "Pending Orders", value: orderStats.pending_orders, color: "yellow" },
+    { title: "Completed Orders", value: orderStats.finished_orders, color: "green" }
   ];
 
   const liveQueue = {

@@ -33,6 +33,7 @@ const Sidebar = () => {
     { path: '/dashboard', name: 'Dashboard', icon: FaTachometerAlt },
     { path: '/appointments', name: 'Appointments', icon: FaCalendarAlt },
     { path: '/orders', name: 'Orders', icon: FaShoppingBag },
+    { path: '/orders-history', name: "Order's History", icon: FaShoppingBag },
     { path: '/customers', name: 'Customers', icon: FaUsers },
   ];
 
