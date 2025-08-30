@@ -23,9 +23,9 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="appointments"
+        name="orders"
         options={{
-          title: 'My Appointment',
+          title: 'My Orders',
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="calendar-today" size={24} color={color} />
           ),

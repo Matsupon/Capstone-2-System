@@ -28,6 +28,10 @@ export default function AppointmentsPage() {
   // Latest order (same source as Home/index.jsx)
   const [latestOrder, setLatestOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
+  
+  // Finished orders for history section
+  const [finishedOrders, setFinishedOrders] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const toggleRecent = () => {
     setExpandedRecent(!expandedRecent);
@@ -117,10 +121,25 @@ export default function AppointmentsPage() {
     }
   }, []);
 
+  const loadFinishedOrders = useCallback(async () => {
+    try {
+      setHistoryLoading(true);
+      const res = await api.get('/me/orders/history');
+      if (res.data?.success) {
+        setFinishedOrders(res.data.data || []);
+      }
+    } catch (e) {
+      // noop
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadNextAppointment();
     loadLatestOrder();
-  }, [loadNextAppointment, loadLatestOrder]);
+    loadFinishedOrders();
+  }, [loadNextAppointment, loadLatestOrder, loadFinishedOrders]);
 
   // Helper function to get status color
   const getStatusColor = (status) => {
@@ -141,7 +160,7 @@ export default function AppointmentsPage() {
       <Header userName="Dianne" />
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 50 }}>
-        <Text style={styles.pageTitle}>My Appointments</Text>
+        <Text style={styles.pageTitle}>My Orders</Text>
 
         {/* Reminders Section */}
         <Text style={styles.sectionTitle}>Reminders</Text>
@@ -161,31 +180,33 @@ export default function AppointmentsPage() {
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardDate}>
-                {latestOrder ? `Order: ${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent order'}
+                {latestOrder ? `Order: ${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent orders for now'}
               </Text>
-              <TouchableOpacity onPress={toggleRecent} style={styles.statusContainer}>
-                {latestOrder?.status ? (
-                  <Text
-                    style={[
-                      styles.statusText,
-                      latestOrder?.status === 'Completed'
-                        ? styles.statusCompleted
-                        : latestOrder?.status === 'Ready to Check'
-                        ? styles.statusReadyToCheck
-                        : styles.statusPending,
-                    ]}
-                  >
-                    {latestOrder?.status}
-                  </Text>
-                ) : (
-                  <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
-                )}
-                <MaterialIcons
-                  name={expandedRecent ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color={getStatusColor(latestOrder?.status || 'Pending')}
-                />
-              </TouchableOpacity>
+              {latestOrder && (
+                <TouchableOpacity onPress={toggleRecent} style={styles.statusContainer}>
+                  {latestOrder?.status ? (
+                    <Text
+                      style={[
+                        styles.statusText,
+                        latestOrder?.status === 'Completed'
+                          ? styles.statusCompleted
+                          : latestOrder?.status === 'Ready to Check'
+                          ? styles.statusReadyToCheck
+                          : styles.statusPending,
+                      ]}
+                    >
+                      {latestOrder?.status}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
+                  )}
+                  <MaterialIcons
+                    name={expandedRecent ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                    size={24}
+                    color={getStatusColor(latestOrder?.status || 'Pending')}
+                  />
+                </TouchableOpacity>
+              )}
             </View>
             {expandedRecent && latestOrder && (
               <View style={styles.dropdownContent}>
@@ -217,82 +238,73 @@ export default function AppointmentsPage() {
           </View>
         </View>
 
-        {/* History Section */}
-        <Text style={styles.sectionTitle}>History</Text>
+       {/* History Section */}
+      <Text style={styles.sectionTitle}>History</Text>
 
-        {/* First History */}
-        <View style={styles.appointmentCard}>
-          <View style={[styles.indicator, styles.indicatorCompleted]} />
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardDate}>April 5, 2025 - 10:00 AM</Text>
-              <TouchableOpacity onPress={() => toggleHistory('first')} style={styles.statusContainer}>
-                <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
-                <MaterialIcons
-                  name={expandedHistory.first ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#4caf50"
-                />
-              </TouchableOpacity>
-            </View>
-            {expandedHistory.first && (
-              <View style={styles.dropdownContent}>
-                <Text style={styles.dropdownTitle}>Order Details:</Text>
-                <Text style={styles.dropdownText}>• Service: Customize Jersey</Text>
-                <Text style={styles.dropdownText}>• Phone Number: +63 912 345 6789</Text>
-                <Text style={styles.dropdownText}>• Size: Small - 2 pcs., Medium - 3 pcs.</Text>
-                <Text style={styles.dropdownText}>• Quantity: 5 pcs.</Text>
-                <Text style={styles.dropdownText}>• Due Date: May 30, 2025</Text>
-                <Text style={styles.dropdownText}>• Notes: Add red stripes on sleeves</Text>
-                <Text style={styles.dropdownText}>• Design Image:</Text>
-                <TouchableOpacity onPress={() => handleImagePress(require('../../assets/images/jersey.jpg'))}>
-                  <Image source={require('../../assets/images/jersey.jpg')} style={styles.image} />
-                </TouchableOpacity>
-                <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
-                <TouchableOpacity onPress={() => handleImagePress(require('../../assets/images/gcash.png'))}>
-                  <Image source={require('../../assets/images/gcash.png')} style={styles.image} />
-                </TouchableOpacity>
-              </View>
-            )}
+{finishedOrders.length > 0 ? (
+  finishedOrders.map((order, index) => (
+    <View key={order.id} style={styles.appointmentCard}>
+      <View style={[styles.indicator, styles.indicatorCompleted]} />
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
+          <View style={styles.orderInfo}>
+            <Text style={styles.cardDate} numberOfLines={2}>
+              {`Order: ${order?.appointment?.service_type || 'N/A'}`}
+            </Text>
           </View>
-        </View>
-
-        {/* Second History */}
-        <View style={styles.appointmentCard}>
-          <View style={[styles.indicator, styles.indicatorCompleted]} />
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardDate}>March 5, 2025 - 10:00 AM</Text>
-              <TouchableOpacity onPress={() => toggleHistory('second')} style={styles.statusContainer}>
-                <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
-                <MaterialIcons
-                  name={expandedHistory.second ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#4caf50"
-                />
-              </TouchableOpacity>
-            </View>
-            {expandedHistory.second && (
-              <View style={styles.dropdownContent}>
-                <Text style={styles.dropdownTitle}>Order Details:</Text>
-                <Text style={styles.dropdownText}>• Service: Customize Jersey</Text>
-                <Text style={styles.dropdownText}>• Phone Number: +63 912 345 6789</Text>
-                <Text style={styles.dropdownText}>• Size: Small - 2 pcs., Medium - 3 pcs.</Text>
-                <Text style={styles.dropdownText}>• Quantity: 5 pcs.</Text>
-                <Text style={styles.dropdownText}>• Due Date: May 30, 2025</Text>
-                <Text style={styles.dropdownText}>• Notes: Add red stripes on sleeves</Text>
-                <Text style={styles.dropdownText}>• Design Image:</Text>
-                <TouchableOpacity onPress={() => handleImagePress(require('../../assets/images/jersey.jpg'))}>
-                  <Image source={require('../../assets/images/jersey.jpg')} style={styles.image} />
-                </TouchableOpacity>
-                <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
-                <TouchableOpacity onPress={() => handleImagePress(require('../../assets/images/gcash.png'))}>
-                  <Image source={require('../../assets/images/gcash.png')} style={styles.image} />
-                </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => toggleHistory(index.toString())} 
+            style={styles.statusContainer}
+          >
+            <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
+            <MaterialIcons
+              name={expandedHistory[index.toString()] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={24}
+              color="#4caf50"
+            />
+          </TouchableOpacity>
+                </View>
+                {expandedHistory[index.toString()] && (
+                  <View style={styles.dropdownContent}>
+                    <Text style={styles.dropdownTitle}>Order Details:</Text>
+                    <Text style={styles.dropdownText}>{`• Service: ${order?.appointment?.service_type || 'N/A'}`}</Text>
+                    <Text style={styles.dropdownText}>{`• Phone Number: ${order?.appointment?.user?.phone || 'N/A'}`}</Text>
+                    <Text style={styles.dropdownText}>{`• Size: ${parseSizesToText(order?.appointment?.sizes) || 'N/A'}`}</Text>
+                    <Text style={styles.dropdownText}>{`• Quantity: ${order?.appointment?.total_quantity ?? 'N/A'} pcs.`}</Text>
+                    <Text style={styles.dropdownText}>{`• Due Date: ${
+                      order?.appointment?.preferred_due_date
+                        ? new Date(order.appointment.preferred_due_date).toLocaleDateString()
+                        : 'N/A'
+                    }`}</Text>
+                    <Text style={styles.dropdownText}>{`• Notes: ${order?.appointment?.notes || 'N/A'}`}</Text>
+                    <Text style={styles.dropdownText}>• Design Image:</Text>
+                    {order?.appointment?.design_image ? (
+                      <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.design_image })}>
+                        <Image source={{ uri: order.appointment.design_image }} style={styles.image} />
+                      </TouchableOpacity>
+                    ) : null}
+                    <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
+                    {order?.appointment?.gcash_proof ? (
+                      <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.gcash_proof })}>
+                        <Image source={{ uri: order.appointment.gcash_proof }} style={styles.image} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                )}
               </View>
-            )}
+            </View>
+          ))
+        ) : (
+          <View style={styles.appointmentCard}>
+            <View style={[styles.indicator, styles.indicatorCompleted]} />
+            <View style={styles.cardContent}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardDate}>No finished orders yet</Text>
+                <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* Image Modal */}
@@ -403,7 +415,18 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start', // Changed from 'center' to 'flex-start'
+    flexWrap: 'wrap',
+  },
+  orderInfo: {
+    flex: 1, // Takes available space
+    marginRight: 10, // Adds spacing between text and status
+    minWidth: '60%', // Ensures text doesn't get too squeezed
+  },
+  statusContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0, // Prevents shrinking
   },
   cardTitle: {
     fontSize: 16,
