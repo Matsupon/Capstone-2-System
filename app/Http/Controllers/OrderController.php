@@ -71,6 +71,7 @@ class OrderController extends Controller
     public function index()
     {
         $orders = Order::with(['appointment.user'])
+            ->where('status', '!=', 'Finished')
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($order) {
@@ -113,10 +114,55 @@ class OrderController extends Controller
         ]);
     }
 
+    public function history()
+    {
+        $orders = Order::with(['appointment.user'])
+            ->where('status', 'Finished')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'status' => 'Completed', // Always show as Completed in history
+                    'scheduled_at' => $order->scheduled_at,
+                    'completed_at' => $order->completed_at,
+                    'total_amount' => $order->total_amount,
+                    'check_appointment_date' => $order->check_appointment_date,
+                    'check_appointment_time' => $order->check_appointment_time,
+                    'pickup_appointment_date' => $order->pickup_appointment_date,
+                    'pickup_appointment_time' => $order->pickup_appointment_time,
+                    'created_at' => $order->created_at,
+                    'appointment' => [
+                        'id' => $order->appointment->id,
+                        'service_type' => $order->appointment->service_type,
+                        'sizes' => $order->appointment->sizes,
+                        'total_quantity' => $order->appointment->total_quantity,
+                        'notes' => $order->appointment->notes,
+                        'design_image' => $order->appointment->design_image,
+                        'gcash_proof' => $order->appointment->gcash_proof,
+                        'preferred_due_date' => $order->appointment->preferred_due_date,
+                        'appointment_date' => $order->appointment->appointment_date,
+                        'appointment_time' => $order->appointment->appointment_time,
+                        'user' => [
+                            'id' => $order->appointment->user->id,
+                            'name' => $order->appointment->user->name,
+                            'phone' => $order->appointment->user->phone,
+                            'email' => $order->appointment->user->email,
+                        ]
+                    ]
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $orders,
+        ]);
+    }
+
     public function updateStatus(Request $request, Order $order)
 {
     $validated = $request->validate([
-        'status'        => 'required|in:Pending,Ongoing,Ready to Check,Completed',
+        'status'        => 'required|in:Pending,Ongoing,Ready to Check,Completed,Finished',
         'scheduled_at'  => 'nullable|date',     // required for Ready to Check & Completed
         'total_amount'  => 'nullable|numeric',  // required for Completed
         
@@ -298,6 +344,7 @@ class OrderController extends Controller
                 ->whereHas('appointment', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
                 })
+                ->where('status', '!=', 'Finished')
                 ->orderBy('created_at', 'desc')
                 ->first();
     
@@ -368,5 +415,111 @@ class OrderController extends Controller
         }
     }
     
+
+    /**
+     * Return finished orders for the authenticated user
+     */
+    public function myHistory(Request $request)
+    {
+        try {
+            $userId = $request->user()->id;
+            \Log::info('Fetching finished orders for user', ['user_id' => $userId]);
+    
+            $orders = Order::with('appointment.user')
+                ->whereHas('appointment', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->where('status', 'Finished')
+                ->orderBy('created_at', 'desc')
+                ->get();
+    
+            if ($orders->isEmpty()) {
+                \Log::info('No finished orders found for user', ['user_id' => $userId]);
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                ]);
+            }
+    
+            \Log::info('Finished orders fetched successfully', [
+                'user_id' => $userId,
+                'count' => $orders->count()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $orders->map(function ($order) {
+                    return [
+                        'id'           => $order->id,
+                        'status'       => 'Completed', // Always show as Completed in history
+                        'scheduled_at' => $order->scheduled_at,
+                        'completed_at' => $order->completed_at,
+                        'appointment'  => [
+                            'id'               => $order->appointment->id,
+                            'service_type'     => $order->appointment->service_type,
+                            'sizes'            => $order->appointment->sizes,
+                            'total_quantity'   => $order->appointment->total_quantity,
+                            'preferred_due_date' => $order->appointment->preferred_due_date,
+                            'notes'            => $order->appointment->notes,
+                            'design_image'     => $order->appointment->design_image
+                                ? asset('storage/' . $order->appointment->design_image)
+                                : null,
+                            'gcash_proof'      => $order->appointment->gcash_proof
+                                ? asset('storage/' . $order->appointment->gcash_proof)
+                                : null,
+                            'appointment_date' => $order->appointment->appointment_date,
+                            'appointment_time' => $order->appointment->appointment_time,
+                            'user' => $order->appointment->relationLoaded('user') && $order->appointment->user ? [
+                                'id' => $order->appointment->user->id,
+                                'name' => $order->appointment->user->name,
+                                'phone' => $order->appointment->user->phone,
+                                'email' => $order->appointment->user->email,
+                            ] : null,
+                        ],
+                        'check_appointment_date' => $order->check_appointment_date,
+                        'check_appointment_time' => $order->check_appointment_time,
+                        'pickup_appointment_date' => $order->pickup_appointment_date,
+                        'pickup_appointment_time' => $order->pickup_appointment_time,
+                    ];
+                }),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch latest order', [
+                'error' => $e->getMessage(),
+                'user_id' => $request->user()->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch latest order',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
+    /**
+     * Get order statistics for dashboard
+     */
+    public function getOrderStats()
+    {
+        try {
+            $pendingOrders = Order::where('status', '!=', 'Finished')->count();
+            $finishedOrders = Order::where('status', 'Finished')->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'pending_orders' => $pendingOrders,
+                    'finished_orders' => $finishedOrders,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to fetch order statistics',
+            ], 500);
+        }
+    }
 
 }

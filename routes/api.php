@@ -51,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index']); // list all orders
+    Route::get('/orders/history', [OrderController::class, 'history']); // list finished orders
     Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
 
     
@@ -63,9 +64,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     // Orders: get booked times for a given date and kind
     Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
+    // Orders: get statistics for dashboard
+    Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
 
     // Mobile: fetch latest order for current user
     Route::get('/me/orders/latest', [OrderController::class, 'myLatest']);
+    
+    // Mobile: fetch finished orders for current user
+    Route::get('/me/orders/history', [OrderController::class, 'myHistory']);
 
     //Mobile: fetch next appointment based on order status (more specific route first)
     Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
