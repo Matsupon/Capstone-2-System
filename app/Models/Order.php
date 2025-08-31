@@ -9,7 +9,6 @@ class Order extends Model
 {
     protected $fillable = [
         'appointment_id',
-        'user_id',
         'queue_number',
         'status',
         'scheduled_at', // Add this
@@ -34,9 +33,6 @@ class Order extends Model
         return $this->belongsTo(Appointment::class);
     }
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+
 }
 

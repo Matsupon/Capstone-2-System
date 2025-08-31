@@ -8,6 +8,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\CustomerController;
 
 // Test endpoint to verify API is working
 Route::get('/test', function () {
@@ -78,5 +79,9 @@ Route::middleware('auth:sanctum')->group(function () {
     
     //Mobile: fetch latest appointment date (less specific route last)
     Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
+
+    // Customers
+    Route::get('/customers', [CustomerController::class, 'index']);
+    Route::get('/customers/{id}', [CustomerController::class, 'show']);
 });
 
