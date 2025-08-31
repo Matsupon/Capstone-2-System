@@ -1,170 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import '../styles/Customers.css';
 import { AiOutlineClose } from 'react-icons/ai';
-
-const customersData = [
-  {
-    id: 1,
-    name: 'Juan Dela Cruz',
-    contact: '09091234567',
-    address: 'Brgy. Mabini, Manila',
-    totalOrders: 3,
-    lastAppointment: 'January 1, 2025',
-    lastOrderStatus: 'Ongoing',
-    orders: [
-      {
-        id: 101,
-        appointmentDate: 'January 1, 2025',
-        service: 'Customize Jersey',
-        sizes: { Small: 1, Medium: 1 },
-        phone: '09091234567',
-        status: 'Ongoing',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.'
-      },
-      {
-        id: 102,
-        appointmentDate: 'December 1, 2024',
-        service: 'Customize Jersey',
-        sizes: { Large: 1 },
-        phone: '09091234567',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-      {
-        id: 103,
-        appointmentDate: 'November 1, 2024',
-        service: 'Customize Jersey',
-        sizes: { Medium: 2, Large: 1 },
-        phone: '09091234567',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Jane Doe',
-    contact: '09123457890',
-    address: 'Purok 3, Brgy. San Roque, Quezon City',
-    totalOrders: 2,
-    lastAppointment: 'February 2, 2025',
-    lastOrderStatus: 'Completed',
-    orders: [
-      {
-        id: 201,
-        appointmentDate: 'February 2, 2025',
-        service: 'Customize Jersey',
-        sizes: { Small: 1, Medium: 1 },
-        phone: '09123457890',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-      {
-        id: 202,
-        appointmentDate: 'January 2, 2025',
-        service: 'Customize Jersey',
-        sizes: { Large: 1 },
-        phone: '09123457890',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-      {
-        id: 203,
-        appointmentDate: 'December 2, 2024',
-        service: 'Customize Jersey',
-        sizes: { Medium: 2, Large: 1 },
-        phone: '09123457890',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Sam Wilson',
-    contact: '09123433456',
-    address: 'Zone 1, Brgy. Sto. Niño, Davao City',
-    totalOrders: 4,
-    lastAppointment: 'March 3, 2025',
-    lastOrderStatus: 'Completed',
-    orders: [
-      {
-        id: 301,
-        appointmentDate: 'March 3, 2025',
-        service: 'Customize Jersey',
-        sizes: { Small: 1, Medium: 1, Large: 1 },
-        phone: '09123433456',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-      {
-        id: 302,
-        appointmentDate: 'February 3, 2025',
-        service: 'Customize Jersey',
-        sizes: { Medium: 2, Large: 1 },
-        phone: '09123433456',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-      {
-        id: 303,
-        appointmentDate: 'January 3, 2025',
-        service: 'Customize Jersey',
-        sizes: { Small: 1, Medium: 1 },
-        phone: '09123433456',
-        status: 'Completed',
-        designImg: 'jersey.jpg',
-        gcashImg: 'gcash.png',
-        notes: 'Client requested sleeveless design with name print.',
-        paymentFee: 950,
-      },
-    ],
-  },
-];
+import api from '../api';
 
 const getStatusColor = (status) => {
   switch (status) {
     case 'Ongoing':
       return '#cddc39';
     case 'Completed':
+    case 'Finished':   // ✅ treat Finished same as Completed
       return '#4caf50';
+    case 'Pending':
+      return '#ff9800';
+    case 'Ready to Check':
+      return '#2196f3';
+    case 'No Orders':
+      return '#9e9e9e';
     default:
       return '#333';
   }
 };
 
+
 const Customers = () => {
+  const [customersData, setCustomersData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [profileModal, setProfileModal] = useState({ open: false, customer: null });
   const [expandedOrder, setExpandedOrder] = useState(null);
 
-  const handleViewProfile = (customer) => {
-    setProfileModal({ open: true, customer });
-    setExpandedOrder(null);
+  // Fetch customers data
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await api.get('/customers');
+        
+        if (response.data.success) {
+          setCustomersData(response.data.data);
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch customers');
+        }
+      } catch (err) {
+        setError(err.response?.data?.message || err.message || 'Failed to fetch customers');
+        console.error('Error fetching customers:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  const handleViewProfile = async (customer) => {
+    try {
+      const response = await api.get(`/customers/${customer.id}`);
+      
+      if (response.data.success) {
+        setProfileModal({ open: true, customer: response.data.data });
+        setExpandedOrder(null);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch customer profile');
+      }
+    } catch (err) {
+      console.error('Error fetching customer profile:', err);
+      alert('Failed to load customer profile');
+    }
   };
 
   const handleCloseModal = () => {
@@ -175,6 +77,48 @@ const Customers = () => {
   const handleExpandOrder = (orderId) => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
+
+  if (loading) {
+    return (
+      <div className="dashboard-layout">
+        <Sidebar />
+        <div className="main-content">
+          <Header />
+          <div className="page-title">
+            <h1>CUSTOMERS</h1>
+          </div>
+          <div className="customers-table-content">
+            <div className="customers-table-wrapper">
+              <div style={{ textAlign: 'center', padding: '50px' }}>
+                Loading customers...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard-layout">
+        <Sidebar />
+        <div className="main-content">
+          <Header />
+          <div className="page-title">
+            <h1>CUSTOMERS</h1>
+          </div>
+          <div className="customers-table-content">
+            <div className="customers-table-wrapper">
+              <div style={{ textAlign: 'center', padding: '50px', color: 'red' }}>
+                Error: {error}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-layout">
