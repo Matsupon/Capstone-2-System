@@ -355,14 +355,6 @@ export default function BookAppointment({ visible, onClose }) {
                 <Ionicons name="arrow-back" size={24} color="#222" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Book an Appointment</Text>
-              <View style={styles.testButtons}>
-                <TouchableOpacity onPress={testAPIConnection} style={styles.testBtn}>
-                  <Text style={{ color: '#4682B4', fontSize: 12 }}>Test API</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={testNetworkConnectivity} style={[styles.testBtn, { marginLeft: 8, backgroundColor: '#f0fff0', borderColor: '#22C55E' }]}>
-                  <Text style={{ color: '#22C55E', fontSize: 12 }}>Test Network</Text>
-                </TouchableOpacity>
-              </View>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -455,20 +447,6 @@ export default function BookAppointment({ visible, onClose }) {
           </View>
         ) : (
           <View style={{ flex: 1 }}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={24} color="#222" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Gcash Downpayment</Text>
-              <View style={styles.testButtons}>
-                <TouchableOpacity onPress={testAPIConnection} style={styles.testBtn}>
-                  <Text style={{ color: '#4682B4', fontSize: 12 }}>Test API</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={testNetworkConnectivity} style={[styles.testBtn, { marginLeft: 8, backgroundColor: '#f0fff0', borderColor: '#22C55E' }]}>
-                  <Text style={{ color: '#22C55E', fontSize: 12 }}>Test Network</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
               <View style={styles.gcashBox}>
