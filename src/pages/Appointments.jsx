@@ -157,10 +157,21 @@ const Appointments = () => {
   };
 
   const confirmRemove = () => {
-    setAppointments(appointments.filter(a => a.id !== removeId));
-    setRemoveId(null);
-    setDeleteSuccess(true);
-    setTimeout(() => setDeleteSuccess(false), 3000);
+    const deleteAppointment = async () => {
+      try {
+        await api.delete(`/appointments/${removeId}`);
+        setAppointments(appointments.filter(a => a.id !== removeId));
+        setRemoveId(null);
+        setDeleteSuccess(true);
+        setTimeout(() => setDeleteSuccess(false), 3000);
+      } catch (err) {
+        console.error('Failed to delete appointment:', err);
+        setError('Failed to delete appointment. Please try again.');
+        setRemoveId(null);
+      }
+    };
+
+    deleteAppointment();
   };
 
   return (
