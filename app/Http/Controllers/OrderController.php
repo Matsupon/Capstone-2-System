@@ -302,23 +302,28 @@ class OrderController extends Controller
             $date = $validated['date'];
             $kind = $validated['kind'];
 
+            // Order-based bookings for the target kind
             if ($kind === 'check') {
-                $times = Order::whereDate('check_appointment_date', $date)
+                $orderTimes = Order::whereDate('check_appointment_date', $date)
                     ->whereNotNull('check_appointment_time')
                     ->pluck('check_appointment_time')
-                    ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); })
-                    ->unique()
-                    ->values()
-                    ->all();
+                    ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
             } else {
-                $times = Order::whereDate('pickup_appointment_date', $date)
+                $orderTimes = Order::whereDate('pickup_appointment_date', $date)
                     ->whereNotNull('pickup_appointment_time')
                     ->pluck('pickup_appointment_time')
-                    ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); })
-                    ->unique()
-                    ->values()
-                    ->all();
+                    ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
             }
+
+            // Also include customer-booked appointment times for the same date
+            $appointmentTimes = \App\Models\Appointment::whereDate('appointment_date', $date)
+                ->pluck('appointment_time')
+                ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
+
+            $times = $orderTimes->merge($appointmentTimes)
+                ->unique()
+                ->values()
+                ->all();
 
             return response()->json([
                 'success' => true,

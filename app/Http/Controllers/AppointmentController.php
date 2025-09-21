@@ -59,9 +59,23 @@ class AppointmentController extends Controller
             ], 422);
         }
     
-        $conflict = Appointment::where('appointment_date', $validated['appointment_date'])
+        // Check conflicts across both appointments and admin-set order schedules
+        $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
             ->where('appointment_time', $validated['appointment_time'])
             ->exists();
+
+        // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*)
+        $conflictInOrders = \App\Models\Order::where(function ($q) use ($validated) {
+                $q->whereDate('check_appointment_date', $validated['appointment_date'])
+                  ->where('check_appointment_time', $validated['appointment_time']);
+            })
+            ->orWhere(function ($q) use ($validated) {
+                $q->whereDate('pickup_appointment_date', $validated['appointment_date'])
+                  ->where('pickup_appointment_time', $validated['appointment_time']);
+            })
+            ->exists();
+
+        $conflict = $conflictInAppointments || $conflictInOrders;
     
         if ($conflict) {
             \Log::warning('Double booking attempt', [
@@ -142,21 +156,34 @@ class AppointmentController extends Controller
     {
         $validated = $request->validate(['date' => 'required|date|after_or_equal:today']);
         $date = $validated['date'];
-    
-        $allSlots = [];
-        for ($hour = 5; $hour <= 22; $hour++) {
-            $allSlots[] = sprintf('%02d:00', $hour);
-        }
-    
-        $bookedSlots = Appointment::where('appointment_date', $date)
+        
+        // Align available slots with the mobile app's TIME_LABELS (08:00-11:00, 13:00-19:00)
+        $allowedSlots = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
+
+        // Booked from customer appointments for the same date
+        $bookedFromAppointments = Appointment::whereDate('appointment_date', $date)
             ->pluck('appointment_time')
-            ->map(function ($time) {
-                return \Carbon\Carbon::parse($time)->format('H:i');
-            })
+            ->map(function ($time) { return \Carbon\Carbon::parse($time)->format('H:i'); })
             ->toArray();
-    
+
+        // Booked from admin-set orders (check and pickup appointments)
+        $bookedFromOrders = collect();
+        $bookedCheck = \App\Models\Order::whereDate('check_appointment_date', $date)
+            ->whereNotNull('check_appointment_time')
+            ->pluck('check_appointment_time')
+            ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
+        $bookedPickup = \App\Models\Order::whereDate('pickup_appointment_date', $date)
+            ->whereNotNull('pickup_appointment_time')
+            ->pluck('pickup_appointment_time')
+            ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
+        $bookedFromOrders = $bookedCheck->merge($bookedPickup)->unique()->values();
+
+        $allBooked = collect($bookedFromAppointments)->merge($bookedFromOrders)->unique()->values()->toArray();
+
+        $available = array_values(array_diff($allowedSlots, $allBooked));
+
         return response()->json([
-            'available_slots' => array_values(array_diff($allSlots, $bookedSlots))
+            'available_slots' => $available
         ]);
     }
 
@@ -349,6 +376,19 @@ public function dashboard()
     {
         try {
             $appointment = Appointment::findOrFail($id);
+
+            // Create a notification to inform the user their appointment was rejected by admin
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'type'    => 'appointment_rejected',
+                'title'   => "We're sorry, unfortunately your appointment has been rejected by the admin.",
+                'body'    => 'Please ensure you uploaded the correct gcash payment proof and try again next time',
+                'data'    => [
+                    'appointment_id' => $appointment->id,
+                    'reason'         => 'deleted_by_admin',
+                ],
+            ]);
+
             $appointment->delete();
 
             return response()->json([
@@ -384,6 +424,19 @@ public function dashboard()
     {
         try {
             $appointment = Appointment::findOrFail($id);
+
+            // Create a notification to inform the user their appointment was deleted/rejected by admin
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'type'    => 'appointment_rejected',
+                'title'   => "We're sorry, unfortunately your appointment has been rejected by the admin.",
+                'body'    => 'Please ensure you uploaded the correct gcash payment proof and try again next time',
+                'data'    => [
+                    'appointment_id' => $appointment->id,
+                    'reason'         => 'deleted_by_admin',
+                ],
+            ]);
+
             $appointment->delete();
 
             return response()->json(['message' => 'Appointment rejected and deleted.']);
