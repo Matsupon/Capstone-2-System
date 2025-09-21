@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import api from '../api';
@@ -7,12 +7,24 @@ import '../styles/Feedback.css';
 const StarRating = ({ value }) => {
   const stars = [1, 2, 3, 4, 5];
   return (
-    <div className="star-rating">
+    <div className="star-rating" aria-label={`Rating: ${value} of 5`}>
       {stars.map((s) => (
-        <span key={s} style={{ color: s <= value ? '#f5a623' : '#d8dee6' }}>★</span>
+        <span key={s} className={s <= value ? 'star on' : 'star'}>★</span>
       ))}
     </div>
   );
+};
+
+const useStorageBase = () =>
+  useMemo(
+    () => (process.env.NODE_ENV === 'development' ? 'http://192.168.10.87:8000' : ''),
+    []
+  );
+
+const formatDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
 };
 
 export default function FeedbackPage() {
@@ -21,6 +33,7 @@ export default function FeedbackPage() {
   const [error, setError] = useState(null);
   const [responding, setResponding] = useState({});
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const storageBase = useStorageBase();
 
   const load = async () => {
     try {
@@ -53,7 +66,8 @@ export default function FeedbackPage() {
     }
   };
 
-  const setResp = (id, patch) => setResponding((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  const setResp = (id, patch) =>
+    setResponding((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
   if (loading) {
     return (
@@ -62,7 +76,9 @@ export default function FeedbackPage() {
         <div className="main-content">
           <Header />
           <div className="page-title"><h1>FEEDBACK</h1></div>
-          <div className="feedback-card-container">Loading...</div>
+          <div className="feedback-outer">
+            <div className="feedback-card-container">Loading...</div>
+          </div>
         </div>
       </div>
     );
@@ -75,7 +91,9 @@ export default function FeedbackPage() {
         <div className="main-content">
           <Header />
           <div className="page-title"><h1>FEEDBACK</h1></div>
-          <div className="feedback-card-container" style={{ color: '#c62828' }}>{error}</div>
+          <div className="feedback-outer">
+            <div className="feedback-card-container" style={{ color: '#c62828' }}>{error}</div>
+          </div>
         </div>
       </div>
     );
@@ -87,84 +105,90 @@ export default function FeedbackPage() {
       <div className="main-content">
         <Header />
         <div className="page-title"><h1>FEEDBACK</h1></div>
-        <div className="feedback-card-container">
-          {items.length === 0 ? (
-            <p className="feedback-empty">No feedback yet.</p>
-          ) : (
-            <div className="feedback-list">
-              {items.map((fb) => {
-                const user = fb?.order?.appointment?.user;
-                const appt = fb?.order?.appointment;
-                const pending = responding[fb.id] || {};
-                const hasChanges = (
-                  (typeof pending.admin_checked !== 'undefined' && pending.admin_checked !== !!fb.admin_checked) ||
-                  (typeof pending.admin_response !== 'undefined' && (pending.admin_response ?? '') !== (fb.admin_response ?? ''))
-                );
+        <div className="feedback-outer">
+          {/* container is now relative so popup can center inside it */}
+          <div className="feedback-card-container feedback-card-relative">
+            {items.length === 0 ? (
+              <p className="feedback-empty">No feedback yet.</p>
+            ) : (
+              <div className="feedback-list">
+                {items.map((fb) => {
+                  const user = fb?.order?.appointment?.user;
+                  const appt = fb?.order?.appointment;
+                  const pending = responding[fb.id] || {};
 
-                return (
-                  <div key={fb.id} className="feedback-item">
-                    {/* Header info */}
-                    <div className="feedback-header">
-                      <div className="feedback-avatar">{(user?.name || 'U').slice(0,1).toUpperCase()}</div>
-                      <div className="feedback-title">
-                        <span className="feedback-name">{user?.name || 'Unknown Customer'}</span>
-                        <span className="feedback-service">{appt?.service_type || 'N/A'}</span>
-                      </div>
-                    </div>
+                  const profileUrl = user?.profile_image
+                    ? `${storageBase}/storage/${user.profile_image}`
+                    : null;
 
-                    {/* Chat bubbles */}
-                    <div className="feedback-bubbles">
-                      {/* Customer bubble */}
-                      <div className="feedback-bubble-customer">
-                        <div className="feedback-bubble-customer-inner">
-                          <div style={{ marginBottom: 6 }}><StarRating value={fb.rating} /></div>
-                          <div className="feedback-comment">{fb.comment || 'No comment provided.'}</div>
-                        </div>
-                      </div>
-
-                      {/* Admin bubble (editor) */}
-                      <div className="feedback-bubble-admin">
-                        <div className="feedback-bubble-admin-inner">
-                          <label className="feedback-admin-checkrow">
-                            <input
-                              type="checkbox"
-                              defaultChecked={!!fb.admin_checked}
-                              onChange={(e) => setResp(fb.id, { admin_checked: e.target.checked })}
-                            />
-                            <span style={{ color: '#000' }}>{(responding[fb.id]?.admin_checked ?? fb.admin_checked) ? 'Checked' : 'Not checked'}</span>
-                          </label>
-                          <textarea
-                            rows={2}
-                            className="feedback-textarea"
-                            placeholder="Write an optional response to the customer..."
-                            defaultValue={fb.admin_response || ''}
-                            onChange={(e) => setResp(fb.id, { admin_response: e.target.value })}
-                          />
-                          <div className="feedback-actions">
-                            <button
-                              onClick={() => handleSubmit(fb.id)}
-                              disabled={!hasChanges}
-                              className="feedback-save-btn"
-                            >
-                              Save
-                            </button>
+                  return (
+                    <article key={fb.id} className="feedback-item card">
+                      <header className="card-header">
+                        <div className="card-header-left">
+                          {profileUrl ? (
+                            <img src={profileUrl} alt="avatar" className="avatar-img" />
+                          ) : (
+                            <div className="feedback-avatar">{(user?.name || 'U').slice(0, 1).toUpperCase()}</div>
+                          )}
+                          <div className="header-meta">
+                            <div className="meta-line">
+                              <span className="feedback-name">{user?.name || 'Unknown Customer'}</span>
+                              <span className="dot" />
+                              <span className="feedback-date">{formatDate(fb.created_at)}</span>
+                            </div>
+                            <div className="meta-sub">{appt?.service_type || 'N/A'}</div>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                        <div className="card-header-right">
+                          <StarRating value={fb.rating} />
+                          <button
+                            className={`check-pill ${responding[fb.id]?.admin_checked ?? fb.admin_checked ? 'on' : ''}`}
+                            title={(responding[fb.id]?.admin_checked ?? fb.admin_checked) ? 'Checked' : 'Mark as checked'}
+                            onClick={() => {
+                              const next = !(responding[fb.id]?.admin_checked ?? fb.admin_checked);
+                              setResp(fb.id, { admin_checked: next });
+                              handleSubmit(fb.id);
+                            }}
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      </header>
 
-                    <hr className="feedback-divider" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        {updateSuccess && (
-          <div className="popup-success">
-            <h3 style={{ color: '#4caf50', margin: 0, fontSize: 16 }}>Response updated successfully</h3>
+                      <div className="card-body">
+                        <p className="feedback-comment">{fb.comment || 'No comment provided.'}</p>
+                      </div>
+
+                      <footer className="card-footer">
+                        <textarea
+                          rows={2}
+                          className="feedback-textarea"
+                          placeholder="Write a comment to the customer..."
+                          defaultValue={fb.admin_response || ''}
+                          onChange={(e) => setResp(fb.id, { admin_response: e.target.value })}
+                        />
+                        <div className="footer-actions">
+                          <button
+                            className={`send-btn ${((responding[fb.id]?.admin_response ?? '') || '').trim() ? 'enabled' : ''}`}
+                            disabled={!(((responding[fb.id]?.admin_response ?? '') || '').trim())}
+                            onClick={() => handleSubmit(fb.id)}
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            {updateSuccess && (
+              <div className="popup-success inside-card">
+                <h3>Response sent successfully!</h3>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
