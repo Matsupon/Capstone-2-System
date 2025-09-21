@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+
+import { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   RefreshControl,
@@ -12,29 +14,21 @@ import {
 } from 'react-native';
 import BookAppointment from '../../components/BookAppointment';
 import Header from '../../components/Header';
-import api from '../../utils/api'; // ensure path is correct
+import api from '../../utils/api';
 
 export default function HomePage() {
   const [userFirstName, setUserFirstName] = useState('User');
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
-
-  // next appointment
   const [nextAppointment, setNextAppointment] = useState(null);
-
-  // refresh state
   const [refreshing, setRefreshing] = useState(false);
-
-  // latest order data
   const [latestOrder, setLatestOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
-
-  // notifications
   const [notifications, setNotifications] = useState([]);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [details, setDetails] = useState(null);
+  const [lastSeenAt, setLastSeenAt] = useState(null);
 
-  // load current user and derive first name
   const loadCurrentUser = useCallback(async () => {
     try {
       const res = await api.get('/user');
@@ -48,7 +42,7 @@ export default function HomePage() {
 
   const loadNotifications = useCallback(async () => {
     try {
-      const res = await api.get('/notifications'); // GET user's notifications
+      const res = await api.get('/notifications');
       if (res.data?.success) {
         const list = res.data.data || [];
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -77,13 +71,13 @@ export default function HomePage() {
     try {
       const res = await api.get('/appointments/next-appointment');
       const data = res.data;
-  
+
       if (data?.appointment_date && data?.appointment_time) {
         const iso = `${data.appointment_date}T${data.appointment_time}`;
         const dateTime = new Date(iso);
-  
+
         if (!isNaN(dateTime.getTime())) {
-          setNextAppointment(formatDateTime12(dateTime)); // ✅ pass Date object
+          setNextAppointment(formatDateTime12(dateTime));
         } else {
           console.log("Invalid date from API:", iso);
           setNextAppointment(null);
@@ -98,13 +92,19 @@ export default function HomePage() {
       setNextAppointment(null);
     }
   }, []);
-  
 
   useEffect(() => {
     loadNotifications();
     loadCurrentUser();
     loadLatestOrder();
     loadNextAppointment();
+    // load last seen timestamp for notifications
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+        if (saved) setLastSeenAt(saved);
+      } catch (_) {}
+    })();
   }, [loadNotifications, loadCurrentUser, loadLatestOrder, loadNextAppointment]);
 
   const onRefresh = useCallback(async () => {
@@ -127,14 +127,13 @@ export default function HomePage() {
 
   const formatDateTime12 = (iso) => {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return "Invalid date";  // debug guard
+    if (isNaN(d.getTime())) return "Invalid date";  
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     const yyyy = d.getFullYear();
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
     return `${mm}/${dd}/${yyyy} ${time}`;
   };  
-  
 
   const parseSizesToText = (sizes) => {
     try {
@@ -166,6 +165,8 @@ export default function HomePage() {
       setDetails({
         title: 'Your order is now ready to check',
         body: ['Your order is now ready to check.', scheduledText].filter(Boolean).join('\n'),
+        type: n.type,
+        data: n.data
       });
       setDetailsVisible(true);
       return;
@@ -185,6 +186,8 @@ export default function HomePage() {
       setDetails({
         title: 'Your order is now completed',
         body: [when, amount].filter(Boolean).join('\n'),
+        type: n.type,
+        data: n.data
       });
       setDetailsVisible(true);
       return;
@@ -193,20 +196,72 @@ export default function HomePage() {
     setDetails({
       title: n.title,
       body: n.body ?? '',
+      type: n.type
     });
     setDetailsVisible(true);
   };
 
+  const renderModalContent = () => {
+    if (!details) return null;
+    
+    if (details.type === 'ready_to_check') {
+      return (
+        <View style={styles.modalContent}>
+          <Text style={styles.modalBody}>Your order is now ready to check.</Text>
+          {details.data?.scheduled_at && (
+            <Text style={styles.modalBodyBlue}>
+              Your next appointment is at {formatDateTime12(details.data.scheduled_at)}.
+            </Text>
+          )}
+        </View>
+      );
+    }
+    
+    if (details.type === 'order_completed') {
+      return (
+        <View style={styles.modalContent}>
+          {details.data?.scheduled_at && (
+            <Text style={styles.modalBodyBlue}>
+              Your next appointment will be on {formatDateTime12(details.data.scheduled_at)}.
+            </Text>
+          )}
+          {details.data?.total_amount != null && (
+            <Text style={styles.modalBodyGreen}>
+              Please prepare {Number(details.data.total_amount).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} to get your order.
+            </Text>
+          )}
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.modalContent}>
+        <Text style={styles.modalBody}>{details.body || 'No additional information.'}</Text>
+      </View>
+    );
+  };
+
   const renderActivityItem = (n) => {
     const isReadyToCheck = n.type === 'ready_to_check';
-    const showViewMore = isReadyToCheck || n.type === 'order_completed';
+    const isOrderCompleted = n.type === 'order_completed';
+    const isAppointmentRejected = n.type === 'appointment_rejected';
+    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected;
     const title = isReadyToCheck
       ? 'Your order is now ready to check'
-      : n.type === 'order_completed'
+      : isOrderCompleted
       ? 'Your order is now completed'
       : n.title;
+    const isUnread = !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime();
     return (
       <View key={n.id} style={styles.activityItem}>
+        {isUnread && (
+          <View style={styles.newPill}>
+            <Text style={styles.newPillText}>NEW</Text>
+          </View>
+        )}
         <Text style={styles.activityDate}>{formatMonthDay(n.created_at)}</Text>
         <View style={styles.activityContent}>
           <Text style={styles.activityText}>{title}</Text>
@@ -226,7 +281,21 @@ export default function HomePage() {
   return (
     <View style={styles.container}>
       <View style={styles.background} />
-      <Header userName={userFirstName} />
+      <Header
+        userName={userFirstName}
+        onNotificationsViewed={async () => {
+          try {
+            const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+            if (saved) {
+              setLastSeenAt(saved);
+            } else {
+              const now = new Date().toISOString();
+              await AsyncStorage.setItem('notifications_last_seen_at', now);
+              setLastSeenAt(now);
+            }
+          } catch (_) {}
+        }}
+      />
 
       <ScrollView
         style={styles.content}
@@ -311,7 +380,6 @@ export default function HomePage() {
 
         <Text style={styles.sectionTitle}>Announcements</Text>
 
-        {/* ✅ Next Appointment card uses API state */}
         <View style={styles.announcementCard}>
           <View style={[styles.indicator, styles.indicatorGreen]} />
           <MaterialIcons
@@ -383,7 +451,6 @@ export default function HomePage() {
           ) : (
             notifications
               .filter(notification => {
-                // Filter out notifications related to finished orders
                 if (latestOrder && latestOrder.status === 'Finished') {
                   return false;
                 }
@@ -400,7 +467,7 @@ export default function HomePage() {
         <MaterialIcons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
-      {/* Details Modal */}
+      {/* Enhanced Details Modal */}
       <Modal
         visible={detailsVisible}
         transparent
@@ -411,22 +478,20 @@ export default function HomePage() {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{details?.title || 'Details'}</Text>
-              <TouchableOpacity onPress={() => setDetailsVisible(false)}>
-                <MaterialIcons name="close" size={22} color="#000" />
+              <TouchableOpacity 
+                onPress={() => setDetailsVisible(false)} 
+                style={styles.closeButton}
+              >
+                <MaterialIcons name="close" size={28} color="#000" />
               </TouchableOpacity>
             </View>
-            {details?.body ? (
-              <Text style={styles.modalBody}>{details.body}</Text>
-            ) : (
-              <Text style={styles.modalBody}>No additional information.</Text>
-            )}
+            {renderModalContent()}
           </View>
         </View>
       </Modal>
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -633,6 +698,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: '#4682B4',
     paddingLeft: 15,
+    position: 'relative',
   },
   activityDate: {
     fontSize: 14,
@@ -652,6 +718,22 @@ const styles = StyleSheet.create({
   activityTime: {
     fontSize: 12,
     color: '#687076',
+  },
+  newPill: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#16A34A',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 5,
+  },
+  newPillText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   fab: {
     position: 'absolute',
@@ -674,10 +756,68 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  // Modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  modalCard: { width: '85%', backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 8 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
-  modalBody: { fontSize: 14, color: '#000', lineHeight: 20 },
+  // Enhanced Modal Styles
+  modalBackdrop: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: { 
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#fff', 
+    borderRadius: 16, 
+    padding: 0,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  modalHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#2c3e50',
+    flex: 1,
+    marginRight: 10,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalContent: {
+    padding: 20,
+    paddingTop: 15,
+  },
+  modalBody: { 
+    fontSize: 18, 
+    color: '#34495e', 
+    lineHeight: 28,
+    textAlign: 'left',
+    marginBottom: 12,
+  },
+  modalBodyBlue: {
+    fontSize: 18,
+    color: '#4682B4', // Blue color for dates/times
+    lineHeight: 28,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  modalBodyGreen: {
+    fontSize: 18,
+    color: '#2E8B57', // Green color for amounts
+    lineHeight: 28,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
 });

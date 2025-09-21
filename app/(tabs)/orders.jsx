@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Modal,
@@ -21,15 +21,9 @@ export default function AppointmentsPage() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
-
-  // Next appointment (same logic as Home/index.jsx)
   const [nextAppointment, setNextAppointment] = useState(null);
-
-  // Latest order (same source as Home/index.jsx)
   const [latestOrder, setLatestOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
-  
-  // Finished orders for history section
   const [finishedOrders, setFinishedOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -54,7 +48,6 @@ export default function AppointmentsPage() {
     setSelectedImage(null);
   };
 
-  // helpers copied to match Home/index.jsx behavior
   const formatDateTime12 = (iso) => {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return 'Invalid date';
@@ -115,7 +108,6 @@ export default function AppointmentsPage() {
         setLatestOrder(res.data.data || null);
       }
     } catch (e) {
-      // noop
     } finally {
       setOrderLoading(false);
     }
@@ -129,7 +121,6 @@ export default function AppointmentsPage() {
         setFinishedOrders(res.data.data || []);
       }
     } catch (e) {
-      // noop
     } finally {
       setHistoryLoading(false);
     }
@@ -141,7 +132,6 @@ export default function AppointmentsPage() {
     loadFinishedOrders();
   }, [loadNextAppointment, loadLatestOrder, loadFinishedOrders]);
 
-  // Helper function to get status color
   const getStatusColor = (status) => {
     switch(status) {
       case 'Completed':

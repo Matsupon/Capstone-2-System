@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import api from '../utils/api';
@@ -45,78 +45,7 @@ export default function BookAppointment({ visible, onClose }) {
   const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
-
-  // Test function to debug API connection
-  const testAPIConnection = async () => {
-    try {
-      console.log("Testing API connection...");
       
-      // Test basic API endpoint
-      const testResponse = await api.get('/test');
-      console.log("Test endpoint response:", testResponse.status);
-      
-      // Test authenticated endpoint
-      const authResponse = await api.get('/appointments/test');
-      console.log("Auth test response:", authResponse.status);
-      
-      if (authResponse.data) {
-        console.log("Auth test data:", authResponse.data);
-      }
-      
-    } catch (error) {
-      console.error("API connection test failed:", error);
-      
-      // Provide specific guidance based on error type
-      if (error.message === 'Network Error') {
-        Alert.alert(
-          'Network Connection Failed',
-          'Cannot connect to the server. Please check:\n\n' +
-          '1. Backend server is running\n' +
-          '2. Network connection is stable\n' +
-          '3. IP address 192.168.137.170:8000 is correct\n' +
-          '4. Firewall allows the connection',
-          [{ text: 'OK' }]
-        );
-      } else if (error.code === 'ECONNABORTED') {
-        Alert.alert(
-          'Connection Timeout',
-          'Server is not responding. Please check if the backend is running.',
-          [{ text: 'OK' }]
-        );
-      }
-    }
-  };
-
-  // Test network connectivity specifically
-  const testNetworkConnectivity = async () => {
-    try {
-      console.log("Testing network connectivity...");
-      
-      // Test with a simple GET request first
-      const response = await api.get('/test', { timeout: 5000 });
-      console.log("Network test successful:", response.status);
-      
-      Alert.alert('Success', 'Network connection is working!');
-      
-    } catch (error) {
-      console.error("Network test failed:", error);
-      
-      let errorMessage = 'Network test failed.';
-      
-      if (error.message === 'Network Error') {
-        errorMessage = 'Cannot reach the server. Please check:\n\n' +
-                      '• Backend server is running on 192.168.137.170:8000\n' +
-                      '• Both devices are on the same network\n' +
-                      '• No firewall blocking the connection';
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Connection timed out. Server may be down or unreachable.';
-      } else if (error.response) {
-        errorMessage = `Server responded with error: ${error.response.status}`;
-      }
-      
-      Alert.alert('Network Test Failed', errorMessage, [{ text: 'OK' }]);
-    }
-  };
 
   useEffect(() => {
     if (!visible) {
@@ -176,17 +105,33 @@ export default function BookAppointment({ visible, onClose }) {
     }
   };
 
-  const pickImage = async (setImage) => {
+  // Image picker that preserves the full photo by default, with optional cropping on demand
+  const pickImage = async (setImage, crop = false) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
+      allowsEditing: crop, // only crop when the user explicitly asks
+      // aspect removed to avoid forced cropping; user can free-crop when allowsEditing is true
       quality: 1,
+      exif: true,
     });
 
     if (!result.canceled && result.assets?.[0]?.uri) {
       setImage(result.assets[0].uri);
     }
+  };
+
+  // Ask user whether to crop or not before picking
+  const requestImagePick = (setter) => {
+    Alert.alert(
+      'Select Image',
+      'Choose how you want to pick the image.',
+      [
+        { text: 'Pick Photo', onPress: () => pickImage(setter, false) },
+        { text: 'Pick & Crop', onPress: () => pickImage(setter, true) },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
   };
 
   const formatTo12Hour = (time24) => {
@@ -245,7 +190,6 @@ export default function BookAppointment({ visible, onClose }) {
     try {
       setIsLoading(true);
     
-      // Validate required fields
       if (!serviceType || !quantity || !gcashImage || !preferredDueDateRaw || !appointmentDateRaw || !appointmentTimeRaw) {
         Alert.alert('Error', 'Please fill in all required fields.');
         return;
@@ -289,7 +233,6 @@ export default function BookAppointment({ visible, onClose }) {
         appointment_time: appointmentTimeRaw
       });
       
-      // Log the FormData contents
       for (let [key, value] of formData.entries()) {
         console.log(`FormData ${key}:`, value);
       }
@@ -298,7 +241,7 @@ export default function BookAppointment({ visible, onClose }) {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 30000, // 30 second timeout
+        timeout: 30000,
       });
       
       console.log("Booking response:", response.data);
@@ -321,15 +264,12 @@ export default function BookAppointment({ visible, onClose }) {
         errorTitle = 'Connection Timeout';
         errorMessage = 'Server is not responding. Please check if the backend is running.';
       } else if (error.response) {
-        // Server responded with error
         console.error('Error response:', error.response.data);
         errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
       } else if (error.request) {
-        // Request was made but no response
         console.error('No response received:', error.request);
         errorMessage = 'No response from server. Please check your internet connection.';
       } else {
-        // Something else happened
         console.error('Request setup error:', error.message);
         errorMessage = `Request error: ${error.message}`;
       }
@@ -427,7 +367,7 @@ export default function BookAppointment({ visible, onClose }) {
                 placeholderTextColor="#aaa"
               />
 
-              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDesignImage)}>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => requestImagePick(setDesignImage)}>
                 <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
                 <Text style={{ color: '#687076' }}>Upload Design if applicable</Text>
                 {designImage && <Image source={{ uri: designImage }} style={styles.uploadedImg} />}
@@ -454,7 +394,7 @@ export default function BookAppointment({ visible, onClose }) {
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>0912 345 6789</Text></Text>
               </View>
 
-              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage)}>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => requestImagePick(setGcashImage)}>
                 <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
                 <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
                 {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}

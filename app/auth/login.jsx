@@ -2,7 +2,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -18,7 +18,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false); // Added loading state
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -27,7 +27,7 @@ export default function Login() {
       return;
     }
 
-    setLoading(true); // Start loading
+    setLoading(true); 
     try {
       const response = await api.post('/login', {
         email,
@@ -37,11 +37,10 @@ export default function Login() {
       const token = response.data.access_token;
   
       if (token) {
-        // Use consistent token key 'token' instead of 'authToken'
         await AsyncStorage.setItem('authToken', token);
         console.log('Login successful, token saved:', token);
   
-        router.replace('/(tabs)'); // Redirect to tabs/index.jsx
+        router.replace('/(tabs)'); 
       } else {
         console.error('Token not received from backend:', response.data);
         alert('Login failed. No token received from server.');
@@ -51,7 +50,7 @@ export default function Login() {
       console.error('Login error:', error.response?.data || error.message);
       alert(error.response?.data?.message || 'Login failed. Please try again.');
     } finally {
-      setLoading(false); // End loading regardless of success/error
+      setLoading(false);
     }
   };
 
@@ -109,10 +108,10 @@ export default function Login() {
         <TouchableOpacity 
           style={styles.loginButton} 
           onPress={handleLogin}
-          disabled={loading} // Disable button during loading
+          disabled={loading} 
         >
           {loading ? (
-            <ActivityIndicator color="#fff" /> // Show spinner when loading
+            <ActivityIndicator color="#fff" /> 
           ) : (
             <Text style={styles.loginButtonText}>LOGIN</Text>
           )}

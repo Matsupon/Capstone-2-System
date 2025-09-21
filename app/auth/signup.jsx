@@ -2,7 +2,7 @@ import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
 import api from '../../utils/api';
 
@@ -26,7 +26,6 @@ export default function SignUp() {
 
       console.log('Registration successful:', response.data);
 
-      // If backend returns access token on register, store and proceed
       const token = response.data?.access_token;
       if (token) {
         await AsyncStorage.setItem('authToken', token);
@@ -34,7 +33,6 @@ export default function SignUp() {
         return;
       }
 
-      // If no token, log in immediately after register
       const loginRes = await api.post('/login', { email, password });
       const loginToken = loginRes.data?.access_token;
       if (loginToken) {

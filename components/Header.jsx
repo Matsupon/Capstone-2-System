@@ -1,12 +1,15 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useState } from 'react';
+
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';
 
-export default function Header({ userName = 'User' }) {
+export default function Header({ userName = 'User', onNotificationsViewed }) {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [lastSeenAt, setLastSeenAt] = useState(null);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -24,8 +27,36 @@ export default function Header({ userName = 'User' }) {
     }
   }, []);
 
+  const markAllAsSeen = async () => {
+    try {
+      const now = new Date().toISOString();
+      await AsyncStorage.setItem('notifications_last_seen_at', now);
+      setLastSeenAt(now);
+    } catch (_) {}
+    if (typeof onNotificationsViewed === 'function') {
+      onNotificationsViewed();
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime()).length;
+
   useEffect(() => {
     loadNotifications();
+    // Load last seen timestamp
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+        if (saved) setLastSeenAt(saved);
+      } catch (_) {}
+    })();
+  }, [loadNotifications]);
+
+  // Periodically refresh notifications to keep badge and list up to date
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 10000); // 10 seconds
+    return () => clearInterval(interval);
   }, [loadNotifications]);
 
   const formatMonthDay = (iso) => {
@@ -45,6 +76,8 @@ export default function Header({ userName = 'User' }) {
       return 'Your order is now ready to check';
     } else if (notification.type === 'order_completed') {
       return 'Your order is now completed';
+    } else if (notification.type === 'appointment_rejected') {
+      return "We're sorry, unfortunately your appointment has been rejected by the admin.";
     }
     return notification.title || 'Notification';
   };
@@ -60,6 +93,8 @@ export default function Header({ userName = 'User' }) {
           })} to get your order.`
         : '';
       return `Your order is now completed. ${amount}`.trim();
+    } else if (notification.type === 'appointment_rejected') {
+      return 'Please ensure you uploaded the correct gcash payment proof and try again next time';
     }
     return notification.body || '';
   };
@@ -80,12 +115,22 @@ export default function Header({ userName = 'User' }) {
         
         <TouchableOpacity 
           style={styles.profileContainer}
-          onPress={() => setShowNotifications(!showNotifications)}
+          onPress={() => {
+            const next = !showNotifications;
+            setShowNotifications(next);
+            if (next) {
+              // Ensure we have the latest notifications before marking as seen
+              Promise.resolve(loadNotifications()).finally(() => {
+                // Mark as seen when opening the dropdown
+                markAllAsSeen();
+              });
+            }
+          }}
         >
           <MaterialIcons name="notifications" size={40} color="#4682B4" />
-          {notifications.length > 0 && (
+          {unreadCount > 0 && (
             <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>{notifications.length}</Text>
+              <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
             </View>
           )}
         </TouchableOpacity>

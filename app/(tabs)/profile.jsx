@@ -4,7 +4,7 @@ import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import mime from 'mime';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
 
@@ -56,7 +56,7 @@ export default function ProfilePage() {
       });
       
       setUser(response.data.user);
-      setProfileImageUrl(response.data.user.image_url); // ✅
+      setProfileImageUrl(response.data.user.image_url); 
 
       if (response.data.image_url) {
         setProfileImageUrl(response.data.image_url);
@@ -170,7 +170,7 @@ export default function ProfilePage() {
       });
   
       setUser(response.data.user);
-      setProfileImageUrl(response.data.image_url); // ✅ Set full image URL here
+      setProfileImageUrl(response.data.image_url); 
       setTempImage(null);
       showSuccessMessage();
     } catch (error) {

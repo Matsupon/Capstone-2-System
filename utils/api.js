@@ -1,16 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-// Use a default API URL if environment variable is not set
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.10.87:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.242.196.107:8000/api';
 
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
-  timeout: 30000, // 30 second timeout
+  timeout: 30000, 
 });
 
-// Automatically add token to requests
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem('authToken');
@@ -28,7 +26,6 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Add response interceptor for better error handling
 api.interceptors.response.use(
   (response) => {
     console.log('API Response:', {
