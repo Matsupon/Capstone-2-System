@@ -127,7 +127,7 @@ class OrderController extends Controller
 
     public function history()
     {
-        $orders = Order::with(['appointment.user'])
+        $orders = Order::with(['appointment.user', 'feedback'])
             ->where('status', 'Finished')
             ->orderBy('created_at', 'desc')
             ->get()
@@ -164,7 +164,16 @@ class OrderController extends Controller
                             'phone' => $order->appointment->user->phone,
                             'email' => $order->appointment->user->email,
                         ]
-                    ]
+                    ],
+                    'feedback' => $order->feedback ? [
+                        'id' => $order->feedback->id,
+                        'rating' => (int)$order->feedback->rating,
+                        'comment' => $order->feedback->comment,
+                        'admin_response' => $order->feedback->admin_response,
+                        'admin_checked' => (bool)$order->feedback->admin_checked,
+                        'responded_at' => $order->feedback->responded_at,
+                        'created_at' => $order->feedback->created_at,
+                    ] : null,
                 ];
             });
 
@@ -430,7 +439,7 @@ class OrderController extends Controller
             $userId = $request->user()->id;
             \Log::info('Fetching finished orders for user', ['user_id' => $userId]);
     
-            $orders = Order::with('appointment.user')
+            $orders = Order::with(['appointment.user', 'feedback'])
                 ->whereHas('appointment', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
                 })
@@ -485,6 +494,15 @@ class OrderController extends Controller
                         'check_appointment_time' => $order->check_appointment_time,
                         'pickup_appointment_date' => $order->pickup_appointment_date,
                         'pickup_appointment_time' => $order->pickup_appointment_time,
+                        'feedback' => $order->feedback ? [
+                            'id' => $order->feedback->id,
+                            'rating' => (int)$order->feedback->rating,
+                            'comment' => $order->feedback->comment,
+                            'admin_response' => $order->feedback->admin_response,
+                            'admin_checked' => (bool)$order->feedback->admin_checked,
+                            'responded_at' => $order->feedback->responded_at,
+                            'created_at' => $order->feedback->created_at,
+                        ] : null,
                     ];
                 }),
             ]);

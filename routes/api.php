@@ -9,6 +9,7 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\FeedbackController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
@@ -77,5 +78,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard-data', [OrderController::class, 'dashboardData']);
     Route::post('/orders/recalculate-queue', [OrderController::class, 'recalculateQueueNumbers']);
 
-});
+    // Feedback
+    // Customer
+    Route::get('/feedback/my-pending', [FeedbackController::class, 'myPending']);
+    Route::post('/feedback', [FeedbackController::class, 'store']);
+    // Admin
+    Route::get('/feedback', [FeedbackController::class, 'index']);
+    Route::patch('/feedback/{feedback}/respond', [FeedbackController::class, 'respond']);
 
+});
