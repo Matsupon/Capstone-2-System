@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FaTachometerAlt, FaCalendarAlt, FaShoppingBag, FaUsers, FaBars } from 'react-icons/fa';
+import { FaStar } from 'react-icons/fa';
 import '../styles/Sidebar.css';
 
 const Sidebar = () => {
@@ -35,6 +36,7 @@ const Sidebar = () => {
     { path: '/orders', name: 'Orders', icon: FaShoppingBag },
     { path: '/orders-history', name: "Order's History", icon: FaShoppingBag },
     { path: '/customers', name: 'Customers', icon: FaUsers },
+    { path: '/feedback', name: 'Feedback', icon: FaStar },
   ];
 
   return (

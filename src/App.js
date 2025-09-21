@@ -6,6 +6,7 @@ import Appointments from './pages/Appointments';
 import Orders from './pages/Orders';
 import OrdersHistory from './pages/OrdersHistory';
 import Customers from './pages/Customers';
+import Feedback from './pages/Feedback';
 import './App.css';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders-history" element={<OrdersHistory />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/feedback" element={<Feedback />} />
         </Routes>
       </div>
     </Router>
