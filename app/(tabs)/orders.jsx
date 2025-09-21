@@ -132,6 +132,14 @@ export default function AppointmentsPage() {
     loadFinishedOrders();
   }, [loadNextAppointment, loadLatestOrder, loadFinishedOrders]);
 
+  // Periodically refresh finished orders to reflect admin responses in near real-time
+  useEffect(() => {
+    const id = setInterval(() => {
+      loadFinishedOrders();
+    }, 10000);
+    return () => clearInterval(id);
+  }, [loadFinishedOrders]);
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'Completed':
@@ -279,6 +287,45 @@ export default function AppointmentsPage() {
                         <Image source={{ uri: order.appointment.gcash_proof }} style={styles.image} />
                       </TouchableOpacity>
                     ) : null}
+
+                    {/* Feedback Section */}
+                    <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#E5E5E5' }}>
+                      <Text style={styles.dropdownTitle}>Feedback:</Text>
+                      {order.feedback ? (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                            {[1,2,3,4,5].map((v) => (
+                              <MaterialIcons
+                                key={v}
+                                name={v <= (order.feedback.rating || 0) ? 'star' : 'star-border'}
+                                size={18}
+                                color={v <= (order.feedback.rating || 0) ? '#f5a623' : '#ccc'}
+                                style={{ marginRight: 2 }}
+                              />
+                            ))}
+                          </View>
+                          {order.feedback.comment ? (
+                            <Text style={styles.dropdownText}>{`Customer: ${order.feedback.comment}`}</Text>
+                          ) : (
+                            <Text style={styles.dropdownText}>Customer left no comment.</Text>
+                          )}
+                          <View style={{ marginTop: 6 }}>
+                            {order.feedback.admin_response ? (
+                              <Text style={[styles.dropdownText, { color: '#000' }]}>{`Admin: ${order.feedback.admin_response}`}</Text>
+                            ) : order.feedback.admin_checked ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <MaterialIcons name="check-circle" size={18} color="#4caf50" />
+                                <Text style={[styles.dropdownText, { marginLeft: 6 }]}>Admin checked your feedback.</Text>
+                              </View>
+                            ) : (
+                              <Text style={[styles.dropdownText, { fontStyle: 'italic' }]}>No response yet.</Text>
+                            )}
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={[styles.dropdownText, { fontStyle: 'italic' }]}>No feedback submitted.</Text>
+                      )}
+                    </View>
                   </View>
                 )}
               </View>

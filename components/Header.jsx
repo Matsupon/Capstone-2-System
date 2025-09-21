@@ -78,6 +78,10 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
       return 'Your order is now completed';
     } else if (notification.type === 'appointment_rejected') {
       return "We're sorry, unfortunately your appointment has been rejected by the admin.";
+    } else if (notification.type === 'feedback_responded') {
+      return notification.title || 'Admin responded to your feedback';
+    } else if (notification.type === 'order_finished') {
+      return 'Congratulations! Your order is now finished!';
     }
     return notification.title || 'Notification';
   };
@@ -95,6 +99,14 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
       return `Your order is now completed. ${amount}`.trim();
     } else if (notification.type === 'appointment_rejected') {
       return 'Please ensure you uploaded the correct gcash payment proof and try again next time';
+    } else if (notification.type === 'feedback_responded') {
+      const checked = notification.data?.admin_checked;
+      const resp = notification.data?.admin_response;
+      if (resp) return resp;
+      if (checked) return 'The admin has reviewed your feedback.';
+      return notification.body || '';
+    } else if (notification.type === 'order_finished') {
+      return 'Please check through the "My Orders" page under the History section to view your completed order';
     }
     return notification.body || '';
   };

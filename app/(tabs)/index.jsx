@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -28,6 +29,13 @@ export default function HomePage() {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [details, setDetails] = useState(null);
   const [lastSeenAt, setLastSeenAt] = useState(null);
+  // Feedback prompt state
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const [finishedVisible, setFinishedVisible] = useState(false);
+  const [pendingFeedback, setPendingFeedback] = useState(null); // { order_id, service_type, completed_at }
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackComment, setFeedbackComment] = useState('');
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -67,6 +75,26 @@ export default function HomePage() {
     }
   }, []);
 
+  // Check if there is a finished order without feedback
+  const loadPendingFeedback = useCallback(async () => {
+    try {
+      const res = await api.get('/feedback/my-pending');
+      if (res.data?.success && res.data.data) {
+        setPendingFeedback(res.data.data);
+        setFeedbackRating(0);
+        setFeedbackComment('');
+        // First show the congratulations modal, only then show feedback modal
+        setFinishedVisible(true);
+      } else {
+        setPendingFeedback(null);
+        setFeedbackVisible(false);
+        setFinishedVisible(false);
+      }
+    } catch (e) {
+      // silent
+    }
+  }, []);
+
   const loadNextAppointment = useCallback(async () => {
     try {
       const res = await api.get('/appointments/next-appointment');
@@ -98,6 +126,8 @@ export default function HomePage() {
     loadCurrentUser();
     loadLatestOrder();
     loadNextAppointment();
+    // Also check for pending feedback (in case there is no active order)
+    loadPendingFeedback();
     // load last seen timestamp for notifications
     (async () => {
       try {
@@ -105,13 +135,13 @@ export default function HomePage() {
         if (saved) setLastSeenAt(saved);
       } catch (_) {}
     })();
-  }, [loadNotifications, loadCurrentUser, loadLatestOrder, loadNextAppointment]);
+  }, [loadNotifications, loadCurrentUser, loadLatestOrder, loadNextAppointment, loadPendingFeedback]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadNotifications(), loadLatestOrder(), loadNextAppointment()]);
+    await Promise.all([loadNotifications(), loadLatestOrder(), loadNextAppointment(), loadPendingFeedback()]);
     setRefreshing(false);
-  }, [loadNotifications, loadLatestOrder, loadNextAppointment]);
+  }, [loadNotifications, loadLatestOrder, loadNextAppointment, loadPendingFeedback]);
 
   const formatMonthDay = (iso) => {
     const d = new Date(iso);
@@ -159,100 +189,67 @@ export default function HomePage() {
 
   const openDetails = (n) => {
     if (n.type === 'ready_to_check') {
-      const scheduledText = n.data?.scheduled_at
-        ? `Your next appointment is at ${formatDateTime12(n.data.scheduled_at)}.`
-        : '';
       setDetails({
+        type: 'ready_to_check',
         title: 'Your order is now ready to check',
-        body: ['Your order is now ready to check.', scheduledText].filter(Boolean).join('\n'),
-        type: n.type,
-        data: n.data
+        scheduled_at: n.data?.scheduled_at || null,
       });
       setDetailsVisible(true);
       return;
     }
 
-    if (n.type === 'order_completed') {
-      const when = n.data?.scheduled_at
-        ? `Your next appointment will be on ${formatDateTime12(n.data.scheduled_at)}.`
-        : '';
-      const amount =
-        n.data?.total_amount != null
-          ? `Please prepare ${Number(n.data.total_amount).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })} to get your order.`
-          : '';
+    if (n.type === 'order_finished') {
       setDetails({
+        type: 'order_finished',
+        title: 'Congratulations! Your order is now finished!',
+        message: 'Please check through the "My Orders" page under the History section to view your completed order',
+      });
+      setDetailsVisible(true);
+      return;
+    }
+
+    if (n.type === 'feedback_responded') {
+      const title = 'Admin responded to your feedback';
+      const body = n.body || n.data?.admin_response || (n.data?.admin_checked ? 'The admin has reviewed your feedback.' : '');
+      setDetails({ type: 'feedback_responded', title, body });
+      setDetailsVisible(true);
+      return;
+    }
+
+    if (n.type === 'order_completed') {
+      setDetails({
+        type: 'order_completed',
         title: 'Your order is now completed',
-        body: [when, amount].filter(Boolean).join('\n'),
-        type: n.type,
-        data: n.data
+        scheduled_at: n.data?.scheduled_at || null,
+        amount: n.data?.total_amount != null ? Number(n.data.total_amount) : null,
       });
       setDetailsVisible(true);
       return;
     }
 
     setDetails({
+      type: 'generic',
       title: n.title,
       body: n.body ?? '',
-      type: n.type
     });
     setDetailsVisible(true);
-  };
-
-  const renderModalContent = () => {
-    if (!details) return null;
-    
-    if (details.type === 'ready_to_check') {
-      return (
-        <View style={styles.modalContent}>
-          <Text style={styles.modalBody}>Your order is now ready to check.</Text>
-          {details.data?.scheduled_at && (
-            <Text style={styles.modalBodyBlue}>
-              Your next appointment is at {formatDateTime12(details.data.scheduled_at)}.
-            </Text>
-          )}
-        </View>
-      );
-    }
-    
-    if (details.type === 'order_completed') {
-      return (
-        <View style={styles.modalContent}>
-          {details.data?.scheduled_at && (
-            <Text style={styles.modalBodyBlue}>
-              Your next appointment will be on {formatDateTime12(details.data.scheduled_at)}.
-            </Text>
-          )}
-          {details.data?.total_amount != null && (
-            <Text style={styles.modalBodyGreen}>
-              Please prepare {Number(details.data.total_amount).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })} to get your order.
-            </Text>
-          )}
-        </View>
-      );
-    }
-    
-    return (
-      <View style={styles.modalContent}>
-        <Text style={styles.modalBody}>{details.body || 'No additional information.'}</Text>
-      </View>
-    );
   };
 
   const renderActivityItem = (n) => {
     const isReadyToCheck = n.type === 'ready_to_check';
     const isOrderCompleted = n.type === 'order_completed';
+    const isOrderFinished = n.type === 'order_finished';
+    const isFeedbackResponded = n.type === 'feedback_responded';
     const isAppointmentRejected = n.type === 'appointment_rejected';
-    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected;
+    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished;
     const title = isReadyToCheck
       ? 'Your order is now ready to check'
       : isOrderCompleted
       ? 'Your order is now completed'
+      : isOrderFinished
+      ? 'Your order is now finished'
+      : isFeedbackResponded
+      ? 'Admin responded to your feedback'
       : n.title;
     const isUnread = !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime();
     return (
@@ -467,7 +464,7 @@ export default function HomePage() {
         <MaterialIcons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
-      {/* Enhanced Details Modal */}
+      {/* Details Modal */}
       <Modal
         visible={detailsVisible}
         transparent
@@ -478,20 +475,152 @@ export default function HomePage() {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{details?.title || 'Details'}</Text>
-              <TouchableOpacity 
-                onPress={() => setDetailsVisible(false)} 
-                style={styles.closeButton}
-              >
-                <MaterialIcons name="close" size={28} color="#000" />
+              <TouchableOpacity onPress={() => setDetailsVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
-            {renderModalContent()}
+            {(() => {
+              if (!details) return <Text style={styles.modalBody}>No additional information.</Text>;
+              if (details.type === 'order_completed') {
+                return (
+                  <View>
+                    {details.scheduled_at && (
+                      <Text style={[styles.modalBody, { color: '#1e88e5', fontSize: 16, fontWeight: '600' }]}>Next appointment: {formatDateTime12(details.scheduled_at)}</Text>
+                    )}
+                    {details.amount != null && (
+                      <Text style={[styles.modalBody, { color: '#16A34A', fontSize: 18, fontWeight: '700', marginTop: 6 }]}>Please prepare ₱{details.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                    )}
+                  </View>
+                );
+              }
+              if (details.type === 'ready_to_check') {
+                return (
+                  <View>
+                    <Text style={[styles.modalBody, { fontSize: 16 }]}>Your order is now ready to check.</Text>
+                    {details.scheduled_at && (
+                      <Text style={[styles.modalBody, { color: '#1e88e5', fontSize: 16, fontWeight: '600' }]}>Next appointment: {formatDateTime12(details.scheduled_at)}</Text>
+                    )}
+                  </View>
+                );
+              }
+              if (details.type === 'order_finished') {
+                return (
+                  <Text style={[styles.modalBody, { fontSize: 16 }]}>{details.message}</Text>
+                );
+              }
+              if (details.type === 'feedback_responded' || details.type === 'generic') {
+                return (
+                  <Text style={[styles.modalBody, { fontSize: 16 }]}>{details.body || 'No additional information.'}</Text>
+                );
+              }
+              return <Text style={styles.modalBody}>No additional information.</Text>;
+            })()}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Finished Order Modal (shown before Feedback) */}
+      <Modal
+        visible={finishedVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setFinishedVisible(false);
+          setFeedbackVisible(true);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Congratulations! Your order is now finished!</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setFinishedVisible(false);
+                  setFeedbackVisible(true);
+                }}
+              >
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalBody}>
+              Please check through the "My Orders" page under the History section to view your completed order
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Feedback Modal */}
+      <Modal
+        visible={feedbackVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFeedbackVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Rate your experience</Text>
+              <TouchableOpacity onPress={() => setFeedbackVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            {pendingFeedback ? (
+              <Text style={styles.modalBody}>
+                {`Order: ${pendingFeedback.service_type || 'N/A'}`}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginVertical: 10 }}>
+              {[1,2,3,4,5].map((v) => (
+                <TouchableOpacity key={v} onPress={() => setFeedbackRating(v)} style={{ marginHorizontal: 6 }}>
+                  <MaterialIcons
+                    name={v <= feedbackRating ? 'star' : 'star-border'}
+                    size={30}
+                    color={v <= feedbackRating ? '#f5a623' : '#ccc'}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              multiline
+              placeholder="Optional comment"
+              placeholderTextColor="#999"
+              value={feedbackComment}
+              onChangeText={setFeedbackComment}
+              style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, minHeight: 80, color: '#000' }}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+              <View style={{ padding: 10 }} />
+              <TouchableOpacity
+                disabled={feedbackRating === 0 || feedbackSubmitting || !pendingFeedback}
+                onPress={async () => {
+                  if (!pendingFeedback) return;
+                  try {
+                    setFeedbackSubmitting(true);
+                    await api.post('/feedback', {
+                      order_id: pendingFeedback.order_id,
+                      rating: feedbackRating,
+                      comment: feedbackComment || undefined,
+                    });
+                    setFeedbackVisible(false);
+                    setPendingFeedback(null);
+                  } catch (e) {
+                    alert('Failed to submit feedback');
+                  } finally {
+                    setFeedbackSubmitting(false);
+                  }
+                }}
+                style={{ backgroundColor: feedbackRating === 0 ? '#ccc' : '#4682B4', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>{feedbackSubmitting ? 'Submitting...' : 'Submit'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -756,68 +885,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  // Enhanced Modal Styles
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: { 
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#fff', 
-    borderRadius: 16, 
-    padding: 0,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  modalHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#2c3e50',
-    flex: 1,
-    marginRight: 10,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalContent: {
-    padding: 20,
-    paddingTop: 15,
-  },
-  modalBody: { 
-    fontSize: 18, 
-    color: '#34495e', 
-    lineHeight: 28,
-    textAlign: 'left',
-    marginBottom: 12,
-  },
-  modalBodyBlue: {
-    fontSize: 18,
-    color: '#4682B4', // Blue color for dates/times
-    lineHeight: 28,
-    fontWeight: '500',
-    marginBottom: 12,
-  },
-  modalBodyGreen: {
-    fontSize: 18,
-    color: '#2E8B57', // Green color for amounts
-    lineHeight: 28,
-    fontWeight: '500',
-    marginBottom: 12,
-  },
+  // Modal
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
+  modalCard: { width: '88%', backgroundColor: '#fff', borderRadius: 14, padding: 22, elevation: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
+  modalBody: { fontSize: 17, color: '#000', lineHeight: 24, marginTop: 6 },
 });
