@@ -1,8 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +28,7 @@ export default function AppointmentsPage() {
   const [orderLoading, setOrderLoading] = useState(false);
   const [finishedOrders, setFinishedOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const toggleRecent = () => {
     setExpandedRecent(!expandedRecent);
@@ -140,6 +143,16 @@ export default function AppointmentsPage() {
     return () => clearInterval(id);
   }, [loadFinishedOrders]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      loadNextAppointment(),
+      loadLatestOrder(),
+      loadFinishedOrders(),
+    ]);
+    setRefreshing(false);
+  }, [loadNextAppointment, loadLatestOrder, loadFinishedOrders]);
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'Completed':
@@ -155,9 +168,24 @@ export default function AppointmentsPage() {
   return (
     <View style={styles.container}>
       <View style={styles.background} />
-      <Header userName="Dianne" />
+      <Header
+        userName="Dianne"
+        onNotificationsViewed={async () => {
+          try {
+            const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+            if (!saved) {
+              const now = new Date().toISOString();
+              await AsyncStorage.setItem('notifications_last_seen_at', now);
+            }
+          } catch (_) {}
+        }}
+      />
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 50 }}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 50 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Text style={styles.pageTitle}>My Orders</Text>
 
         {/* Reminders Section */}

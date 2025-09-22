@@ -194,8 +194,8 @@ const OrdersHistory = () => {
 
           {/* View File Modal */}
           {showDetails && selectedOrder && (
-            <div className="modal-bg">
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+            <div className="modal-bg" onClick={() => setShowDetails(false)}>
+              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
                 <AiOutlineClose
                   className="orders-modal-exit-icon"
                   onClick={() => setShowDetails(false)}

@@ -245,6 +245,17 @@ const Dashboard = () => {
     return `${formattedHour}:${minutes} ${period}`;
   };
 
+  // Helper to determine if a time (HH:mm or HH:mm:ss) today is still upcoming
+  const isUpcomingToday = (timeString) => {
+    if (!timeString) return false;
+    const [h, m] = timeString.split(':');
+    const now = new Date();
+    const t = new Date();
+    t.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+    // Only treat as upcoming if the appointment is for today and time >= now
+    return t.getTime() >= now.getTime();
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     
@@ -367,19 +378,21 @@ const Dashboard = () => {
     {queueData.has_queue ? (
       <>
         {/* Current Customer */}
-        <div className="current-customer">
-          <strong>Current Customer:</strong>{' '}
-          <span className="queue-number">
-            #{queueData.current_customer?.queue_number || 'N/A'}
-          </span>{' '}
-          {queueData.current_customer?.name || 'N/A'}
-          <span className="queue-time">
-            ({formatTime(queueData.current_customer?.appointment_time)})
-          </span>
-        </div>
+        {queueData.current_customer && isUpcomingToday(queueData.current_customer?.appointment_time) && (
+          <div className="current-customer">
+            <strong>Current Customer:</strong>{' '}
+            <span className="queue-number">
+              #{queueData.current_customer?.queue_number || 'N/A'}
+            </span>{' '}
+            {queueData.current_customer?.name || 'N/A'}
+            <span className="queue-time">
+              ({formatTime(queueData.current_customer?.appointment_time)})
+            </span>
+          </div>
+        )}
 
         {/* Next Customer */}
-        {queueData.next_customer && (
+        {queueData.next_customer && isUpcomingToday(queueData.next_customer?.appointment_time) && (
           <div className="next-customer">
             <strong>Next Customer:</strong>{' '}
             <span className="queue-number">
@@ -392,6 +405,16 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* If both current and next are not upcoming, show message */}
+        {!isUpcomingToday(queueData.current_customer?.appointment_time) &&
+          !isUpcomingToday(queueData.next_customer?.appointment_time) && (
+            <div className="no-queue-message">
+              <div className="queue-status">
+                <span className="status-indicator inactive"></span>
+                <span>{queueData.message || 'No upcoming customers for the rest of today'}</span>
+              </div>
+            </div>
+        )}
 
       </>
     ) : (
@@ -407,8 +430,8 @@ const Dashboard = () => {
 
             {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
-              <div className="dashboard-modal-bg">
-                <div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+              <div className="dashboard-modal-bg" onClick={() => setShowDetails(false)}>
+                <div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
                   <AiOutlineClose
                     className="dashboard-modal-exit-icon"
                     onClick={() => setShowDetails(false)}
@@ -553,7 +576,12 @@ const Dashboard = () => {
                 <div className="due-dates-list">
                   {acceptedAppointments
                     .filter(app => {
-                      return app.preferred_due_date && new Date(app.preferred_due_date) > new Date();
+                      if (!app.preferred_due_date) return false;
+                      const due = new Date(app.preferred_due_date);
+                      const now = new Date();
+                      // include today and allow showing items that became overdue since yesterday
+                      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                      return due >= yesterday;
                     })
                     .sort((a, b) => new Date(a.preferred_due_date) - new Date(b.preferred_due_date))
                     .slice(0, 2)
@@ -569,6 +597,15 @@ const Dashboard = () => {
                         </div>
                       </div>
                     ))}
+                  {acceptedAppointments.filter(app => {
+                    if (!app.preferred_due_date) return false;
+                    const due = new Date(app.preferred_due_date);
+                    const now = new Date();
+                    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                    return due >= yesterday;
+                  }).length === 0 && (
+                    <p style={{ color: '#687076', padding: '8px 4px' }}>No upcoming due dates.</p>
+                  )}
                 </div>
               </div>
             </div>

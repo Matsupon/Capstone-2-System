@@ -232,8 +232,8 @@ const Appointments = () => {
 
           {/* View Details Modal */}
           {showDetails && selectedAppointment && (
-            <div className="modal-bg">
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+            <div className="modal-bg" onClick={() => setShowDetails(false)}>
+              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
                 <h2 style={{textAlign: 'center'}}>Appointment Details</h2>
                 <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
@@ -308,8 +308,8 @@ const Appointments = () => {
 
           {/* Queue Confirmation Modal */}
           {queueConfirmId !== null && (
-            <div className="modal-bg">
-              <div className="modal-panel queue-confirm-modal">
+            <div className="modal-bg" onClick={() => setQueueConfirmId(null)}>
+              <div className="modal-panel queue-confirm-modal" onClick={(e) => e.stopPropagation()}>
                 <h3>Add this appointment to the queue?</h3>
                 <div className="queue-confirm-btns">
                   <button className="yes" onClick={confirmAddToQueue}>Yes</button>
@@ -329,8 +329,8 @@ const Appointments = () => {
 
           {/* Remove Confirmation Modal */}
           {removeId !== null && (
-            <div className="modal-bg">
-              <div className="modal-panel remove-modal">
+            <div className="modal-bg" onClick={() => setRemoveId(null)}>
+              <div className="modal-panel remove-modal" onClick={(e) => e.stopPropagation()}>
                 <h3>Are you sure you want to delete this appointment?</h3>
                 <div className="remove-btns">
                   <button className="yes" onClick={confirmRemove}>Yes</button>

@@ -491,6 +491,9 @@ const Orders = () => {
         </div>
         <div className="orders-content">
           <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
+            {orders.length === 0 ? (
+              <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
+            ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
@@ -524,23 +527,23 @@ const Orders = () => {
                       </div>
                     </td>
                     <td>
-  {/* NEXT APPOINT COLUMN */}
-  {order.status === 'Ready to Check' && order.check_appointment_date && order.check_appointment_time && (
-    <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>
-  )}
-  {order.status === 'Pending' && (
-    order.appointment?.appointment_date && order.appointment?.appointment_time ? (
-      <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>
-    ) : order.appointment?.preferred_due_date ? (
-      <span>{formatDateForDisplay(order.appointment.preferred_due_date)}</span>
-    ) : (
-      <span>N/A</span>
-    )
-  )}
-  {order.status === 'Completed' && order.pickup_appointment_date && order.pickup_appointment_time && (
-    <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>
-  )}
-</td>
+                      {/* NEXT APPOINT COLUMN */}
+                      {order.status === 'Ready to Check' && order.check_appointment_date && order.check_appointment_time && (
+                        <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>
+                      )}
+                      {order.status === 'Pending' && (
+                        order.appointment?.appointment_date && order.appointment?.appointment_time ? (
+                          <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>
+                        ) : order.appointment?.preferred_due_date ? (
+                          <span>{formatDateForDisplay(order.appointment.preferred_due_date)}</span>
+                        ) : (
+                          <span>N/A</span>
+                        )
+                      )}
+                      {order.status === 'Completed' && order.pickup_appointment_date && order.pickup_appointment_time && (
+                        <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>
+                      )}
+                    </td>
                     <td>
                       <span
                         className="action-link"
@@ -600,12 +603,13 @@ const Orders = () => {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
 
           {/* View File Modal */}
           {showDetails && selectedOrder && (
-            <div className="modal-bg">
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}>
+            <div className="modal-bg" onClick={() => setShowDetails(false)}>
+              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
                 <AiOutlineClose
                   className="orders-modal-exit-icon"
                   onClick={() => setShowDetails(false)}
@@ -875,8 +879,8 @@ const Orders = () => {
 
           {/* Payment Fee Modal */}
           {showPaymentModal && (
-            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }}>
-              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }} onClick={() => setShowPaymentModal(false)}>
+              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                 <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Please provide the total payment fee for this order:</h3>
                 <input
                   type="number"
@@ -900,8 +904,8 @@ const Orders = () => {
 
           {/* Finish Confirmation Modal */}
           {showFinishConfirmation && orderToFinish && (
-            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }}>
-              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }} onClick={() => { setShowFinishConfirmation(false); setOrderToFinish(null); }}>
+              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                 <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure the Order is Finished?</h3>
                 <div style={{ display: 'flex', gap: 16, width: '100%' }}>
                   <button

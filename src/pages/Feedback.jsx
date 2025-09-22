@@ -57,7 +57,16 @@ export default function FeedbackPage() {
     try {
       const res = await api.patch(`/feedback/${id}/respond`, payload);
       if (res.data?.success) {
-        await load();
+        // optimistic update locally to avoid full refresh
+        setItems((prev) => prev.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                admin_checked: typeof payload.admin_checked !== 'undefined' ? payload.admin_checked : it.admin_checked,
+                admin_response: typeof payload.admin_response !== 'undefined' ? payload.admin_response : it.admin_response,
+              }
+            : it
+        ));
         setUpdateSuccess(true);
         setTimeout(() => setUpdateSuccess(false), 3000);
       }
@@ -148,6 +157,12 @@ export default function FeedbackPage() {
                               const next = !(responding[fb.id]?.admin_checked ?? fb.admin_checked);
                               setResp(fb.id, { admin_checked: next });
                               handleSubmit(fb.id);
+                            }}
+                            style={{
+                              color: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
+                              borderColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
+                              backgroundColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#E8F5E9' : undefined,
+                              fontWeight: 700,
                             }}
                           >
                             ✓

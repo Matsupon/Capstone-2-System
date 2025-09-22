@@ -171,8 +171,8 @@ const Customers = () => {
 
         {/* Profile Modal */}
         {profileModal.open && profileModal.customer && (
-          <div className="customers-modal-bg">
-            <div className="customers-modal-panel">
+          <div className="customers-modal-bg" onClick={handleCloseModal}>
+            <div className="customers-modal-panel" onClick={(e) => e.stopPropagation()}>
               <AiOutlineClose
                 className="customers-modal-exit-icon"
                 onClick={handleCloseModal}
@@ -240,6 +240,32 @@ const Customers = () => {
                           <img src={order.designImg} alt="Design" className="customers-modal-image" />
                           <div className="customers-modal-image-label">GCash Proof</div>
                           <img src={order.gcashImg} alt="GCash Proof" className="customers-modal-image" />
+
+                          {/* Feedback (only for new orders that have it) */}
+                          {order.feedback && (
+                            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #E5E5E5' }}>
+                              <div className="customers-modal-detail-label">Feedback</div>
+                              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                                {[1,2,3,4,5].map((v) => (
+                                  <span key={v} style={{ color: v <= (order.feedback.rating || 0) ? '#f5a623' : '#ccc', fontSize: 16, marginRight: 2 }}>★</span>
+                                ))}
+                              </div>
+                              {order.feedback.comment ? (
+                                <div className="customers-modal-detail-value">Customer: {order.feedback.comment}</div>
+                              ) : (
+                                <div className="customers-modal-detail-value" style={{ fontStyle: 'italic' }}>Customer left no comment.</div>
+                              )}
+                              <div style={{ marginTop: 6 }}>
+                                {order.feedback.admin_response ? (
+                                  <div className="customers-modal-detail-value">Admin: {order.feedback.admin_response}</div>
+                                ) : order.feedback.admin_checked ? (
+                                  <div className="customers-modal-detail-value" style={{ color: '#0f7a28' }}>Admin checked this feedback.</div>
+                                ) : (
+                                  <div className="customers-modal-detail-value" style={{ fontStyle: 'italic' }}>No admin response yet.</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

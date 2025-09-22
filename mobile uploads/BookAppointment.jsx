@@ -105,11 +105,11 @@ export default function BookAppointment({ visible, onClose }) {
     }
   };
 
-  // Image picker that preserves the full photo by default, with optional cropping on demand
+  // Image picker; for design images we enable cropping by default
   const pickImage = async (setImage, crop = false) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: crop, // only crop when the user explicitly asks
+      allowsEditing: crop, // crop when requested by caller
       // aspect removed to avoid forced cropping; user can free-crop when allowsEditing is true
       quality: 1,
       exif: true,
@@ -120,18 +120,24 @@ export default function BookAppointment({ visible, onClose }) {
     }
   };
 
-  // Ask user whether to crop or not before picking
-  const requestImagePick = (setter) => {
-    Alert.alert(
-      'Select Image',
-      'Choose how you want to pick the image.',
-      [
-        { text: 'Pick Photo', onPress: () => pickImage(setter, false) },
-        { text: 'Pick & Crop', onPress: () => pickImage(setter, true) },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-      { cancelable: true }
-    );
+  // No pre-choice dialog. For design images we enable cropping by default; for gcash we don't crop.
+
+  // Validate step 1 inputs before proceeding to step 2
+  const handleNextStep = () => {
+    const total = Object.values(sizes).reduce((a, b) => a + (b || 0), 0);
+    if (!serviceType) {
+      Alert.alert('Missing Service Type', 'Please select a service type to continue.');
+      return;
+    }
+    if (total <= 0) {
+      Alert.alert('Select Sizes', 'Please select at least one size and specify its quantity.');
+      return;
+    }
+    if (!quantity || Number(quantity) !== total) {
+      Alert.alert('Quantity Mismatch', 'Total quantity must match the sum of selected sizes.');
+      return;
+    }
+    setStep(2);
   };
 
   const formatTo12Hour = (time24) => {
@@ -188,12 +194,25 @@ export default function BookAppointment({ visible, onClose }) {
 
   const handleBookAppointment = async () => {
     try {
-      setIsLoading(true);
-    
-      if (!serviceType || !quantity || !gcashImage || !preferredDueDateRaw || !appointmentDateRaw || !appointmentTimeRaw) {
-        Alert.alert('Error', 'Please fill in all required fields.');
+      // Step 2 validations with specific messages
+      if (!gcashImage) {
+        Alert.alert('Missing GCash Proof', 'Please upload your GCash payment proof to continue.');
         return;
       }
+      if (!preferredDueDateRaw) {
+        Alert.alert('Missing Preferred Due Date', 'Please select your preferred due date.');
+        return;
+      }
+      if (!appointmentDateRaw) {
+        Alert.alert('Missing Appointment Date', 'Please select an appointment date.');
+        return;
+      }
+      if (!appointmentTimeRaw) {
+        Alert.alert('Missing Appointment Time', 'Please select an appointment time.');
+        return;
+      }
+
+      setIsLoading(true);
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -367,7 +386,7 @@ export default function BookAppointment({ visible, onClose }) {
                 placeholderTextColor="#aaa"
               />
 
-              <TouchableOpacity style={styles.uploadBox} onPress={() => requestImagePick(setDesignImage)}>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDesignImage, true)}>
                 <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
                 <Text style={{ color: '#687076' }}>Upload Design if applicable</Text>
                 {designImage && <Image source={{ uri: designImage }} style={styles.uploadedImg} />}
@@ -376,8 +395,7 @@ export default function BookAppointment({ visible, onClose }) {
               <View style={{ alignItems: 'flex-end', marginTop: 18 }}>
                 <TouchableOpacity
                   style={styles.nextBtn}
-                  onPress={() => setStep(2)}
-                  disabled={!serviceType || !quantity}
+                  onPress={handleNextStep}
                 >
                   <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 16 }}>Next</Text>
                   <MaterialIcons name="chevron-right" size={22} color="#222" />
@@ -387,14 +405,20 @@ export default function BookAppointment({ visible, onClose }) {
           </View>
         ) : (
           <View style={{ flex: 1 }}>
-
+            {/* Back header for Step 2 */}
+            <View style={styles.headerRow}>
+              <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={24} color="#222" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Payment & Schedule</Text>
+            </View>
             <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
               <View style={styles.gcashBox}>
                 <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>0912 345 6789</Text></Text>
               </View>
 
-              <TouchableOpacity style={styles.uploadBox} onPress={() => requestImagePick(setGcashImage)}>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage, true)}>
                 <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
                 <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
                 {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}
@@ -470,9 +494,9 @@ export default function BookAppointment({ visible, onClose }) {
             </ScrollView>
 
             <TouchableOpacity 
-              style={[styles.bookBtn, (!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime || isLoading) && styles.bookBtnDisabled]} 
+              style={[styles.bookBtn, isLoading && styles.bookBtnDisabled]} 
               onPress={handleBookAppointment}
-              disabled={!gcashImage || !preferredDueDate || !appointmentDate || !appointmentTime || isLoading}
+              disabled={isLoading}
             >
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
                 {isLoading ? 'Booking...' : 'Book an Appointment'}

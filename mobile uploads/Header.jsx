@@ -51,13 +51,22 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
     })();
   }, [loadNotifications]);
 
-  // Periodically refresh notifications to keep badge and list up to date
+  // Periodically refresh notifications and re-read lastSeenAt to keep badge in sync across pages
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadNotifications();
+    const interval = setInterval(async () => {
+      try {
+        await loadNotifications();
+      } finally {
+        try {
+          const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+          if (saved && saved !== lastSeenAt) {
+            setLastSeenAt(saved);
+          }
+        } catch (_) {}
+      }
     }, 10000); // 10 seconds
     return () => clearInterval(interval);
-  }, [loadNotifications]);
+  }, [loadNotifications, lastSeenAt]);
 
   const formatMonthDay = (iso) => {
     const d = new Date(iso);
