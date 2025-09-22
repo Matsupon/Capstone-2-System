@@ -25,7 +25,6 @@ class ProfileController extends Controller
     ]);
 
     try {
-        // Update profile fields if provided
         $fields = ['name','email','phone','address'];
         $dirty = false;
         foreach ($fields as $field) {
@@ -39,7 +38,6 @@ class ProfileController extends Controller
             $dirty = true;
         }
 
-        // Handle optional image upload
         if ($request->hasFile('profile_image')) {
             $file = $request->file('profile_image');
             Log::info('✅ Uploaded file info:', [

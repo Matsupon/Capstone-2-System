@@ -17,6 +17,7 @@ class Appointment extends Model
         'preferred_due_date',
         'appointment_date',
         'appointment_time',
+        'status',
     ];
 
     protected $casts = [

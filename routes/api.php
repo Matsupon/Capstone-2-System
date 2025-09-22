@@ -10,12 +10,10 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
 
-// Test endpoint to verify API is working
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
 });
 
-// Test endpoint for appointments (no auth required for debugging)
 Route::get('/test-appointments', function () {
     return response()->json([
         'message' => 'Appointments endpoint is accessible!',
@@ -33,55 +31,51 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/profile', [ProfileController::class, 'update']);
 
-    // Test appointment controller
     Route::get('/appointments/test', [AppointmentController::class, 'test']);
     
-    // Test the new method
     Route::get('/appointments/test-next', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
 
     //customer side appointments
     Route::post('/appointments', [AppointmentController::class, 'store']); 
     Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
+    Route::get('/me/orders/latest', [OrderController::class, 'myLatest']);
+    Route::get('/me/orders/history', [OrderController::class, 'myHistory']);
+    Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
+    Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
+
+    // Customers
+    Route::get('/customers', [CustomerController::class, 'index']);
+    Route::get('/customers/{id}', [CustomerController::class, 'show']);
+
 
     //admin side appointments
-    Route::get('/appointments', [AppointmentController::class, 'index']); // fetch all appointments
-    Route::get('/admin/appointments', [AppointmentController::class, 'adminGetAllAppointments']); // admin fetch all appointments
-    Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); // admin fetch appointment by ID
-    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']); // reject
-    Route::delete('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); // admin reject
+    Route::get('/appointments', [AppointmentController::class, 'index']); 
+    Route::get('/admin/appointments', [AppointmentController::class, 'adminGetAllAppointments']); 
+    Route::get('/admin/appointments/accepted', [AppointmentController::class, 'adminGetAcceptedAppointments']); 
+    Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); 
+    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+    Route::delete('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); 
 
     // Orders
-    Route::get('/orders', [OrderController::class, 'index']); // list all orders
-    Route::get('/orders/history', [OrderController::class, 'history']); // list finished orders
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/history', [OrderController::class, 'history']); 
     Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
-
+    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
+    Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
+    Route::get('/orders/today-queue', [OrderController::class, 'getTodayQueue']);
+    Route::get('/orders/today-appointments-count', [OrderController::class, 'getTodayAppointmentsCount']);
     
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
-    // Orders: update status (Ready to Check / Completed, etc.)
-    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
-    // Orders: get booked times for a given date and kind
-    Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
-    // Orders: get statistics for dashboard
-    Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
+    //Admin DASHBOARD
+    Route::get('/orders/today-appointments-count', [OrderController::class, 'getTodayAppointmentsCount']);
+    Route::get('/orders/today-queue', [OrderController::class, 'getTodayQueue']);
+    Route::get('/dashboard-data', [OrderController::class, 'dashboardData']);
+    Route::post('/orders/recalculate-queue', [OrderController::class, 'recalculateQueueNumbers']);
 
-    // Mobile: fetch latest order for current user
-    Route::get('/me/orders/latest', [OrderController::class, 'myLatest']);
-    
-    // Mobile: fetch finished orders for current user
-    Route::get('/me/orders/history', [OrderController::class, 'myHistory']);
-
-    //Mobile: fetch next appointment based on order status (more specific route first)
-    Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
-    
-    //Mobile: fetch latest appointment date (less specific route last)
-    Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
-
-    // Customers
-    Route::get('/customers', [CustomerController::class, 'index']);
-    Route::get('/customers/{id}', [CustomerController::class, 'show']);
 });
 

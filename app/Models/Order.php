@@ -11,9 +11,9 @@ class Order extends Model
         'appointment_id',
         'queue_number',
         'status',
-        'scheduled_at', // Add this
-        'completed_at', // Add this
-        'total_amount', // Add this
+        'scheduled_at', 
+        'completed_at',
+        'total_amount',
         'check_appointment_date',
         'check_appointment_time',
         'pickup_appointment_date',

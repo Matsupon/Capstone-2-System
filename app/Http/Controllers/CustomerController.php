@@ -10,22 +10,17 @@ use Carbon\Carbon;
 
 class CustomerController extends Controller
 {
-    /**
-     * Get all customers with their order statistics
-     */
     public function index()
 {
     try {
-        $customers = User::whereHas('appointments.order') // only customers with accepted appointments
+        $customers = User::whereHas('appointments.order') 
             ->with(['appointments.order'])
             ->get()
             ->map(function ($user) {
-                // Count total orders
                 $totalOrders = $user->appointments->filter(function ($appointment) {
                     return $appointment->order !== null;
                 })->count();
 
-                // Get latest order
                 $latestOrder = Order::whereHas('appointment', function ($query) use ($user) {
                         $query->where('user_id', $user->id);
                     })
@@ -65,16 +60,11 @@ class CustomerController extends Controller
     }
 }
 
-
-    /**
-     * Get individual customer profile with complete order history
-     */
     public function show($id)
     {
         try {
             $user = User::findOrFail($id);
 
-            // Get orders through appointments
             $orders = Order::whereHas('appointment', function ($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
@@ -82,13 +72,10 @@ class CustomerController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-            // Get total orders count
             $totalOrders = $orders->count();
             
-            // Get latest order for last appointment info
             $latestOrder = $orders->first();
             
-            // If no orders, get the latest appointment instead
             if (!$latestOrder) {
                 $latestAppointment = $user->appointments()->orderBy('appointment_date', 'desc')->first();
                 $lastAppointment = $latestAppointment ? 
@@ -100,9 +87,7 @@ class CustomerController extends Controller
                 $lastOrderStatus = $latestOrder->status;
             }
 
-            // Format orders for the modal
             $formattedOrders = $orders->map(function ($order) {
-                // Parse sizes from JSON string
                 $sizes = [];
                 if (!empty($order->appointment->sizes)) {
                     $decodedSizes = json_decode($order->appointment->sizes, true);
@@ -129,7 +114,6 @@ class CustomerController extends Controller
                 ];
             });
 
-            // If no orders, create a placeholder order from the latest appointment
             if ($formattedOrders->isEmpty()) {
                 $latestAppointment = $user->appointments()->orderBy('appointment_date', 'desc')->first();
                 if ($latestAppointment) {
