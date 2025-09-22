@@ -36,6 +36,7 @@ export default function HomePage() {
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false);
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -480,7 +481,7 @@ export default function HomePage() {
               </TouchableOpacity>
             </View>
             {(() => {
-              if (!details) return <Text style={styles.modalBody}>No additional information.</Text>;
+              if (!details) return <Text style={styles.modalBody}>Please check the "My Orders" page under the History section to review your feedback and check for admin response!</Text>;
               if (details.type === 'order_completed') {
                 return (
                   <View>
@@ -603,6 +604,8 @@ export default function HomePage() {
                     });
                     setFeedbackVisible(false);
                     setPendingFeedback(null);
+                    setFeedbackSuccess(true);
+                    setTimeout(() => setFeedbackSuccess(false), 3000);
                   } catch (e) {
                     alert('Failed to submit feedback');
                   } finally {
@@ -617,6 +620,12 @@ export default function HomePage() {
           </View>
         </View>
       </Modal>
+
+      {feedbackSuccess && (
+        <View style={{ position: 'absolute', left: 20, right: 20, bottom: 90, backgroundColor: '#E8F5E9', borderRadius: 12, padding: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }}>
+          <Text style={{ color: '#16A34A', fontWeight: '700' }}>Feedback sent successfully!</Text>
+        </View>
+      )}
     </View>
   );
 }
