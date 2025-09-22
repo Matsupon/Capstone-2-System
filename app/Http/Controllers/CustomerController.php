@@ -68,7 +68,7 @@ class CustomerController extends Controller
             $orders = Order::whereHas('appointment', function ($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
-            ->with('appointment')
+            ->with(['appointment', 'feedback'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -111,6 +111,13 @@ class CustomerController extends Controller
                         : 'gcash.png', // fallback
                     'notes' => $order->appointment->notes ?: 'No notes provided.',
                     'paymentFee' => $order->status === 'Finished' ? $order->total_amount : null,
+                    'feedback' => $order->feedback ? [
+                        'rating' => (int) $order->feedback->rating,
+                        'comment' => $order->feedback->comment,
+                        'admin_response' => $order->feedback->admin_response,
+                        'admin_checked' => (bool) $order->feedback->admin_checked,
+                        'created_at' => optional($order->feedback->created_at)->toDateTimeString(),
+                    ] : null,
                 ];
             });
 
