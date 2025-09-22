@@ -10,11 +10,13 @@ import '../styles/Dashboard.css';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  const [acceptedAppointments, setAcceptedAppointments] = useState([]);
   const [orderStats, setOrderStats] = useState({ pending_orders: 0, finished_orders: 0 });
+  const [queueData, setQueueData] = useState({ has_queue: false, current_customer: null, next_customer: null, message: '' });
+  const [todaysAppointmentsCount, setTodaysAppointmentsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Check authentication on component mount
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
     if (!adminToken) {
@@ -22,7 +24,6 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
-  // Fetch appointments data
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
@@ -39,7 +40,6 @@ const Dashboard = () => {
           response = await api.get('/admin/appointments');
           console.log('Admin endpoint raw response:', response);
   
-          // Extract data array in one place
           const data = response.data.data || response.data;
           console.log('Appointments array:', data);
   
@@ -58,7 +58,6 @@ const Dashboard = () => {
           console.log('Admin endpoint failed:', adminError);
           console.log('Admin error response:', adminError.response);
   
-          // Fallback to original endpoint
           try {
             console.log('Trying original endpoint...');
             response = await api.get('/appointments');
@@ -92,7 +91,17 @@ const Dashboard = () => {
       }
     };
 
-    // Fetch order statistics
+    const fetchAcceptedAppointments = async () => {
+      try {
+        const response = await api.get('/admin/appointments/accepted');
+        if (response.data?.success) {
+          setAcceptedAppointments(response.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch accepted appointments:', err);
+      }
+    };
+
     const fetchOrderStats = async () => {
       try {
         const response = await api.get('/orders/stats');
@@ -103,9 +112,61 @@ const Dashboard = () => {
         console.error('Failed to fetch order stats:', err);
       }
     };
-  
-    fetchAppointments();
-    fetchOrderStats();
+
+    const fetchTodayQueue = async () => {
+      try {
+        const response = await api.get('/orders/today-queue');
+        console.log('Today queue response:', response.data);
+        if (response.data?.success) {
+          setQueueData(response.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch today\'s queue:', err);
+        // Set default empty state on error
+        setQueueData({ 
+          has_queue: false, 
+          current_customer: null, 
+          next_customer: null, 
+          message: 'Failed to load queue data',
+          all_orders: []
+        });
+      }
+    };
+
+    const fetchTodaysAppointmentsCount = async () => {
+      try {
+        const response = await api.get('/orders/today-appointments-count');
+        console.log('Today appointments count response:', response.data);
+        if (response.data?.success) {
+          setTodaysAppointmentsCount(response.data.data?.todays_appointments || 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch today\'s appointments count:', err);
+        setTodaysAppointmentsCount(0);
+      }
+    };
+
+    // Initial data fetch
+    const fetchAllData = async () => {
+      await Promise.all([
+        fetchAppointments(),
+        fetchAcceptedAppointments(),
+        fetchOrderStats(),
+        fetchTodayQueue(),
+        fetchTodaysAppointmentsCount()
+      ]);
+    };
+
+    fetchAllData();
+
+    // Set up real-time updates every 10 seconds for better responsiveness
+    const interval = setInterval(() => {
+      fetchTodayQueue();
+      fetchTodaysAppointmentsCount();
+      fetchOrderStats();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [navigate]);
   
 
@@ -114,43 +175,48 @@ const Dashboard = () => {
   const currentYear = currentDate.getFullYear();
   const today = currentDate.getDate();
   
-  // Calendar state for dynamic navigation
   const [calendarMonth, setCalendarMonth] = useState(currentMonth);
   const [calendarYear, setCalendarYear] = useState(currentYear);
   const todayDate = currentDate.getDate();
   const isCurrentMonth = calendarMonth === currentMonth && calendarYear === currentYear;
 
-  // Get month name
   const monthNames = ["January", "February", "March", "April", "May", "June", 
     "July", "August", "September", "October", "November", "December"];
   const currentMonthName = monthNames[calendarMonth];
 
-  // Get days in selected month
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-  // Get first day of selected month (0 = Sunday, 6 = Saturday)
   const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay();
 
-  // Marked dates logic (keep as before, but update for selected month)
-  const getRandomDays = () => {
-    const days = [];
-    while (days.length < 2) {
-      const randomDay = Math.floor(Math.random() * daysInMonth) + 1;
-      if ((calendarMonth !== currentMonth || randomDay !== todayDate) && !days.includes(randomDay)) {
-        days.push(randomDay);
-      }
+  const getMarkedDates = () => {
+    const markedDates = [];
+    
+    if (isCurrentMonth) {
+      markedDates.push(todayDate);
     }
-    return days;
+    
+    acceptedAppointments.forEach(appointment => {
+      if (appointment.preferred_due_date && appointment.preferred_due_date !== 'N/A') {
+        const dueDate = new Date(appointment.preferred_due_date);
+        if (dueDate.getMonth() === calendarMonth && dueDate.getFullYear() === calendarYear) {
+          const day = dueDate.getDate();
+          if (!markedDates.includes(day)) {
+            markedDates.push(day);
+          }
+        }
+      }
+    });
+    
+    return markedDates;
   };
-  const markedDates = (isCurrentMonth ? [todayDate] : []).concat(getRandomDays());
+  
+  const markedDates = getMarkedDates();
 
-  // Calendar grid for selected month
   const calendarDays = [
     ...Array(firstDayOfMonth).fill(null),
     ...Array.from({length: daysInMonth}, (_, i) => i + 1),
     ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
   ];
 
-  // Calendar navigation handlers
   const handlePrevMonth = () => {
     if (calendarMonth === 0) {
       setCalendarMonth(11);
@@ -168,7 +234,6 @@ const Dashboard = () => {
     }
   };
 
-  // Helper function to format time in 12-hour format
   const formatTime = (timeString) => {
     if (!timeString) return 'N/A';
     
@@ -180,7 +245,6 @@ const Dashboard = () => {
     return `${formattedHour}:${minutes} ${period}`;
   };
 
-  // Helper function to format date as "Month Day" (e.g., "May 10")
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     
@@ -188,7 +252,6 @@ const Dashboard = () => {
     return `${monthNames[date.getMonth()]} ${date.getDate()}`;
   };
 
-  // Helper function to format date and time as "Month Day - Time" (e.g., "May 10 - 9:30 AM")
   const formatDateTime = (dateString, timeString) => {
     if (!dateString) return 'N/A';
     
@@ -200,22 +263,27 @@ const Dashboard = () => {
     return `${month} ${day} - ${time}`;
   };
 
-  // Sample data
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Ready to Check':
+        return '#e91e63';
+      case 'Pending':
+        return '#ff9800';
+      case 'Completed':
+        return '#4caf50';
+      case 'Finished':
+        return '#4caf50';
+      default:
+        return '#333';
+    }
+  };
+
   const quickStats = [
-    { title: "Today's Appointments", value: appointments.filter(app => {
-        const appDate = new Date(app.appointment_date);
-        return appDate.toDateString() === currentDate.toDateString();
-      }).length, color: "blue" },
+    { title: "Today's Appointments", value: todaysAppointmentsCount, color: "blue" },
     { title: "Pending Orders", value: orderStats.pending_orders, color: "yellow" },
     { title: "Completed Orders", value: orderStats.finished_orders, color: "green" }
   ];
 
-  const liveQueue = {
-    current: { number: "001", name: "Juan Dela Cruz" },
-    next: { number: "002", name: "Dianne Javellana" }
-  };
-
-  // Modal state for Recent Appointments
   const [showDetails, setShowDetails] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
 
@@ -292,18 +360,50 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Live Queue */}
-            <div className="panel live-queue">
-              <h3>Live Queue</h3>
-              <div className="queue-info">
-                <div className="current-customer">
-                  <strong>Current Customer:</strong> #{liveQueue.current.number} {liveQueue.current.name}
-                </div>
-                <div className="next-customer">
-                  <strong>Next Customer:</strong> #{liveQueue.next.number} {liveQueue.next.name}
-                </div>
-              </div>
-            </div>
+{/* Live Queue */}
+<div className="panel live-queue">
+  <h3>Live Queue - Today</h3>
+  <div className="queue-info">
+    {queueData.has_queue ? (
+      <>
+        {/* Current Customer */}
+        <div className="current-customer">
+          <strong>Current Customer:</strong>{' '}
+          <span className="queue-number">
+            #{queueData.current_customer?.queue_number || 'N/A'}
+          </span>{' '}
+          {queueData.current_customer?.name || 'N/A'}
+          <span className="queue-time">
+            ({formatTime(queueData.current_customer?.appointment_time)})
+          </span>
+        </div>
+
+        {/* Next Customer */}
+        {queueData.next_customer && (
+          <div className="next-customer">
+            <strong>Next Customer:</strong>{' '}
+            <span className="queue-number">
+              #{queueData.next_customer?.queue_number || 'N/A'}
+            </span>{' '}
+            {queueData.next_customer?.name || 'N/A'}
+            <span className="queue-time">
+              ({formatTime(queueData.next_customer?.appointment_time)})
+            </span>
+          </div>
+        )}
+
+
+      </>
+    ) : (
+      <div className="no-queue-message">
+        <div className="queue-status">
+          <span className="status-indicator inactive"></span>
+          <span>{queueData.message || 'No appointments scheduled for today'}</span>
+        </div>
+      </div>
+    )}
+  </div>
+</div>
 
             {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
@@ -451,8 +551,10 @@ const Dashboard = () => {
                   <Link to="/orders" className="view-all-link">View All</Link>
                 </div>
                 <div className="due-dates-list">
-                  {appointments
-                    .filter(app => new Date(app.preferred_due_date) > new Date())
+                  {acceptedAppointments
+                    .filter(app => {
+                      return app.preferred_due_date && new Date(app.preferred_due_date) > new Date();
+                    })
                     .sort((a, b) => new Date(a.preferred_due_date) - new Date(b.preferred_due_date))
                     .slice(0, 2)
                     .map((appointment, index) => (
@@ -463,9 +565,7 @@ const Dashboard = () => {
                         <div className="due-date-info">
                           <div className="customer-name">{appointment.user?.name || 'N/A'}</div>
                           <div className="service">{appointment.service_type}</div>
-                          <div className="date-time">
-                            {appointment.preferred_due_date ? formatDate(appointment.preferred_due_date) : 'N/A'} • {formatTime(appointment.appointment_time)}
-                          </div>
+                          <div className="date-time">{appointment.preferred_due_date ? formatDate(appointment.preferred_due_date) : 'N/A'}</div>
                         </div>
                       </div>
                     ))}

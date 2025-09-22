@@ -19,7 +19,6 @@ const Appointments = () => {
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [queueConfirmId, setQueueConfirmId] = useState(null);
 
-  // Check authentication on component mount
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
     if (!adminToken) {
@@ -27,7 +26,6 @@ const Appointments = () => {
     }
   }, [navigate]);
 
-  // Fetch appointments data
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
@@ -44,18 +42,15 @@ const Appointments = () => {
         console.log('Full admin endpoint URL: /api/admin/appointments');
         console.log('Full original endpoint URL: /api/appointments');
         
-        // Try admin endpoint first using the configured api instance
         let response;
         try {
           console.log('Trying admin endpoint...');
           response = await api.get('/admin/appointments');
           console.log('Admin endpoint response:', response);
           
-          // Check if the response has the expected structure
           if (response.data.success && response.data.data) {
             setAppointments(response.data.data);
           } else if (Array.isArray(response.data)) {
-            // Fallback for legacy response format
             setAppointments(response.data);
           } else {
             throw new Error('Invalid response format from server');
@@ -68,7 +63,6 @@ const Appointments = () => {
           console.log('Admin endpoint failed:', adminError);
           console.log('Admin error response:', adminError.response);
           
-          // If admin endpoint fails, try the original endpoint
           try {
             console.log('Trying original endpoint...');
             response = await api.get('/appointments');
@@ -99,7 +93,6 @@ const Appointments = () => {
     fetchAppointments();
   }, [navigate]);
 
-  // Helper function to format time in 12-hour format
   const formatTime = (timeString) => {
     if (!timeString) return 'N/A';
     
@@ -111,7 +104,6 @@ const Appointments = () => {
     return `${formattedHour}:${minutes} ${period}`;
   };
 
-  // Helper function to format date as "Month Day" (e.g., "May 10")
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     
@@ -122,7 +114,6 @@ const Appointments = () => {
     return `${monthNames[date.getMonth()]} ${date.getDate()}`;
   };
 
-  // Helper function to format date and time as "Month Day - Time" (e.g., "May 10 - 9:30 AM")
   const formatDateTime = (dateString, timeString) => {
     if (!dateString) return 'N/A';
     

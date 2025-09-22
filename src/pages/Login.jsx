@@ -1,4 +1,3 @@
-// src/pages/Login.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
@@ -25,14 +24,12 @@ const Login = () => {
       });
 
       if (response.data.token) {
-        // Store admin data and token
         localStorage.setItem('adminToken', response.data.token);
         localStorage.setItem('adminData', JSON.stringify({
           email: response.data.admin.email,
           fullname: response.data.admin.fullname
         }));
         
-        // Navigate to dashboard after successful login
         navigate('/dashboard');
       }
     } catch (err) {
@@ -50,12 +47,15 @@ const Login = () => {
   return (
     <div className="login-container">
       <div className="login-left">
-        <div className="image-wrapper">
-          <img 
-            src="/left-image.png" 
-            alt="Tailoring Illustration" 
-            className="login-image"
-          />
+        <div className="left-content">
+          <div className="image-wrapper">
+            <img 
+              src="/left-image.png" 
+              alt="Tailoring Illustration" 
+              className="login-image"
+            />
+          </div>
+          <h1 className="brand-name">Jun Tailoring</h1>
         </div>
       </div>
       

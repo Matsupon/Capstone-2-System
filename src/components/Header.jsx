@@ -6,7 +6,6 @@ import '../styles/Header.css';
 const Header = () => {
   const navigate = useNavigate();
   
-  // Get admin data from localStorage
   const adminData = JSON.parse(localStorage.getItem('adminData') || '{}');
   const adminToken = localStorage.getItem('adminToken');
 
@@ -16,7 +15,6 @@ const Header = () => {
     navigate('/login');
   };
 
-  // If no token, redirect to login
   if (!adminToken) {
     navigate('/login');
     return null;
@@ -26,7 +24,6 @@ const Header = () => {
     <header className="header">
       <div className="header-content">
         <div className="header-left">
-          {/* Logo or branding can go here */}
         </div>
         <div className="header-right">
           <Link to="/profile" className="profile-link">

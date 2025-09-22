@@ -10,12 +10,12 @@ const getStatusColor = (status) => {
     case 'Ongoing':
       return '#cddc39';
     case 'Completed':
-    case 'Finished':   // ✅ treat Finished same as Completed
+    case 'Finished':   
       return '#4caf50';
     case 'Pending':
       return '#ff9800';
     case 'Ready to Check':
-      return '#2196f3';
+      return '#e91e63';
     case 'No Orders':
       return '#9e9e9e';
     default:
@@ -31,7 +31,6 @@ const Customers = () => {
   const [profileModal, setProfileModal] = useState({ open: false, customer: null });
   const [expandedOrder, setExpandedOrder] = useState(null);
 
-  // Fetch customers data
   useEffect(() => {
     const fetchCustomers = async () => {
       try {

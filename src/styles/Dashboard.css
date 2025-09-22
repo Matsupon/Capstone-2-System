@@ -160,23 +160,164 @@ td {
 .queue-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .current-customer, .next-customer {
-  padding: 8px;
-  border-radius: 4px;
+  padding: 12px;
+  border-radius: 8px;
   font-size: clamp(11px, 1.5vw, 14px);
+  border: 1px solid #e0e0e0;
 }
 
 .current-customer {
-  background: #e8f4fd;
+  background: linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%);
   color: #2980b9;
+  border-color: #2980b9;
+  box-shadow: 0 2px 4px rgba(41, 128, 185, 0.1);
 }
 
 .next-customer {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   color: #666;
+  border-color: #dee2e6;
+}
+
+.queue-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: clamp(10px, 1.3vw, 12px);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.queue-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-number {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: clamp(12px, 1.6vw, 16px);
+  min-width: 30px;
+  text-align: center;
+}
+
+.customer-name {
+  font-weight: 500;
+  flex: 1;
+}
+
+.queue-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: clamp(10px, 1.3vw, 12px);
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-indicator.active {
+  background: #28a745;
+  box-shadow: 0 0 6px rgba(40, 167, 69, 0.4);
+}
+
+.status-indicator.inactive {
+  background: #6c757d;
+}
+
+.no-queue-message {
+  padding: 16px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  font-size: clamp(11px, 1.5vw, 14px);
+}
+
+.appointment-time {
+  font-size: clamp(10px, 1.2vw, 12px);
+  color: #666;
+  font-weight: 500;
+}
+
+.queue-list {
+  margin-top: 12px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 12px;
+}
+
+.queue-list-header {
+  font-weight: 600;
+  font-size: clamp(10px, 1.3vw, 12px);
+  color: #333;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.queue-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: clamp(10px, 1.2vw, 12px);
+  border: 1px solid #e9ecef;
+}
+
+.queue-item-number {
+  background: #007bff;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: clamp(9px, 1.1vw, 11px);
+  min-width: 20px;
+  text-align: center;
+}
+
+.queue-item-name {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+}
+
+.queue-item-time {
+  color: #666;
+  font-size: clamp(9px, 1.1vw, 11px);
+  min-width: 60px;
+}
+
+.queue-item-status {
+  font-size: clamp(9px, 1.1vw, 11px);
+  font-weight: 500;
+  min-width: 80px;
+  text-align: right;
 }
 
 /* Calendar */

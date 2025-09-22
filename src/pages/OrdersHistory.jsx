@@ -14,7 +14,6 @@ const OrdersHistory = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Fetch finished orders from the backend
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -37,7 +36,7 @@ const OrdersHistory = () => {
   }, []);
 
   const getStatusColor = (status) => {
-    return '#4caf50'; // Always green for completed orders in history
+    return '#4caf50'; 
   };
 
   const handleViewFile = (order) => {
@@ -55,26 +54,22 @@ const OrdersHistory = () => {
     
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     
-    // Check if the dateString contains time information (has space and colon)
     if (dateString.includes(' ') && dateString.includes(':')) {
       try {
-        // It's a datetime string, parse it manually to avoid timezone issues
         const [datePart, timePart] = dateString.split(' ');
         const [year, month, day] = datePart.split('-').map(Number);
         const [hours, minutes] = timePart.split(':').map(Number);
         
-        // Validate the parsed values
         if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
           throw new Error('Invalid datetime format');
         }
         
-        const monthName = monthNames[month - 1]; // month is 1-indexed in the string
+        const monthName = monthNames[month - 1];
         const time = `${hours % 12 === 0 ? 12 : hours % 12}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
         
         return `${monthName} ${day} - ${time}`;
       } catch (error) {
         console.warn('Error parsing datetime string:', dateString, error);
-        // Fallback to original logic if parsing fails
         const date = new Date(dateString);
         const month = monthNames[date.getMonth()];
         const day = date.getDate();
@@ -82,7 +77,6 @@ const OrdersHistory = () => {
         return `${month} ${day} - ${time}`;
       }
     } else {
-      // It's just a date string, use the original logic
       const date = new Date(dateString);
       const month = monthNames[date.getMonth()];
       const day = date.getDate();
@@ -270,14 +264,15 @@ const OrdersHistory = () => {
                     <div className="image-label">Design Image</div>
                     {selectedOrder.appointment?.design_image ? (
                       <img 
-                        src={`${process.env.NODE_ENV === 'development' ? 'http://192.168.137.170:8000' : ''}/storage/${selectedOrder.appointment.design_image}`} 
+                        src={selectedOrder.appointment.design_image} 
                         alt="Design" 
                         className="modal-image"
                         onClick={() => handleImageClick(
-                          `${process.env.NODE_ENV === 'development' ? 'http://192.168.137.170:8000' : ''}/storage/${selectedOrder.appointment.design_image}`,
+                          selectedOrder.appointment.design_image,
                           'Design Image'
                         )}
                         onError={(e) => {
+                          console.error('Failed to load image:', e.target.src);
                           e.target.style.display = 'none';
                           e.target.nextSibling.style.display = 'block';
                         }}

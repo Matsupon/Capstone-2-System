@@ -4,7 +4,7 @@ import Sidebar from '../components/Sidebar';
 import '../styles/Orders.css';
 import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
-import api from '../api'; // Your API configuration
+import api from '../api';
 
 const formatTimeToAMPM = (timeString) => {
   if (!timeString) return '';
@@ -13,7 +13,6 @@ const formatTimeToAMPM = (timeString) => {
   
   const [hours, minutes] = timeString.split(':').map(Number);
 
-  // Remove the time restriction - allow all times to be displayed
   const period = hours >= 12 ? 'PM' : 'AM';
   const hours12 = hours % 12 === 0 ? 12 : hours % 12;
 
@@ -47,9 +46,6 @@ const Orders = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showFinishConfirmation, setShowFinishConfirmation] = useState(false);
   const [orderToFinish, setOrderToFinish] = useState(null);
-  // Note: Removed bookedSlots fetching since backend endpoint requires a date param
-  
-  // New states for completion calendar
   const [completionCalendarMonth, setCompletionCalendarMonth] = useState(new Date().getMonth());
   const [completionCalendarYear, setCompletionCalendarYear] = useState(new Date().getFullYear());
   const [completionSelectedDay, setCompletionSelectedDay] = useState(null);
@@ -71,13 +67,11 @@ const Orders = () => {
     ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
   ];
 
-  // Fetch orders from the backend
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const response = await api.get('/orders');
       if (response.data.success) {
-        // Debug: Log the datetime fields to see what we're receiving
         console.log('Orders data received:', response.data.data.map(order => ({
           id: order.id,
           status: order.status,
@@ -103,7 +97,6 @@ const Orders = () => {
     fetchOrders();
   }, []);
 
-  // Calendar functions
   const handleCalendarPrevMonth = () => {
     if (calendarMonth === 0) {
       setCalendarMonth(11);
@@ -155,7 +148,6 @@ const Orders = () => {
         const formattedDate = `${completionCalendarYear}-${String(completionCalendarMonth + 1).padStart(2, '0')}-${String(completionSelectedDay).padStart(2, '0')}`;
         const completedAt = `${formattedDate} ${completionSelectedTime}`;
         
-        // Update the order with all required fields
         setOrders(orders.map(order =>
           order.id === calendarOrderId
             ? {
@@ -186,7 +178,6 @@ const Orders = () => {
     }
   };
 
-  // Completion calendar functions
   const handleCompletionCalendarPrevMonth = () => {
     if (completionCalendarMonth === 0) {
       setCompletionCalendarMonth(11);
@@ -215,7 +206,6 @@ const Orders = () => {
     setBookedCheckTimes([]);
   };
 
-  // New function to open completion calendar
   const openCompletionCalendarModal = (orderId) => {
     setCalendarOrderId(orderId);
     setShowCompletionCalendar(true);
@@ -234,7 +224,6 @@ const Orders = () => {
     setBookedCheckTimes([]);
   };
 
-  // New function to close completion calendar
   const closeCompletionCalendarModal = () => {
     setShowCompletionCalendar(false);
     setCalendarOrderId(null);
@@ -312,7 +301,6 @@ const Orders = () => {
       });
 
       if (response.data.success) {
-        // Remove the order from the list since it's now finished
         setOrders(orders.filter(order => order.id !== orderToFinish.id));
         setShowFinishConfirmation(false);
         setOrderToFinish(null);
@@ -328,17 +316,15 @@ const Orders = () => {
   const handlePaymentSubmit = async () => {
     try {
       const order = orders.find(o => o.id === paymentOrderId);
-      
-      // Get the pickup appointment date and time from the order
       const pickupDate = order.pickup_appointment_date;
       const pickupTime = order.pickup_appointment_time;
       
       const response = await api.patch(`/orders/${paymentOrderId}/status`, {
         status: 'Completed',
-        scheduled_at: order.completionDateTime, // This should be the datetime string
+        scheduled_at: order.completionDateTime, 
         total_amount: paymentFee,
-        pickup_appointment_date: pickupDate, // Add this field
-        pickup_appointment_time: pickupTime, // Add this field
+        pickup_appointment_date: pickupDate, 
+        pickup_appointment_time: pickupTime,
       });
   
       if (response.data.success) {
@@ -367,21 +353,17 @@ const Orders = () => {
     if (!dateString) return '';
     
     console.log('formatDateForDisplay input:', dateString);
-    
-    // Check if the dateString contains time information (has space and colon)
     if (dateString.includes(' ') && dateString.includes(':')) {
       try {
-        // It's a datetime string, parse it manually to avoid timezone issues
         const [datePart, timePart] = dateString.split(' ');
         const [year, month, day] = datePart.split('-').map(Number);
         const [hours, minutes] = timePart.split(':').map(Number);
         
-        // Validate the parsed values
         if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
           throw new Error('Invalid datetime format');
         }
         
-        const monthName = monthNames[month - 1]; // month is 1-indexed in the string
+        const monthName = monthNames[month - 1]; 
         const time = formatTimeToAMPM(timePart);
         
         console.log('Parsed datetime:', { datePart, timePart, monthName, day, time });
@@ -390,7 +372,6 @@ const Orders = () => {
         return `${monthName} ${day} - ${time}`;
       } catch (error) {
         console.warn('Error parsing datetime string:', dateString, error);
-        // Fallback to original logic if parsing fails
         const date = new Date(dateString);
         const month = monthNames[date.getMonth()];
         const day = date.getDate();
@@ -398,7 +379,6 @@ const Orders = () => {
         return `${month} ${day} - ${time}`;
       }
     } else {
-      // It's just a date string, use the original logic
       const date = new Date(dateString);
       const month = monthNames[date.getMonth()];
       const day = date.getDate();
@@ -425,8 +405,6 @@ const Orders = () => {
     }
     return false;
   };
-
-  // Fetch booked times when a day is selected in either modal
   useEffect(() => {
     const fetch = async () => {
       if (showCalendarModal && selectedDay) {
@@ -456,8 +434,6 @@ const Orders = () => {
     };
     fetch();
   }, [showCompletionCalendar, completionSelectedDay, completionCalendarMonth, completionCalendarYear]);
-
-  // Generate time slots from 8AM to 8PM in 30-minute intervals
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 8; hour <= 20; hour++) {
@@ -706,14 +682,15 @@ const Orders = () => {
                     <div className="image-label">Design Image</div>
                     {selectedOrder.appointment?.design_image ? (
                       <img 
-                        src={`${process.env.NODE_ENV === 'development' ? 'http://192.168.137.170:8000' : ''}/storage/${selectedOrder.appointment.design_image}`} 
+                        src={selectedOrder.appointment.design_image} 
                         alt="Design" 
                         className="modal-image"
                         onClick={() => handleImageClick(
-                          `${process.env.NODE_ENV === 'development' ? 'http://192.168.137.170:8000' : ''}/storage/${selectedOrder.appointment.design_image}`,
+                          selectedOrder.appointment.design_image,
                           'Design Image'
                         )}
                         onError={(e) => {
+                          console.error('Failed to load image:', e.target.src);
                           e.target.style.display = 'none';
                           e.target.nextSibling.style.display = 'block';
                         }}
