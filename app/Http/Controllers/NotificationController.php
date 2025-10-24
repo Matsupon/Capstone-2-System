@@ -60,4 +60,58 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    // Admin utilities for new appointments counter
+    public function countUnviewedAppointments(): \Illuminate\Http\JsonResponse
+    {
+        $count = Notification::where('type', 'appointment_book')
+            ->where(function ($q) {
+                $q->whereNull('is_viewed')->orWhere('is_viewed', false);
+            })
+            ->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [ 'unviewed_count' => $count ]
+        ]);
+    }
+
+    public function markAppointmentAsViewed($appointmentId): \Illuminate\Http\JsonResponse
+    {
+        $affected = Notification::where('type', 'appointment_book')
+            ->where(function ($q) use ($appointmentId) {
+                $q->where('data->appointment_id', (int)$appointmentId)
+                  ->orWhere('data->appointment_id', (string)$appointmentId);
+            })
+            ->update([
+                'is_viewed' => true,
+                'viewed_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [ 'updated' => $affected, 'appointment_id' => (int)$appointmentId ]
+        ]);
+    }
+
+    public function getAppointmentViewStates(): \Illuminate\Http\JsonResponse
+    {
+        $items = Notification::select('data', 'is_viewed')
+            ->where('type', 'appointment_book')
+            ->get()
+            ->map(function ($n) {
+                $appointmentId = is_array($n->data) ? ($n->data['appointment_id'] ?? null) : null;
+                return $appointmentId ? [
+                    'appointment_id' => (int)$appointmentId,
+                    'is_viewed' => (bool)($n->is_viewed ?? false),
+                ] : null;
+            })
+            ->filter()
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $items,
+        ]);
+    }
 }

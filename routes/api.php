@@ -10,6 +10,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\AdminController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
@@ -31,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/profile', [ProfileController::class, 'update']);
+        Route::patch('/admin/profile', [AdminController::class, 'update']);
+        Route::get('/admin/profile', [AdminController::class, 'me']);
 
     Route::get('/appointments/test', [AppointmentController::class, 'test']);
     
@@ -71,6 +74,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    // Admin: appointment new-items counter and view tracking
+    Route::get('/notifications/appointments/unviewed-count', [NotificationController::class, 'countUnviewedAppointments']);
+    Route::patch('/notifications/appointments/{appointmentId}/viewed', [NotificationController::class, 'markAppointmentAsViewed']);
+    Route::get('/notifications/appointments/view-states', [NotificationController::class, 'getAppointmentViewStates']);
 
     //Admin DASHBOARD
     Route::get('/orders/today-appointments-count', [OrderController::class, 'getTodayAppointmentsCount']);

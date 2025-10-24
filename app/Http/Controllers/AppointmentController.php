@@ -130,6 +130,19 @@ class AppointmentController extends Controller
                     'created_by'      => 'customer',
                 ],
             ]);
+
+            // Admin-facing notification used for dashboard/Appointments counters
+            Notification::create([
+                'user_id' => $appointment->user_id, // stored with customer id; admin views are global
+                'type'    => 'appointment_book',
+                'title'   => 'New appointment submitted',
+                'body'    => null,
+                'data'    => [
+                    'appointment_id'  => $appointment->id,
+                    'appointment_date'=> $appointment->appointment_date,
+                    'appointment_time'=> $appointment->appointment_time,
+                ],
+            ]);
         
             return response()->json([
                 'message' => 'Appointment booked successfully',
