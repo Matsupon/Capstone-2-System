@@ -272,7 +272,7 @@ export default function FeedbackPage() {
                       </header>
 
                       <div className="card-body">
-                        <p className="feedback-comment">{fb.comment || 'No comment provided.'}</p>
+                        <p className="feedback-comment">{fb.comment || '(No comment provided.)'}</p>
                       </div>
 
                       <footer className="card-footer">

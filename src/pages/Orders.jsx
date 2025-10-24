@@ -660,7 +660,7 @@ const Orders = () => {
                         onClick={() => handleViewFile(order)}
                         style={{ color: '#007bff', cursor: 'pointer' }}
                       >
-                        View File
+                        View Details
                       </span>
                     </td>
                     <td>

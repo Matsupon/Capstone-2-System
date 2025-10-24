@@ -8,6 +8,7 @@ import Orders from './pages/Orders';
 import OrdersHistory from './pages/OrdersHistory';
 import Customers from './pages/Customers';
 import Feedback from './pages/Feedback';
+import Profile from './pages/Profile';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import './App.css';
@@ -39,6 +40,7 @@ function App() {
             <Route path="/orders-history" element={<OrdersHistory />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/feedback" element={<Feedback />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Routes>
       </div>

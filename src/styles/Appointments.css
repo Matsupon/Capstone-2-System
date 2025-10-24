@@ -260,8 +260,8 @@ input[type="checkbox"]:checked::before {
 .image-modal-bg {
   position: fixed;
   top: 0;
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
+  left: 0;
+  width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
@@ -280,8 +280,55 @@ input[type="checkbox"]:checked::before {
   position: relative;
   box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   padding: 20px;
-  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+  transform: none;
 }
+
+/* Dashboard modal styles (match Orders) */
+.dashboard-modal-bg {
+  position: fixed;
+  top: 0;
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+.dashboard-modal-panel {
+  background: white;
+  border-radius: 10px;
+  padding: 32px 28px 24px 28px;
+  max-width: 620px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  scrollbar-gutter: stable both-edges;
+}
+.dashboard-modal-title {
+  margin-bottom: 18px;
+  color: #1a3c6c;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+.dashboard-modal-exit-icon {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  color: #444;
+  cursor: pointer;
+  z-index: 10;
+  transition: transform 0.2s ease;
+}
+.dashboard-modal-exit-icon:hover { transform: scale(1.2); }
 
 .modal-panel::before { content: none; }
 
@@ -688,6 +735,7 @@ input[type="checkbox"]:checked::before {
 @media (max-width: 768px) {
   .image-modal-bg { left: 0; width: 100%; }
   .modal-bg { left: 0; width: 100%; }
+  .dashboard-modal-bg { left: 0; width: 100%; }
   .details-container { flex-direction: column; gap: 20px; }
   .details-modal { max-width: 90vw !important; padding: 20px; }
 }
@@ -702,3 +750,8 @@ input[type="checkbox"]:checked::before {
 .modal-bg.animate-fade.closing { animation: apptModalFadeOut 160ms ease-in forwards; }
 .modal-panel.animate-pop { animation: apptModalPopIn 200ms ease-out forwards; }
 .modal-panel.animate-pop.closing { animation: apptModalPopOut 160ms ease-in forwards; }
+/* Ensure animations also apply when using dashboard modal classes */
+.dashboard-modal-bg.animate-fade { animation: apptModalFadeIn 180ms ease-out forwards; }
+.dashboard-modal-bg.animate-fade.closing { animation: apptModalFadeOut 160ms ease-in forwards; }
+.dashboard-modal-panel.animate-pop { animation: apptModalPopIn 200ms ease-out forwards; }
+.dashboard-modal-panel.animate-pop.closing { animation: apptModalPopOut 160ms ease-in forwards; }

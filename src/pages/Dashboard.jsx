@@ -16,6 +16,8 @@ const Dashboard = () => {
   const [todaysAppointmentsCount, setTodaysAppointmentsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [unviewedNewAppointments, setUnviewedNewAppointments] = useState(0);
+  const [unviewedAppointmentIds, setUnviewedAppointmentIds] = useState(new Set());
   
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -119,6 +121,8 @@ const Dashboard = () => {
         console.log('Today queue response:', response.data);
         if (response.data?.success) {
           setQueueData(response.data.data);
+          const all = response.data.data?.all_orders || [];
+          setTodaysAppointmentsCount(all.length);
         }
       } catch (err) {
         console.error('Failed to fetch today\'s queue:', err);
@@ -130,29 +134,29 @@ const Dashboard = () => {
           message: 'Failed to load queue data',
           all_orders: []
         });
+        setTodaysAppointmentsCount(0);
       }
     };
 
-  const fetchTodaysAppointmentsCount = async () => {
-    try {
-      const response = await api.get('/orders/today-appointments-count');
-      console.log('Today appointments count response:', response.data);
-      if (response.data?.success) {
-        const allTodaysAppointments = response.data.data?.todays_appointments || 0;
-        
-        // Filter to only count appointments that haven't passed their time yet
-        const upcomingAppointments = acceptedAppointments.filter(appointment => {
-          if (!appointment.appointment_date || !appointment.appointment_time) return false;
-          return isUpcomingToday(appointment.appointment_date, appointment.appointment_time);
-        });
-        
-        setTodaysAppointmentsCount(upcomingAppointments.length);
-      }
-    } catch (err) {
-      console.error('Failed to fetch today\'s appointments count:', err);
-      setTodaysAppointmentsCount(0);
-    }
-  };
+    const fetchUnviewedAppointmentsCount = async () => {
+      try {
+        const res = await api.get('/notifications/appointments/unviewed-count');
+        if (res.data?.success) {
+          setUnviewedNewAppointments(res.data.data?.unviewed_count || 0);
+        }
+      } catch (_) {}
+    };
+
+    const fetchAppointmentViewStates = async () => {
+      try {
+        const res = await api.get('/notifications/appointments/view-states');
+        if (res.data?.success) {
+          const items = res.data.data || [];
+          const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
+          setUnviewedAppointmentIds(unviewed);
+        }
+      } catch (_) {}
+    };
 
     // Initial data fetch
     const fetchAllData = async () => {
@@ -160,10 +164,10 @@ const Dashboard = () => {
         fetchAppointments(),
         fetchAcceptedAppointments(),
         fetchOrderStats(),
-        fetchTodayQueue()
+        fetchTodayQueue(),
+        fetchUnviewedAppointmentsCount(),
+        fetchAppointmentViewStates()
       ]);
-      // Fetch today's appointments count after acceptedAppointments is loaded
-      await fetchTodaysAppointmentsCount();
     };
 
     fetchAllData();
@@ -171,8 +175,9 @@ const Dashboard = () => {
     // Set up real-time updates every 10 seconds for better responsiveness
     const interval = setInterval(() => {
       fetchTodayQueue();
-      fetchTodaysAppointmentsCount();
       fetchOrderStats();
+      fetchUnviewedAppointmentsCount();
+      fetchAppointmentViewStates();
     }, 10000);
 
     return () => clearInterval(interval);
@@ -415,7 +420,20 @@ const Dashboard = () => {
             {/* Recent Appointments */}
             <div className="panel recent-appointments">
               <div className="panel-header">
-                <h3>Recent Appointments</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  New Appointments
+                  {unviewedNewAppointments > 0 && (
+                    <span style={{
+                      background: '#e11d48',
+                      color: 'white',
+                      borderRadius: '9999px',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                      lineHeight: 1,
+                      marginLeft: 8
+                    }}>{unviewedNewAppointments}</span>
+                  )}
+                </h3>
                 <Link to="/appointments" className="view-all-link">View All</Link>
               </div>
               <div className="table-container">
@@ -437,7 +455,10 @@ const Dashboard = () => {
                     </thead>
                     <tbody>
                       {appointments.slice(0, 5).map((appointment, index) => (
-                        <tr key={index}>
+                        <tr
+                          key={index}
+                          style={unviewedAppointmentIds.has(appointment.id) ? { background: '#e6f0ff' } : {}}
+                        >
                           <td>{formatDateTime(appointment.appointment_date, appointment.appointment_time)}</td>
                           <td>{appointment.user?.name || 'N/A'}</td>
                           <td>{appointment.service_type}</td>
@@ -449,6 +470,15 @@ const Dashboard = () => {
                                 setSelectedAppointment(appointment);
                                 setOpenedFromDueDates(false);
                                 setShowDetails(true);
+                                api.patch(`/notifications/appointments/${appointment.id}/viewed`).then(() => {
+                                  setUnviewedNewAppointments((c) => Math.max(0, c - 1));
+                                  setUnviewedAppointmentIds(prev => {
+                                    if (!prev.has(appointment.id)) return prev;
+                                    const next = new Set(prev);
+                                    next.delete(appointment.id);
+                                    return next;
+                                  });
+                                }).catch(() => {});
                               }}
                             >
                               View Details
@@ -479,10 +509,7 @@ const Dashboard = () => {
                 {queueData.has_queue ? (
                   <>
                     {/* Current Customer */}
-                    {queueData.current_customer && isUpcomingToday(
-                      queueData.current_customer?.appointment_date || queueData.current_customer?.appointment?.appointment_date,
-                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
-                    ) && (
+                    {queueData.current_customer && (
                       <div className="current-customer">
                         <strong>Upcoming Customer:</strong>{' '}
                         <span className="queue-number">
@@ -490,16 +517,13 @@ const Dashboard = () => {
                         </span>{' '}
                         {queueData.current_customer?.name || 'N/A'}
                         <span className="queue-time">
-                          ({formatTime(queueData.current_customer?.appointment_time)})
+                          ({formatTime(queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time)})
                         </span>
                       </div>
                     )}
 
                     {/* Next Customer */}
-                    {queueData.next_customer && isUpcomingToday(
-                      queueData.next_customer?.appointment_date || queueData.next_customer?.appointment?.appointment_date,
-                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
-                    ) && (
+                    {queueData.next_customer && (
                       <div className="next-customer">
                         <strong>Next Customer:</strong>{' '}
                         <span className="queue-number">
@@ -507,26 +531,19 @@ const Dashboard = () => {
                         </span>{' '}
                         {queueData.next_customer?.name || 'N/A'}
                         <span className="queue-time">
-                          ({formatTime(queueData.next_customer?.appointment_time)})
+                          ({formatTime(queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time)})
                         </span>
                       </div>
                     )}
 
-                    {/* If both current and next are not upcoming, show message */}
-                    {!isUpcomingToday(
-                        queueData.current_customer?.appointment_date || queueData.current_customer?.appointment?.appointment_date,
-                        queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
-                      ) &&
-                      !isUpcomingToday(
-                        queueData.next_customer?.appointment_date || queueData.next_customer?.appointment?.appointment_date,
-                        queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
-                      ) && (
-                        <div className="no-queue-message">
-                          <div className="queue-status">
-                            <span className="status-indicator inactive"></span>
-                            <span>{queueData.message || 'No upcoming customers for the rest of today'}</span>
-                          </div>
+                    {/* If neither present, show message */}
+                    {!queueData.current_customer && !queueData.next_customer && (
+                      <div className="no-queue-message">
+                        <div className="queue-status">
+                          <span className="status-indicator inactive"></span>
+                          <span>{queueData.message || 'No queued customers at the moment'}</span>
                         </div>
+                      </div>
                     )}
 
                   </>

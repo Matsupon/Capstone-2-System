@@ -19,6 +19,7 @@ const Appointments = () => {
   const [queueConfirmId, setQueueConfirmId] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [unviewedAppointmentIds, setUnviewedAppointmentIds] = useState(new Set());
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -91,7 +92,19 @@ const Appointments = () => {
       }
     };
 
+    const fetchViewStates = async () => {
+      try {
+        const res = await api.get('/notifications/appointments/view-states');
+        if (res.data?.success) {
+          const items = res.data.data || [];
+          const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
+          setUnviewedAppointmentIds(unviewed);
+        }
+      } catch (_) {}
+    };
+
     fetchAppointments();
+    fetchViewStates();
   }, [navigate]);
 
   const formatTime = (timeString) => {
@@ -132,6 +145,13 @@ const Appointments = () => {
   const handleViewDetails = (appointment) => {
     setSelectedAppointment(appointment);
     setShowDetails(true);
+    api.patch(`/notifications/appointments/${appointment.id}/viewed`).catch(() => {});
+    setUnviewedAppointmentIds(prev => {
+      if (!prev.has(appointment.id)) return prev;
+      const next = new Set(prev);
+      next.delete(appointment.id);
+      return next;
+    });
   };
 
   const handleImageClick = (imageSrc, imageAlt) => {
@@ -187,7 +207,7 @@ const Appointments = () => {
       </div>
       
       <div className="appointments-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
+          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, margin: '0 16px' }}>
             {isLoading ? (
               <p>Loading appointments...</p>
             ) : error ? (
@@ -196,25 +216,31 @@ const Appointments = () => {
               <p>No appointments found.</p>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#e8f4fd' }}>
-                    <th>Date & Time</th>
-                    <th>Name</th>
-                    <th>Service</th>
-                    <th>Action</th>
-                    <th>Add to Queue</th>
-                    <th>Remove</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appointments.slice(0, 5).map((appt) => (
-                    <tr key={appt.id}>
-                      <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
-                      <td>{appt.user?.name || 'N/A'}</td>
-                      <td>{appt.service_type}</td>
-                      <td>
-                        <span className="action-link" onClick={() => handleViewDetails(appt)}>View Details</span>
-                      </td>
+  <thead>
+    <tr style={{ background: '#e8f4fd' }}>
+      <th>Date & Time</th>
+      <th>Name</th>
+      <th>Service</th>
+      <th>Action</th>
+      <th>Add to Queue</th>
+      <th>Remove</th>
+    </tr>
+  </thead>
+  <tbody>
+    {appointments.slice(0, 5).map((appt) => (
+      <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
+        <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
+        <td>{appt.user?.name || 'N/A'}</td>
+        <td>{appt.service_type}</td>
+        <td>
+          <span
+            className="action-link"
+            onClick={() => handleViewDetails(appt)}
+            style={{ color: '#007bff', cursor: 'pointer' }}
+          >
+            View Details
+          </span>
+        </td>
                       <td>
                         <input 
                           type="checkbox" 
@@ -232,10 +258,10 @@ const Appointments = () => {
             )}
           </div>
 
-          {/* View Details Modal */}
+          {/* View Details Modal (match Orders dashboard modal design) */}
           {showDetails && selectedAppointment && (
             <div
-              className={`modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+              className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
               onClick={() => {
                 setDetailsClosing(true);
                 setTimeout(() => {
@@ -245,29 +271,21 @@ const Appointments = () => {
               }}
             >
               <div
-                className={`modal-panel details-modal animate-pop${detailsClosing ? ' closing' : ''}`}
+                className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="modal-header">
-                  <div className="left-spacer" />
-                  <h2>Appointment
-                     Details</h2>
-                  <div
-                    className="exit-btn"
-                    onClick={() => {
-                      setDetailsClosing(true);
-                      setTimeout(() => {
-                        setShowDetails(false);
-                        setDetailsClosing(false);
-                      }, 200);
-                    }}
-                    aria-label="Close"
-                    role="button"
-                  >
-                    <AiOutlineClose />
-                  </div>
-                </div>
-                <div className="details-container" style={{flexWrap: 'wrap'}}>
+                <AiOutlineClose
+                  className="dashboard-modal-exit-icon"
+                  onClick={() => {
+                    setDetailsClosing(true);
+                    setTimeout(() => {
+                      setShowDetails(false);
+                      setDetailsClosing(false);
+                    }, 200);
+                  }}
+                />
+                <h2 className="dashboard-modal-title">Appointment Details</h2>
+                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
                   <div className="details-left">
                     <div className="detail-label">Service Type</div>
                     <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
@@ -422,31 +440,13 @@ const Appointments = () => {
 
           {/* Image Modal for Zoom */}
           {showImageModal && selectedImage && (
-            <div className="image-modal-bg" onClick={() => setShowImageModal(false)}>
-              <div className="image-modal-panel" onClick={e => e.stopPropagation()}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  width: '100%', 
-                  marginBottom: 15 
-                }}>
-                  <h3 style={{ margin: 0 }}>{selectedImage.alt}</h3>
-                  <AiOutlineClose 
-                    style={{ cursor: 'pointer', fontSize: '24px' }}
-                    onClick={() => setShowImageModal(false)}
-                  />
-                </div>
-                <img 
-                  src={selectedImage.src} 
-                  alt={selectedImage.alt} 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '50vh', 
-                    objectFit: 'contain',
-                    borderRadius: '8px',
-                    border: '1px solid #ddd'
-                  }}
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
+              <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
+                <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
+                <img
+                  src={selectedImage.src}
+                  alt={selectedImage.alt}
+                  style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
                 />
               </div>
             </div>

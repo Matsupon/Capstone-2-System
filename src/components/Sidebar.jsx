@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaTachometerAlt, FaCalendarAlt, FaShoppingBag, FaUsers, FaBars } from 'react-icons/fa';
+import { FaCog } from 'react-icons/fa';
 import { FaStar } from 'react-icons/fa';
 import '../styles/Sidebar.css';
 
@@ -81,6 +82,47 @@ const Sidebar = () => {
           })}
         </nav>
         <div style={{ marginTop: 'auto', padding: '12px' }}>
+          <Link
+            to="/profile"
+            onClick={closeSidebar}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              textDecoration: 'none',
+              background: '#ffffff',
+              border: '1px solid rgba(59,130,246,0.2)',
+              color: '#1e293b',
+              fontWeight: 700,
+              cursor: 'pointer',
+              padding: '12px 16px',
+              textAlign: 'center',
+              borderRadius: '8px',
+              fontSize: '16px',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.10)',
+              transition: 'all 0.3s ease',
+              marginBottom: '10px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(59,130,246,0.2)';
+              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.08)';
+              e.currentTarget.style.color = '#3b82f6';
+              e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.10)';
+              e.currentTarget.style.background = '#ffffff';
+              e.currentTarget.style.color = '#1e293b';
+              e.currentTarget.style.borderColor = 'rgba(59,130,246,0.2)';
+            }}
+          >
+            <FaCog />
+            <span>Settings</span>
+          </Link>
           <button
             onClick={handleLogout}
             style={{
