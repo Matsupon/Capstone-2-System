@@ -28,6 +28,35 @@ class Order extends Model
         'pickup_appointment_date' => 'date',
     ];
 
+    // Custom accessors to return time as simple time strings
+    public function getCheckAppointmentTimeAttribute($value)
+    {
+        if (!$value) return null;
+        // If it's already a time string, return it
+        if (is_string($value) && preg_match('/^\d{2}:\d{2}:\d{2}$/', $value)) {
+            return substr($value, 0, 5); // Return HH:MM format
+        }
+        // If it's a Carbon instance, format it
+        if ($value instanceof \Carbon\Carbon) {
+            return $value->format('H:i');
+        }
+        return $value;
+    }
+
+    public function getPickupAppointmentTimeAttribute($value)
+    {
+        if (!$value) return null;
+        // If it's already a time string, return it
+        if (is_string($value) && preg_match('/^\d{2}:\d{2}:\d{2}$/', $value)) {
+            return substr($value, 0, 5); // Return HH:MM format
+        }
+        // If it's a Carbon instance, format it
+        if ($value instanceof \Carbon\Carbon) {
+            return $value->format('H:i');
+        }
+        return $value;
+    }
+
     public function appointment()
     {
         return $this->belongsTo(Appointment::class);

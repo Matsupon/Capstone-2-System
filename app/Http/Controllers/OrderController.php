@@ -311,15 +311,17 @@ class OrderController extends Controller
             $date = $validated['date'];
             $kind = $validated['kind'];
 
-            // Order-based bookings for the target kind
+            // Order-based bookings for the target kind - EXCLUDE FINISHED ORDERS
             if ($kind === 'check') {
                 $orderTimes = Order::whereDate('check_appointment_date', $date)
                     ->whereNotNull('check_appointment_time')
+                    ->where('status', '!=', 'Finished') // Exclude finished orders
                     ->pluck('check_appointment_time')
                     ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
             } else {
                 $orderTimes = Order::whereDate('pickup_appointment_date', $date)
                     ->whereNotNull('pickup_appointment_time')
+                    ->where('status', '!=', 'Finished') // Exclude finished orders
                     ->pluck('pickup_appointment_time')
                     ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
             }

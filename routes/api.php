@@ -85,5 +85,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin
     Route::get('/feedback', [FeedbackController::class, 'index']);
     Route::patch('/feedback/{feedback}/respond', [FeedbackController::class, 'respond']);
+    Route::delete('/feedback/{feedback}', [FeedbackController::class, 'destroy']);
 
 });

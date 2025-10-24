@@ -150,4 +150,27 @@ class FeedbackController extends Controller
             ]
         ]);
     }
+
+    // Admin: delete feedback
+    public function destroy(Feedback $feedback)
+    {
+        try {
+            $feedback->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Feedback deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete feedback', [
+                'error' => $e->getMessage(),
+                'feedback_id' => $feedback->id,
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete feedback'
+            ], 500);
+        }
+    }
 }

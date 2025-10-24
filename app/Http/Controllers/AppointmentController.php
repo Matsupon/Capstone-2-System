@@ -39,10 +39,10 @@ class AppointmentController extends Controller
                 'sizes' => 'required|string',  
                 'total_quantity' => 'required|integer',
                 'notes' => 'nullable|string',
-                'design_image' => 'nullable|file|image|max:2048',
-                'gcash_proof' => 'required|file|image|max:2048',
+                'design_image' => 'nullable|file|image|max:5120',
+                'gcash_proof' => 'required|file|image|max:5120',
                 'preferred_due_date' => 'required|date',
-                'appointment_date' => 'required|date|after:today',
+                'appointment_date' => 'required|date|after_or_equal:today',
                 'appointment_time' => 'required|date_format:H:i',
             ]);
 
@@ -64,8 +64,9 @@ class AppointmentController extends Controller
             ->where('appointment_time', $validated['appointment_time'])
             ->exists();
 
-        // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*)
-        $conflictInOrders = \App\Models\Order::where(function ($q) use ($validated) {
+        // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
+        $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished') // Exclude finished orders
+            ->where(function ($q) use ($validated) {
                 $q->whereDate('check_appointment_date', $validated['appointment_date'])
                   ->where('check_appointment_time', $validated['appointment_time']);
             })
@@ -157,8 +158,13 @@ class AppointmentController extends Controller
         $validated = $request->validate(['date' => 'required|date|after_or_equal:today']);
         $date = $validated['date'];
         
-        // Align available slots with the mobile app's TIME_LABELS (08:00-11:00, 13:00-19:00)
-        $allowedSlots = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
+        // Generate 30-minute time slots from 8:00 AM to 8:00 PM
+        $allowedSlots = [];
+        for ($hour = 8; $hour <= 20; $hour++) {
+            for ($minute = 0; $minute < 60; $minute += 30) {
+                $allowedSlots[] = sprintf('%02d:%02d', $hour, $minute);
+            }
+        }
 
         // Booked from customer appointments for the same date
         $bookedFromAppointments = Appointment::whereDate('appointment_date', $date)
@@ -166,14 +172,16 @@ class AppointmentController extends Controller
             ->map(function ($time) { return \Carbon\Carbon::parse($time)->format('H:i'); })
             ->toArray();
 
-        // Booked from admin-set orders (check and pickup appointments)
+        // Booked from admin-set orders (check and pickup appointments) - EXCLUDE FINISHED ORDERS
         $bookedFromOrders = collect();
         $bookedCheck = \App\Models\Order::whereDate('check_appointment_date', $date)
             ->whereNotNull('check_appointment_time')
+            ->where('status', '!=', 'Finished') // Exclude finished orders
             ->pluck('check_appointment_time')
             ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
         $bookedPickup = \App\Models\Order::whereDate('pickup_appointment_date', $date)
             ->whereNotNull('pickup_appointment_time')
+            ->where('status', '!=', 'Finished') // Exclude finished orders
             ->pluck('pickup_appointment_time')
             ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
         $bookedFromOrders = $bookedCheck->merge($bookedPickup)->unique()->values();
