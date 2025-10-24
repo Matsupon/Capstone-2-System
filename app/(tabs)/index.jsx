@@ -53,7 +53,7 @@ export default function HomePage() {
     try {
       const res = await api.get('/notifications');
       if (res.data?.success) {
-        const list = res.data.data || [];
+        const list = (res.data.data || []).filter(n => n.type !== 'appointment_book');
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setNotifications(list);
       }

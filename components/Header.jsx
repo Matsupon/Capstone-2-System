@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';
@@ -16,7 +16,7 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
       setLoading(true);
       const res = await api.get('/notifications');
       if (res.data?.success) {
-        const list = res.data.data || [];
+        const list = (res.data.data || []).filter(n => n.type !== 'appointment_book');
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setNotifications(list);
       }

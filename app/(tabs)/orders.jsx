@@ -282,7 +282,7 @@ export default function AppointmentsPage() {
             onPress={() => toggleHistory(index.toString())} 
             style={styles.statusContainer}
           >
-            <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
+            <Text style={[styles.statusText, styles.statusCompleted]}></Text>
             <MaterialIcons
               name={expandedHistory[index.toString()] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
               size={24}
@@ -365,7 +365,7 @@ export default function AppointmentsPage() {
             <View style={styles.cardContent}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardDate}>No finished orders yet</Text>
-                <Text style={[styles.statusText, styles.statusCompleted]}>Completed</Text>
+                <Text style={[styles.statusText, styles.statusCompleted]}></Text>
               </View>
             </View>
           </View>

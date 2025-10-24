@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
-import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import { Alert, Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -15,10 +15,20 @@ const SERVICE_TYPES = [
 ];
 
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
-const TIME_LABELS = [
-  "08:00", "09:00", "10:00", "11:00", "13:00", "14:00",
-  "15:00", "16:00", "17:00", "18:00", "19:00"
-];
+
+// Generate time slots with 30-minute intervals (8:00 AM to 8:00 PM)
+const generateTimeSlots = () => {
+  const slots = [];
+  for (let hour = 8; hour <= 20; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const hourStr = hour < 10 ? `0${hour}` : `${hour}`;
+      const minuteStr = minute < 10 ? `0${minute}` : `${minute}`;
+      const time = `${hourStr}:${minuteStr}`;
+      slots.push(time);
+    }
+  }
+  return slots;
+};
 
 export default function BookAppointment({ visible, onClose }) {
   const [step, setStep] = useState(1);
@@ -94,6 +104,17 @@ export default function BookAppointment({ visible, onClose }) {
     try {
       console.log("Fetching slots for date:", appointmentDateRaw);
       
+      // Check if the selected date is in the past
+      const selectedDate = new Date(appointmentDateRaw);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < today) {
+        console.log("Selected date is in the past, clearing available slots");
+        setAvailableSlots([]);
+        return;
+      }
+      
       const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}`);
       
       console.log("Available slots data:", response.data);
@@ -116,7 +137,17 @@ export default function BookAppointment({ visible, onClose }) {
     });
 
     if (!result.canceled && result.assets?.[0]?.uri) {
-      setImage(result.assets[0].uri);
+      try {
+        const asset = result.assets[0];
+        const manip = await ImageManipulator.manipulateAsync(
+          asset.uri,
+          [{ resize: { width: 1280 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        setImage(manip.uri);
+      } catch (e) {
+        setImage(result.assets[0].uri);
+      }
     }
   };
 
@@ -220,21 +251,35 @@ export default function BookAppointment({ visible, onClose }) {
       formData.append('total_quantity', quantity);
       formData.append('notes', notes || 'None');
     
+      const inferFileMeta = (uri) => {
+        try {
+          const filename = uri.split('/').pop() || 'upload.jpg';
+          const lower = filename.toLowerCase();
+          let type = 'image/jpeg';
+          if (lower.endsWith('.png')) type = 'image/png';
+          else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.jpe')) type = 'image/jpeg';
+          else if (lower.endsWith('.heic')) type = 'image/heic';
+          return { name: filename, type };
+        } catch {
+          return { name: 'upload.jpg', type: 'image/jpeg' };
+        }
+      };
+
       if (designImage) {
-        const designImageInfo = await FileSystem.getInfoAsync(designImage);
+        const meta = inferFileMeta(designImage);
         formData.append('design_image', {
           uri: designImage,
-          name: designImageInfo.uri.split('/').pop(),
-          type: 'image/jpeg',
+          name: meta.name,
+          type: meta.type,
         });
       }
     
       if (gcashImage) {
-        const gcashImageInfo = await FileSystem.getInfoAsync(gcashImage);
+        const meta = inferFileMeta(gcashImage);
         formData.append('gcash_proof', {
           uri: gcashImage,
-          name: gcashImageInfo.uri.split('/').pop(),
-          type: 'image/jpeg',
+          name: meta.name,
+          type: meta.type,
         });
       }
     
@@ -465,7 +510,7 @@ export default function BookAppointment({ visible, onClose }) {
 
                   {timeDropdown && (
   <View style={styles.dropdownMenu}>
-    {TIME_LABELS.map((time) => {
+    {generateTimeSlots().map((time) => {
       const isAvailable = availableSlots.includes(time);
       return (
         <TouchableOpacity
@@ -482,7 +527,7 @@ export default function BookAppointment({ visible, onClose }) {
             fontWeight: isAvailable ? '600' : '400'
           }}>
             {formatTo12Hour(time)}
-            {!isAvailable && " (Booked)"}
+            {!isAvailable && " (Not Available)"}
           </Text>
         </TouchableOpacity>
       );
