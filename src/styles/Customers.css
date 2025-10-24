@@ -1,63 +1,135 @@
+/* Pastel Customers Styles */
+:root {
+  --primary-gradient: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 50%, #81d4fa 100%);
+  --secondary-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 25%, #e2e8f0 50%, #cbd5e1 75%, #94a3b8 100%);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(59, 130, 246, 0.2);
+  --text-primary: #0f172a;
+  --text-secondary: #1e293b;
+  --text-muted: #334155;
+  --accent-color: #3b82f6;
+  --shadow-glow: 0 4px 20px rgba(59, 130, 246, 0.15);
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-border: rgba(59, 130, 246, 0.15);
+}
+
+.page-title {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  padding: 4px 20px;
+  border-radius: 0 0 12px 12px;
+  box-shadow: var(--shadow-glow);
+  margin: 0 0 4px 0;
+  text-align: center;
+}
+
+.page-title h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(20px, 2.8vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-family: 'Poppins', sans-serif;
+}
+
 .customers-table-content {
-  padding: clamp(10px, 2vw, 20px);
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 6px 8px;
+  max-width: 100%;
+  margin: 0;
+  height: calc(100vh - 120px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .customers-table-wrapper {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 24px;
+  box-shadow: var(--shadow-glow);
+  padding: 8px 10px; /* tighter to allow wider table */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--card-border);
 }
+
 .customers-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: clamp(12px, 1.3vw, 15px);
+  font-size: clamp(13px, 1.4vw, 16px);
   background: transparent;
+  flex: 1;
+  display: table; /* allow natural table layout to stretch full width */
+  /* no internal scroll by default */
+  overflow-y: visible;
+  max-height: none;
+  font-family: 'Lato', sans-serif;
+  /* Make columns distribute evenly to fill available width */
+  table-layout: fixed;
+  margin: 0;
 }
+
+/* Enable internal scroll only when there are more than 5 rows */
+.customers-table-wrapper.scrollable .customers-table {
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
+}
+
 .customers-th, .customers-td {
-  padding: 12px 8px;
+  padding: 8px 6px;
   text-align: center;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  font-family: 'Lato', sans-serif;
+  /* Prevent layout shift and ensure cells share width evenly */
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .customers-th {
   font-weight: 600;
-  color: #333;
-  background: #e8f4fd;
-  font-size: clamp(13px, 1.4vw, 16px);
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  font-size: clamp(12px, 1.5vw, 15px);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: 'Poppins', sans-serif;
+  border-bottom: 1px solid var(--card-border);
 }
 .customers-td {
-  color: #333;
-  font-size: clamp(12px, 1.3vw, 15px);
+  color: var(--text-secondary);
+  font-size: clamp(11px, 1.4vw, 14px);
   border-bottom: 1px solid #f0f0f0;
 }
+.customers-table thead tr { background: #e8f4fd; }
 .customers-table-row:last-child .customers-td {
   border-bottom: none;
 }
 
 .customers-view-profile-btn {
-  background: #90bfff;
-  color: #1a237e;
+  background: #3b82f6;
+  color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 8px 18px;
-  font-weight: 500;
-  font-size: 15px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
-.customers-view-profile-btn:hover {
-  background: #5b9df7;
-}
+.customers-view-profile-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.customers-view-profile-btn:active { transform: translateY(0); }
 
 /* Modal Styles */
 .customers-modal-bg {
   position: fixed;
   top: 0;
-  left: 0;
-  width: 100vw;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
   height: 100vh;
-  background: rgba(0,0,0,0.2);
-  z-index: 1001;
+  background: rgba(128, 128, 128, 0.5);
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,14 +146,48 @@
   text-align: left;
   max-height: 90vh;
   overflow-y: auto;
+  /* Center within overlay (overlay already excludes sidebar) */
+  transform: none;
 }
 .customers-modal-title {
   text-align: center;
   margin-bottom: 18px;
-  color: #1a237e;
+  color: #000;
   font-size: 24px;
   font-weight: 700;
 }
+
+/* Modal header layout for Customers */
+.customers-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.customers-modal-header h2 { 
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0; 
+  font-weight: 800; 
+  color: #1f2937; 
+  text-align: center;
+}
+
+.customers-modal-header .exit-btn { 
+  width: 28px; 
+  height: 28px; 
+  display: grid; 
+  place-items: center; 
+  cursor: pointer; 
+  color: #6b7280; 
+  transition: transform 0.15s ease; 
+  margin-left: auto;
+}
+
+.customers-modal-header .exit-btn:hover { transform: scale(1.1); color: #111827; }
 .customers-modal-customer-info {
   margin-bottom: 18px;
   font-size: 16px;
@@ -91,6 +197,22 @@
   flex-wrap: wrap;
   justify-content: center;
 }
+/* Profile header: two columns left/right */
+.customers-profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  width: 100%;
+}
+.customers-profile-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.customers-profile-col.left { align-items: flex-start; text-align: left; }
+.customers-profile-col.right { align-items: flex-end; text-align: right; }
 .customers-modal-orders-list {
   margin-bottom: 18px;
 }
@@ -194,6 +316,50 @@
 
 .customers-modal-exit-icon:hover {
   transform: scale(1.2);
+}
+
+/* Image Modal Styles */
+.image-modal-bg {
+  position: fixed;
+  top: 0;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(128, 128, 128, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 10vh;
+  z-index: 10000;
+}
+
+.image-modal-panel {
+  background: white;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 80%;
+  max-height: 70vh;
+  overflow-y: auto;
+  position: relative;
+  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .customers-modal-bg,
+  .image-modal-bg {
+    left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .customers-profile-row { flex-direction: column; }
+  .customers-profile-col.right { align-items: flex-start; text-align: left; }
 }
 
 

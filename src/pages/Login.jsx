@@ -45,25 +45,15 @@ const Login = () => {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-left">
-        <div className="left-content">
-          <div className="image-wrapper">
-            <img 
-              src="/left-image.png" 
-              alt="Tailoring Illustration" 
-              className="login-image"
-            />
-          </div>
-          <h1 className="brand-name">Jun Tailoring</h1>
-        </div>
+    <div className="login-page">
+      <div className="login-page__bg">
+        <div className="login-page__gradient-layer" />
       </div>
-      
-      <div className="login-right">
-        <div className="login-form">
-          <h1>Welcome Back!</h1>
-          <p className="subtitle">Sign in to continue to your account</p>
-          
+      <div className="login-page__content">
+        <div className="login-card page-enter">
+          <h1>Login</h1>
+          <p className="subtitle">Login to continue to your account</p>
+
           {error && (
             <div className="error-message" style={{
               backgroundColor: '#fee',
@@ -76,8 +66,8 @@ const Login = () => {
               {error}
             </div>
           )}
-          
-          <form onSubmit={handleLogin}>
+
+          <form onSubmit={handleLogin} className="login-form">
             <div className="form-group">
               <label htmlFor="email">Email Address</label>
               <input
@@ -90,7 +80,7 @@ const Login = () => {
                 disabled={isLoading}
               />
             </div>
-            
+
             <div className="form-group">
               <div className="password-label-container">
                 <label htmlFor="password">Password</label>
@@ -105,26 +95,26 @@ const Login = () => {
                   required
                   disabled={isLoading}
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <FaEye /> : < FaEyeSlash />}
                 </button>
               </div>
             </div>
-        
-            <button 
-              type="submit" 
+
+            <button
+              type="submit"
               className="login-button"
               disabled={isLoading}
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </button>
           </form>
-          
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaTachometerAlt, FaCalendarAlt, FaShoppingBag, FaUsers, FaBars } from 'react-icons/fa';
 import { FaStar } from 'react-icons/fa';
 import '../styles/Sidebar.css';
 
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -30,11 +31,17 @@ const Sidebar = () => {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminData');
+    navigate('/login');
+  };
+
   const menuItems = [
     { path: '/dashboard', name: 'Dashboard', icon: FaTachometerAlt },
     { path: '/appointments', name: 'Appointments', icon: FaCalendarAlt },
     { path: '/orders', name: 'Orders', icon: FaShoppingBag },
-    { path: '/orders-history', name: "Order's History", icon: FaShoppingBag },
+    { path: '/orders-history', name: "Order History", icon: FaShoppingBag },
     { path: '/customers', name: 'Customers', icon: FaUsers },
     { path: '/feedback', name: 'Feedback', icon: FaStar },
   ];
@@ -73,6 +80,42 @@ const Sidebar = () => {
             );
           })}
         </nav>
+        <div style={{ marginTop: 'auto', padding: '12px' }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              width: '100%',
+              background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+              border: 'none',
+              color: 'white',
+              fontWeight: 700,
+              cursor: 'pointer',
+              padding: '12px 16px',
+              textAlign: 'center',
+              borderRadius: '8px',
+              fontSize: '16px',
+              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 20px rgba(220, 38, 38, 0.4)';
+              e.target.style.background = 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+              e.target.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+            }}
+          >
+            <span></span>
+            LOGOUT
+          </button>
+        </div>
       </aside>
     </>
   );

@@ -1,212 +1,137 @@
-/* Orders.css */
-
-.orders-content {
-  padding: 20px;
-}
-
-.orders-content table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.orders-content th {
-  padding: 12px;
-  text-align: center;
-  font-weight: 600;
-  color: #333;
-}
-
-.orders-content td {
-  padding: 12px;
-  border-bottom: 1px solid #eee;
-}
-
-.orders-content th:first-child {
-  color: #222;
-}
-
-.orders-content td:first-child {
-  text-align: center;
-}
-
-.action-link {
-  color: #007bff;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.action-link:hover {
-  text-decoration: underline;
-}
-
-.update-btn {
-  background-color: #4fc3f7;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.update-btn:hover {
-  background-color: #29b6f6;
-}
-
-.update-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  z-index: 1000;
-  min-width: 150px;
-}
-
-.dropdown-item {
-  padding: 10px 15px;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
-  font-size: 14px;
-  text-align: center;
-}
-
-.dropdown-item:hover {
-  background-color: #f8f9fa;
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-/* Modal Styles */
+/* Shared Modal Base Styles (used across Orders, OrdersHistory, Dashboard, Appointments) */
 .modal-bg {
   position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 16px;
+  z-index: 10000;
+}
+
+.modal-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: min(700px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  /* Center relative to main content (ignore sidebar width) */
+  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+}
+
+.details-modal {
+  padding: 24px;
+}
+
+/* Modal header layout: title centered, X on the right */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  position: relative;
+}
+.modal-header .left-spacer,
+.modal-header .right-spacer { width: 28px; height: 28px; }
+.modal-header h2 { 
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0; 
+  font-weight: 800; 
+  color: #1f2937; 
+  text-align: center;
+}
+.modal-header .exit-btn { 
+  width: 28px; 
+  height: 28px; 
+  display: grid; 
+  place-items: center; 
+  cursor: pointer; 
+  color: #6b7280; 
+  transition: transform 0.15s ease; 
+  margin-left: auto;
+}
+.modal-header .exit-btn:hover { transform: scale(1.1); color: #111827; }
+
+/* Image Zoom Modal */
+.image-modal-bg {
+  position: fixed;
   top: 0;
-  left: 0;
-  width: 100%;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 16px;
+  z-index: 10000;
+}
+.image-modal-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: min(600px, 96vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  padding: 20px;
+  /* Center relative to main content (ignore sidebar width) */
+  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+}
+
+@media (max-width: 768px) {
+  .orders-calendar-modal-bg,
+  .image-modal-bg {
+    left: 0;
+    width: 100%;
+  }
+}
+
+/* Dashboard modal styles (duplicated here so Orders pages have same design) */
+.dashboard-modal-bg {
+  position: fixed;
+  top: 0;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 2000;
 }
-
-.modal-panel {
+.dashboard-modal-panel {
   background: white;
-  border-radius: 8px;
-  padding: 24px;
-  max-width: 600px;
+  border-radius: 10px;
+  padding: 32px 28px 24px 28px;
+  max-width: 620px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
-}
-
-.details-modal {
-  padding: 10px 24px;
-}
-
-.details-modal h2 {
-  margin-bottom: 0px;
-  color: #333;
-}
-
-.details-container {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
   display: flex;
-  gap: 30px;
-  margin-bottom: 1px;
-}
-
-.details-left {
-  flex: 1;
-}
-
-.details-right {
-  flex: 1;
-}
-
-.detail-label {
-  font-weight: 600;
-  color: #666;
-  margin-bottom: 3px;
-  font-size: 14px;
-}
-
-.detail-value {
-  color: #333;
-  font-size: 16px;
-}
-
-.image-label {
-  font-weight: 600;
-  color: #333;  
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: inline-block;
+  flex-direction: column;
+  align-items: center;
   position: relative;
+  scrollbar-gutter: stable both-edges;
 }
-
-.image-label::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  border-radius: 1px;
+.dashboard-modal-title {
+  margin-bottom: 18px;
+  color: #1a3c6c;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
 }
-
-.modal-image {
-  width: 100%;
-  max-width: 200px;
-  height: auto;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border: 1px solid #ddd;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.modal-image:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-/* Error message styling */
-.modal-image + p {
-  margin-top: 8px;
-  font-style: italic;
-}
-
-/* Image modal styling */
-.modal-image {
-  cursor: pointer;
-}
-
-.modal-image:hover::after {
-  content: 'Click to zoom';
-  position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.modal-image:hover:hover::after {
-  opacity: 1;
-}
-
-
-.orders-modal-exit-icon {
+.dashboard-modal-exit-icon {
   position: absolute;
   top: 15px;
   right: 20px;
@@ -216,298 +141,115 @@
   z-index: 10;
   transition: transform 0.2s ease;
 }
+.dashboard-modal-exit-icon:hover { transform: scale(1.2); }
+.dashboard-modal-image { width: 100%; max-width: 200px; height: 120px; border-radius: 4px; background: #f0f0f0; object-fit: cover; cursor: pointer; }
 
-.orders-modal-exit-icon:hover {
-  transform: scale(1.2);
-}
+/* Animations */
+@keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modalPopIn { 0% { opacity: 0; transform: translateY(10px) scale(0.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes modalPopOut { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(6px) scale(0.96); } }
 
-/* Adjust modal height */
-.modal-panel.details-modal {
-  max-height: 90vh;
-}
+.modal-bg.animate-fade { animation: modalFadeIn 180ms ease-out forwards; }
+.modal-bg.animate-fade.closing { animation: modalFadeOut 160ms ease-in forwards; }
+.modal-panel.animate-pop { animation: modalPopIn 200ms ease-out forwards; }
+.modal-panel.animate-pop.closing { animation: modalPopOut 160ms ease-in forwards; }
 
-/* Ensure details container uses available space */
-.details-container {
-  display: flex;
-  gap: 30px;
-  margin-bottom: 10px;
-}
+/* Utility for details columns */
+.details-container { display: flex; gap: 30px; }
+.details-left, .details-right { flex: 1; }
+.detail-label { font-weight: 600; color: #555; margin-bottom: 2px; font-size: 14px; letter-spacing: 0; text-transform: none; }
+.detail-value { color: #333; font-size: 15px; font-weight: 400; line-height: 1.4; margin-bottom: 4px; }
+.modal-image { width: 140px; max-height: 140px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.modal-image:hover { transform: scale(1.04); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
 
-/* Add responsive behavior */
 @media (max-width: 768px) {
-  .details-container {
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .modal-panel {
-    max-height: 90vh;
-    overflow-y: auto;
-  }
+  .details-container { flex-direction: column; gap: 20px; }
+  .details-modal { padding: 20px; }
 }
 
-/* Success Popup */
-.popup-success {
-  position: fixed;
-  top: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  padding: 24px 32px;
-  z-index: 1002;
-  text-align: center;
-  min-width: 320px;
-  animation: fadeInDown 0.5s ease;
-}
-
-.popup-success h3 {
-  margin: 0;
-  padding: 4px 0;
-  color: #4caf50;
-  font-size: 16px;
-}
-
-@keyframes fadeInOut {
-  0%, 100% {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  10%, 90% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .details-container {
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .orders-content {
-    padding: 10px;
-  }
-
-  .modal-image {
-    max-width: 150px;
-  }
-}
-  
-  .orders-content table {
-    font-size: 14px;
-  }
-  
-  .orders-content th,
-  .orders-content td {
-    padding: 8px;
-  }
-  
-  /* Center dropdown on mobile */
-  .update-dropdown {
-    left: 50%;
-    transform: translateX(-50%);
-    width: auto;
-  }
-
-/* Calendar/Time Picker Modal Styles */
+/* Orders Calendar Modal - Centered and styled */
 .orders-calendar-modal-bg {
   position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.5);
+  top: 0;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  padding: 4vh 16px;
+  z-index: 10000;
 }
+
 .orders-calendar-modal-panel {
   background: #fff;
-  border-radius: 10px;
-  padding: 28px 28px 20px 28px;
-  max-width: 420px;
-  width: 90%;
+  border-radius: 12px;
+  width: min(760px, 96vw);
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  padding: 20px;
+  /* Centering handled by flex on the backdrop; no additional translate needed */
 }
+
 .orders-calendar-modal-header {
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.orders-calendar-modal-header h2 {
-  flex: 1;
-  text-align: center;
-  font-size: 20px;
-  color: #1a3c6c;
-  font-weight: 700;
-  margin: 0;
-}
-.orders-calendar-modal-exit {
-  font-size: 22px;
-  color: #888;
-  cursor: pointer;
-  margin-right: 8px;
-}
-.orders-calendar-section {
-  width: 100%;
-  margin-bottom: 16px;
-}
-.orders-calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.orders-nav-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  font-size: 18px;
-  border-radius: 4px;
-  padding: 2px 8px;
-}
-.orders-nav-btn:hover {
-  background: #f0f0f0;
-}
-.orders-calendar-grid {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-}
-.orders-calendar-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
-}
-.orders-calendar-days span {
-  padding: 6px 4px;
-  text-align: center;
-  font-weight: 600;
-  font-size: 13px;
-  color: #666;
-}
-.orders-calendar-dates {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-}
-.orders-calendar-date {
-  padding: 8px 0;
-  text-align: center;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
-  position: relative;
-  min-height: 32px;
-  font-size: 15px;
-  cursor: pointer;
-  background: #fff;
-  transition: background 0.2s, color 0.2s;
-}
-.orders-calendar-date.empty {
-  background: #f8f9fa;
-  cursor: default;
-}
-.orders-calendar-date.today {
-  background: #e8f4fd;
-  border-radius: 4px;
-  font-weight: 700;
-}
-.orders-calendar-date.past {
-  color: #bbb !important;
-  background: #f3f3f3 !important;
-  pointer-events: none;
-  opacity: 0.7;
-}
-.orders-calendar-date.selected {
-  background: #3498db !important;
-  color: #fff !important;
-  border-radius: 4px;
-  font-weight: 700;
-}
-.orders-date-number {
-  font-size: 15px;
-}
-.orders-time-picker-section {
-  width: 100%;
-  margin: 18px 0 10px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.orders-time-picker-section label {
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 4px;
-}
-.orders-time-picker-input {
-  font-size: 15px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  width: 100%;
-  margin-bottom: 4px;
-}
-.orders-set-date-btn {
-  margin-top: 10px;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  padding: 10px 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 15px;
-  width: 100%;
-  font-weight: 600;
-  transition: background 0.2s;
-}
-.orders-set-date-btn:disabled {
-  background: #b3d6f5;
-  color: #fff;
-  cursor: not-allowed;
-}
-.orders-set-date-btn:hover:not(:disabled) {
-  background-color: #217dbb;
-}
-.orders-calendar-success-popup {
-  position: fixed;
-  left: 50%;
-  top: 20%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 4px;
-  padding: 18px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 2100;
-  animation: fadeInOut 3s ease-in-out forwards;
-  display: flex;
   justify-content: center;
-  align-items: center;
+  position: relative;
+  margin-bottom: 12px;
 }
-.orders-calendar-success-popup h3 {
-  margin: 0;
-  color: #4caf50;
-  font-size: 18px;
-  text-align: center;
+
+.orders-calendar-modal-exit {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
 }
-@media (max-width: 600px) {
-  .orders-calendar-modal-panel {
-    max-width: 98vw;
-    padding: 16px 6px 12px 6px;
-  }
-  .orders-calendar-modal-header h2 {
-    font-size: 16px;
-  }
-  .orders-date-number {
-    font-size: 13px;
-  }
+
+.orders-calendar-section { display: flex; flex-direction: column; gap: 12px; }
+.orders-calendar-header { display: flex; align-items: center; justify-content: space-between; }
+.orders-nav-btn { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+
+.orders-calendar-grid { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.orders-calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); background: #f9fafb; font-weight: 600; font-size: 12px; }
+.orders-calendar-days span { padding: 6px 4px; text-align: center; }
+.orders-calendar-dates { display: grid; grid-template-columns: repeat(7, 1fr); }
+.orders-calendar-date { padding: 8px 4px; text-align: center; border-right: 1px solid #eee; border-bottom: 1px solid #eee; min-height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #fff; }
+.orders-calendar-date.empty { background: transparent; cursor: default; }
+.orders-calendar-date.today { background: #eef2ff; font-weight: 700; color: #1d4ed8; }
+.orders-calendar-date.past { color: #9ca3af; background: #fafafa; pointer-events: none; }
+.orders-calendar-date.selected { outline: 2px solid #3b82f6; outline-offset: -2px; }
+.orders-date-number { font-weight: 600; font-size: 12px; }
+
+.orders-time-picker-section { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.orders-time-picker-input { padding: 6px 10px; border-radius: 6px; border: 1px solid #e5e7eb; }
+.orders-set-date-btn { background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer; width: 100%; font-weight: 600; }
+.orders-set-date-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+/* Update dropdown styles used on Orders list */
+.update-dropdown { position: absolute; right: 0; top: 110%; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); overflow: hidden; z-index: 20; }
+.dropdown-item { padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.dropdown-item:hover { background: #f3f4f6; }
+
+/* Success popups - centered relative to content area (ignore sidebar) */
+.orders-calendar-success-popup,
+.popup-success {
+  position: fixed;
+  /* center within the content area excluding the sidebar */
+  left: calc(clamp(200px, 20vw, 250px) + (100% - clamp(200px, 20vw, 250px)) / 2);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  padding: 10px 16px;
+  z-index: 10001;
 }
+

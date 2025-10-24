@@ -1,12 +1,36 @@
+/* Pastel Header Styles */
+:root {
+  --primary-gradient: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 50%, #81d4fa 100%);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(59, 130, 246, 0.2);
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent-color: #3b82f6;
+  --shadow-glow: 0 4px 20px rgba(59, 130, 246, 0.15);
+  --shadow-strong: 0 8px 30px rgba(59, 130, 246, 0.25);
+}
+
+/* Reserve space for the fixed header within admin layout only */
+.main-content {
+  padding-top: clamp(50px, 8vh, 60px);
+}
+
 .header {
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
   padding: 0 clamp(10px, 2vw, 20px);
   height: clamp(50px, 8vh, 60px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-glow);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
 }
 
 .header-content {
@@ -36,24 +60,31 @@
   width: clamp(32px, 5vw, 40px);
   height: clamp(32px, 5vw, 40px);
   border-radius: 50%;
-  background: #f0f0f0;
+  background: var(--accent-gradient);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--accent-color);
   font-size: clamp(14px, 2.5vw, 18px);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  border: 2px solid var(--glass-border);
+  box-shadow: var(--shadow-glow);
 }
 
 .profile-picture:hover {
-  background: #e0e0e0;
+  background: var(--accent-color);
+  color: white;
+  transform: scale(1.05);
+  box-shadow: var(--shadow-strong);
 }
 
 .user-role {
   font-weight: 600;
-  color: #333;
-  font-size: clamp(11px, 1.8vw, 14px);
+  color: var(--text-primary);
+  font-size: clamp(12px, 1.9vw, 15px);
+  letter-spacing: 0.01em;
+  font-family: 'Poppins', sans-serif;
 }
 
 /* Responsive Design */
@@ -61,6 +92,15 @@
   .header {
     padding: 0 10px;
     height: 50px;
+    margin-left: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+  .main-content {
+    padding-top: 50px;
   }
   
   .header-right {
@@ -82,6 +122,9 @@
   .header {
     padding: 0 8px;
     height: 45px;
+  }
+  .main-content {
+    padding-top: 45px;
   }
   
   .header-right {

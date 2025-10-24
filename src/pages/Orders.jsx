@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
 import '../styles/Orders.css';
 import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
@@ -11,21 +9,46 @@ const formatTimeToAMPM = (timeString) => {
 
   console.log('formatTimeToAMPM input:', timeString);
   
-  const [hours, minutes] = timeString.split(':').map(Number);
+  try {
+    // Handle different time formats
+    let timeObj;
+    if (timeString.includes('T')) {
+      // ISO format with T
+      timeObj = new Date(timeString);
+    } else if (timeString.includes(' ')) {
+      // Date and time separated by space
+      timeObj = new Date(timeString);
+    } else {
+      // Just time string (HH:MM)
+      const [hours, minutes] = timeString.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) {
+        console.warn('Invalid time format:', timeString);
+        return '';
+      }
+      timeObj = new Date();
+      timeObj.setHours(hours, minutes, 0, 0);
+    }
 
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+    if (isNaN(timeObj.getTime())) {
+      console.warn('Invalid time object created from:', timeString);
+      return '';
+    }
 
-  const result = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  console.log('formatTimeToAMPM result:', result);
-  
-  return result;
+    const result = timeObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    console.log('formatTimeToAMPM result:', result);
+    
+    return result;
+  } catch (error) {
+    console.warn('Error formatting time:', timeString, error);
+    return '';
+  }
 };
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [detailsClosing, setDetailsClosing] = useState(false);
   const [showUpdateDropdown, setShowUpdateDropdown] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -78,7 +101,12 @@ const Orders = () => {
           scheduled_at: order.scheduled_at,
           completed_at: order.completed_at,
           check_appointment_date: order.check_appointment_date,
-          check_appointment_time: order.check_appointment_time
+          check_appointment_time: order.check_appointment_time,
+          pickup_appointment_date: order.pickup_appointment_date,
+          pickup_appointment_time: order.pickup_appointment_time,
+          appointment_date: order.appointment?.appointment_date,
+          appointment_time: order.appointment?.appointment_time,
+          preferred_due_date: order.appointment?.preferred_due_date
         })));
         
         setOrders(response.data.data);
@@ -96,6 +124,20 @@ const Orders = () => {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUpdateDropdown && !event.target.closest('.update-dropdown') && !event.target.closest('.update-btn')) {
+        setShowUpdateDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUpdateDropdown]);
 
   const handleCalendarPrevMonth = () => {
     if (calendarMonth === 0) {
@@ -353,47 +395,93 @@ const Orders = () => {
     if (!dateString) return '';
     
     console.log('formatDateForDisplay input:', dateString);
-    if (dateString.includes(' ') && dateString.includes(':')) {
-      try {
-        const [datePart, timePart] = dateString.split(' ');
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hours, minutes] = timePart.split(':').map(Number);
-        
-        if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
-          throw new Error('Invalid datetime format');
-        }
-        
-        const monthName = monthNames[month - 1]; 
-        const time = formatTimeToAMPM(timePart);
-        
-        console.log('Parsed datetime:', { datePart, timePart, monthName, day, time });
-        console.log('Final formatted string:', `${monthName} ${day} - ${time}`);
-        
-        return `${monthName} ${day} - ${time}`;
-      } catch (error) {
-        console.warn('Error parsing datetime string:', dateString, error);
-        const date = new Date(dateString);
-        const month = monthNames[date.getMonth()];
-        const day = date.getDate();
-        const time = formatTimeToAMPM(date.toTimeString().split(' ')[0]);
-        return `${month} ${day} - ${time}`;
-      }
-    } else {
+    
+    try {
       const date = new Date(dateString);
+      
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', dateString);
+        return '';
+      }
+      
       const month = monthNames[date.getMonth()];
       const day = date.getDate();
       
-      return `${month} ${day}`;
+      // If the original string contains time information (T or space with colon), include it
+      if (dateString.includes('T') || (dateString.includes(' ') && dateString.includes(':'))) {
+        const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+        console.log('Final formatted string with time:', `${month} ${day} - ${time}`);
+        return `${month} ${day} - ${time}`;
+      } else {
+        // For date-only strings, just show the date
+        console.log('Final formatted string (date only):', `${month} ${day}`);
+        return `${month} ${day}`;
+      }
+    } catch (error) {
+      console.warn('Error parsing date string:', dateString, error);
+      return '';
     }
   };
 
   const formatDateAndTime = (dateString, timeString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    const month = monthNames[date.getMonth()];
-    const day = date.getDate();
-    const time = formatTimeToAMPM(timeString);
-    return `${month} ${day} - ${time}`;
+    
+    try {
+      let dateTime;
+      let time;
+      
+      // Check if timeString is a simple time format (HH:MM) or a full datetime
+      if (timeString && timeString.match(/^\d{2}:\d{2}$/)) {
+        // timeString is a simple time format (e.g., "08:00")
+        const date = new Date(dateString);
+        const [hours, minutes] = timeString.split(':').map(Number);
+        
+        // Create a new date with the correct time
+        dateTime = new Date(date);
+        dateTime.setHours(hours, minutes, 0, 0);
+        
+        // Format time manually to avoid timezone issues
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+        time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+      } else if (dateString.includes('T') && timeString.includes('T')) {
+        // Both are full datetime strings, use the timeString as it likely has the correct time
+        const localTimeString = timeString.replace('Z', '').replace(/\.\d+/, '');
+        dateTime = new Date(localTimeString);
+        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else if (dateString.includes('T')) {
+        // dateString is already a full datetime, use it
+        const localDateString = dateString.replace('Z', '').replace(/\.\d+/, '');
+        dateTime = new Date(localDateString);
+        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else if (timeString.includes('T')) {
+        // timeString is a full datetime, use it
+        const localTimeString = timeString.replace('Z', '').replace(/\.\d+/, '');
+        dateTime = new Date(localTimeString);
+        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else {
+        // Both are separate date and time strings, combine them
+        const isoString = `${dateString}T${timeString}`;
+        dateTime = new Date(isoString);
+        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      }
+      
+      if (isNaN(dateTime.getTime())) {
+        console.warn('Invalid datetime:', { dateString, timeString });
+        return '';
+      }
+      
+      const month = monthNames[dateTime.getMonth()];
+      const day = dateTime.getDate();
+      
+      console.log('formatDateAndTime result:', `${month} ${day} - ${time}`);
+      console.log('Original strings:', { dateString, timeString });
+      console.log('Parsed date object:', dateTime);
+      return `${month} ${day} - ${time}`;
+    } catch (error) {
+      console.warn('Error formatting date and time:', dateString, timeString, error);
+      return '';
+    }
   };
 
   const isTimeSlotBooked = (time, kind) => {
@@ -409,6 +497,18 @@ const Orders = () => {
     const fetch = async () => {
       if (showCalendarModal && selectedDay) {
         const date = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+        
+        // Check if the selected date is in the past
+        const selectedDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (selectedDate < today) {
+          console.log("Selected date is in the past, clearing booked times");
+          setBookedCheckTimes([]);
+          return;
+        }
+        
         try {
           const res = await api.get('/orders/booked-times', { params: { date, kind: 'check' } });
           setBookedCheckTimes(res.data?.booked_times || []);
@@ -424,6 +524,18 @@ const Orders = () => {
     const fetch = async () => {
       if (showCompletionCalendar && completionSelectedDay) {
         const date = `${completionCalendarYear}-${String(completionCalendarMonth + 1).padStart(2, '0')}-${String(completionSelectedDay).padStart(2, '0')}`;
+        
+        // Check if the selected date is in the past
+        const selectedDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (selectedDate < today) {
+          console.log("Selected completion date is in the past, clearing booked times");
+          setBookedPickupTimes([]);
+          return;
+        }
+        
         try {
           const res = await api.get('/orders/booked-times', { params: { date, kind: 'pickup' } });
           setBookedPickupTimes(res.data?.booked_times || []);
@@ -449,16 +561,12 @@ const Orders = () => {
 
   if (loading) {
     return (
-      <div className="dashboard-layout">
-        <Sidebar />
-        <div className="main-content">
-          <Header />
-          <div className="page-title">
-            <h1>ORDERS</h1>
-          </div>
-          <div className="orders-content">
-            <p>Loading orders...</p>
-          </div>
+      <div className="page-wrap">
+        <div className="page-title">
+          <h1>ORDERS</h1>
+        </div>
+        <div className="orders-content">
+          <p>Loading orders...</p>
         </div>
       </div>
     );
@@ -466,49 +574,42 @@ const Orders = () => {
 
   if (error) {
     return (
-      <div className="dashboard-layout">
-        <Sidebar />
-        <div className="main-content">
-          <Header />
-          <div className="page-title">
-            <h1>ORDERS</h1>
-          </div>
-          <div className="orders-content">
-            <p>Error: {error}</p>
-          </div>
+      <div className="page-wrap">
+        <div className="page-title">
+          <h1>ORDERS</h1>
+        </div>
+        <div className="orders-content">
+          <p>Error: {error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
-      <div className="main-content">
-        <Header />
-        <div className="page-title">
-          <h1>ORDERS</h1>
-        </div>
-        <div className="orders-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
+    <div className="page-wrap">
+      <div className="page-title">
+        <h1>ORDERS</h1>
+      </div>
+      <div className="orders-content">
+          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, margin: '0 16px', overflow: 'visible' }}>
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', overflow: 'visible' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
-                  <th>Order #</th>
-                  <th>Queue #</th>
-                  <th>Name</th>
-                  <th>Services</th>
-                  <th>Status</th>
-                  <th>Next Appoint.</th>
-                  <th>Layout/Notes</th>
-                  <th>Actions</th>
-                </tr>
+                <th style={{ width: '5%' }}>Order #</th>
+                 <th style={{ width: '5%' }}>Queue #</th>
+                 <th style={{ width: '15%' }}>Name</th>
+                 <th style={{ width: '20%' }}>Services</th> {/* a bit less wide */}
+                 <th style={{ width: '20%' }}>Status</th>
+                 <th style={{ width: '20%' }}>Next Appoint.</th> {/* wider column */}
+                 <th style={{ width: '15%' }}>Layout/Notes</th>
+                 <th style={{ width: '12%' }}>Actions</th>
+               </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
+                {orders.slice(0, 5).map((order) => (
                   <tr key={order.id}>
                     <td>{order.id}</td>
                     <td>{order.queue_number}</td>
@@ -531,17 +632,26 @@ const Orders = () => {
                       {order.status === 'Ready to Check' && order.check_appointment_date && order.check_appointment_time && (
                         <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>
                       )}
+                      {order.status === 'Ready to Check' && (!order.check_appointment_date || !order.check_appointment_time) && (
+                        <span style={{ color: '#999' }}>No appointment set</span>
+                      )}
                       {order.status === 'Pending' && (
                         order.appointment?.appointment_date && order.appointment?.appointment_time ? (
                           <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>
                         ) : order.appointment?.preferred_due_date ? (
                           <span>{formatDateForDisplay(order.appointment.preferred_due_date)}</span>
                         ) : (
-                          <span>N/A</span>
+                          <span style={{ color: '#999' }}>No appointment set</span>
                         )
                       )}
                       {order.status === 'Completed' && order.pickup_appointment_date && order.pickup_appointment_time && (
                         <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>
+                      )}
+                      {order.status === 'Completed' && (!order.pickup_appointment_date || !order.pickup_appointment_time) && (
+                        <span style={{ color: '#999' }}>No pickup set</span>
+                      )}
+                      {order.status === 'Finished' && (
+                        <span>N/A</span>
                       )}
                     </td>
                     <td>
@@ -559,12 +669,19 @@ const Orders = () => {
                           className="update-btn"
                           onClick={() => toggleUpdateDropdown(order.id)}
                           style={{
-                            backgroundColor: '#4fc3f7',
+                            backgroundColor: '#3b82f6',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             padding: '8px 16px',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            transition: 'background-color 0.3s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#1d4ed8';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = '#3b82f6';
                           }}
                         >
                           Update
@@ -606,40 +723,58 @@ const Orders = () => {
             )}
           </div>
 
-          {/* View File Modal */}
+          {/* View File Modal (Dashboard design) */}
           {showDetails && selectedOrder && (
-            <div className="modal-bg" onClick={() => setShowDetails(false)}>
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
+            <div
+              className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+              onClick={() => {
+                setDetailsClosing(true);
+                setTimeout(() => {
+                  setShowDetails(false);
+                  setDetailsClosing(false);
+                }, 200);
+              }}
+            >
+              <div
+                className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <AiOutlineClose
-                  className="orders-modal-exit-icon"
-                  onClick={() => setShowDetails(false)}
+                  className="dashboard-modal-exit-icon"
+                  onClick={() => {
+                    setDetailsClosing(true);
+                    setTimeout(() => {
+                      setShowDetails(false);
+                      setDetailsClosing(false);
+                    }, 200);
+                  }}
                 />
-                <h2 style={{ textAlign: 'center', marginTop: '10px', marginBottom: '-5px' }}>Order Details</h2>
-                <div className="details-container" style={{flexWrap: 'wrap'}}>
+                <h2 className="dashboard-modal-title">Order Details</h2>
+                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
                   <div className="details-left">
-                    <div className="detail-group">
-                      <div className="detail-label">Full Name</div>
-                      <div className="detail-value">{selectedOrder.appointment?.user?.name || 'N/A'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Queue Number</div>
-                      <div className="detail-value">{selectedOrder.queue_number}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Queue Number</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.queue_number}</div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Appointment Date Accepted</div>
-                      <div className="detail-value">{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Service Type</div>
-                      <div className="detail-value">{selectedOrder.appointment?.service_type || 'N/A'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Service Type</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.service_type || 'N/A'}</div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Phone Number</div>
-                      <div className="detail-value">{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Phone Number</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Size</div>
-                      <div className="detail-value">
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Size</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>
                         {selectedOrder.appointment?.sizes ? (
                           <>
                             {Object.entries(JSON.parse(selectedOrder.appointment.sizes)).map(([size, qty]) => (
@@ -649,46 +784,46 @@ const Orders = () => {
                         ) : 'N/A'}
                       </div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Quantity</div>
-                      <div className="detail-value">
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Quantity</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>
                         {selectedOrder.appointment?.total_quantity || 0} pcs.
                       </div>
                     </div>
                     {selectedOrder.status === 'Completed' && selectedOrder.total_amount && (
-                      <div className="detail-group">
-                        <div className="detail-label">Total Payment Fee</div>
-                        <div className="detail-value">₱{selectedOrder.total_amount}</div>
+                      <div className="detail-group" style={{ marginBottom: 8 }}>
+                        <div className="detail-label" style={{ fontWeight: 600 }}>Total Payment Fee</div>
+                        <div className="detail-value" style={{ fontWeight: 400 }}>₱{selectedOrder.total_amount}</div>
                       </div>
                     )}
                   </div>
                   <div className="details-right">
-                    <div className="detail-group">
-                      <div className="detail-label">Due Date</div>
-                      <div className="detail-value">{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
                     {selectedOrder.status === 'Completed' && selectedOrder.completed_at && (
-                      <div className="detail-group">
-                        <div className="detail-label">Completion Date</div>
-                        <div className="detail-value">{formatDateForDisplay(selectedOrder.completed_at)}</div>
+                      <div className="detail-group" style={{ marginBottom: 8 }}>
+                        <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
+                        <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
                       </div>
                     )}
-                    <div className="detail-group">
-                      <div className="detail-label">Current Status</div>
-                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status) }}>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
+                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
                         {selectedOrder.status}
                       </div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Notes</div>
-                      <div className="detail-value">{selectedOrder.appointment?.notes || 'No notes provided.'}</div>
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Notes</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.notes || 'No notes provided.'}</div>
                     </div>
-                    <div className="image-label">Design Image</div>
+                    <div className="image-label" style={{ fontWeight: 600 }}>Design Image</div>
                     {selectedOrder.appointment?.design_image ? (
                       <img 
                         src={selectedOrder.appointment.design_image} 
                         alt="Design" 
-                        className="modal-image"
+                        className="dashboard-modal-image"
                         onClick={() => handleImageClick(
                           selectedOrder.appointment.design_image,
                           'Design Image'
@@ -696,7 +831,6 @@ const Orders = () => {
                         onError={(e) => {
                           console.error('Failed to load image:', e.target.src);
                           e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'block';
                         }}
                       />
                     ) : (
@@ -879,8 +1013,8 @@ const Orders = () => {
 
           {/* Payment Fee Modal */}
           {showPaymentModal && (
-            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }} onClick={() => setShowPaymentModal(false)}>
-              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setShowPaymentModal(false)}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                 <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Please provide the total payment fee for this order:</h3>
                 <input
                   type="number"
@@ -904,8 +1038,8 @@ const Orders = () => {
 
           {/* Finish Confirmation Modal */}
           {showFinishConfirmation && orderToFinish && (
-            <div className="modal-bg" style={{ background: 'rgba(0,0,0,0.4)', zIndex: 1000 }} onClick={() => { setShowFinishConfirmation(false); setOrderToFinish(null); }}>
-              <div className="modal-panel" style={{ maxWidth: 400, margin: '10vh auto', padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div className="dashboard-modal-bg animate-fade" onClick={() => { setShowFinishConfirmation(false); setOrderToFinish(null); }}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                 <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure the Order is Finished?</h3>
                 <div style={{ display: 'flex', gap: 16, width: '100%' }}>
                   <button
@@ -932,45 +1066,19 @@ const Orders = () => {
 
           {/* Image Modal for Zoom */}
           {showImageModal && selectedImage && (
-            <div className="modal-bg" onClick={() => setShowImageModal(false)}>
-              <div className="modal-panel" style={{ 
-                maxWidth: '90vw', 
-                maxHeight: '90vh', 
-                padding: 20,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }} onClick={e => e.stopPropagation()}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  width: '100%', 
-                  marginBottom: 15 
-                }}>
-                  <h3 style={{ margin: 0 }}>{selectedImage.alt}</h3>
-                  <AiOutlineClose 
-                    style={{ cursor: 'pointer', fontSize: '24px' }}
-                    onClick={() => setShowImageModal(false)}
-                  />
-                </div>
-                <img 
-                  src={selectedImage.src} 
-                  alt={selectedImage.alt} 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '70vh', 
-                    objectFit: 'contain',
-                    borderRadius: '8px',
-                    border: '1px solid #ddd'
-                  }}
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
+              <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
+                <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
+                <img
+                  src={selectedImage.src}
+                  alt={selectedImage.alt}
+                  style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
                 />
               </div>
             </div>
           )}
         </div>
       </div>
-    </div>
   );
 };
 

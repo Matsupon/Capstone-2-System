@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
 import '../styles/Appointments.css';
 import { FaTrashAlt } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
@@ -14,10 +12,13 @@ const Appointments = () => {
   const [error, setError] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [detailsClosing, setDetailsClosing] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
   const [removeId, setRemoveId] = useState(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [queueConfirmId, setQueueConfirmId] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -133,6 +134,11 @@ const Appointments = () => {
     setShowDetails(true);
   };
 
+  const handleImageClick = (imageSrc, imageAlt) => {
+    setSelectedImage({ src: imageSrc, alt: imageAlt });
+    setShowImageModal(true);
+  };
+
   const handleAddToQueue = (id) => {
     setQueueConfirmId(id);
   };
@@ -175,16 +181,12 @@ const Appointments = () => {
   };
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
-      <div className="main-content">
-        <Header />
-        
-        <div className="page-title">
-          <h1>APPOINTMENTS</h1>
-        </div>
-        
-        <div className="appointments-content">
+    <>
+      <div className="page-title">
+        <h1>APPOINTMENTS</h1>
+      </div>
+      
+      <div className="appointments-content">
           <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24 }}>
             {isLoading ? (
               <p>Loading appointments...</p>
@@ -205,7 +207,7 @@ const Appointments = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {appointments.map((appt) => (
+                  {appointments.slice(0, 5).map((appt) => (
                     <tr key={appt.id}>
                       <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
                       <td>{appt.user?.name || 'N/A'}</td>
@@ -232,9 +234,39 @@ const Appointments = () => {
 
           {/* View Details Modal */}
           {showDetails && selectedAppointment && (
-            <div className="modal-bg" onClick={() => setShowDetails(false)}>
-              <div className="modal-panel details-modal" style={{ maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
-                <h2 style={{textAlign: 'center'}}>Appointment Details</h2>
+            <div
+              className={`modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+              onClick={() => {
+                setDetailsClosing(true);
+                setTimeout(() => {
+                  setShowDetails(false);
+                  setDetailsClosing(false);
+                }, 200);
+              }}
+            >
+              <div
+                className={`modal-panel details-modal animate-pop${detailsClosing ? ' closing' : ''}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div className="left-spacer" />
+                  <h2>Appointment
+                     Details</h2>
+                  <div
+                    className="exit-btn"
+                    onClick={() => {
+                      setDetailsClosing(true);
+                      setTimeout(() => {
+                        setShowDetails(false);
+                        setDetailsClosing(false);
+                      }, 200);
+                    }}
+                    aria-label="Close"
+                    role="button"
+                  >
+                    <AiOutlineClose />
+                  </div>
+                </div>
                 <div className="details-container" style={{flexWrap: 'wrap'}}>
                   <div className="details-left">
                     <div className="detail-label">Service Type</div>
@@ -279,12 +311,33 @@ const Appointments = () => {
                         src={selectedAppointment.design_image} 
                         alt="Jersey Design"
                         className="modal-image"
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                        style={{ 
+                          width: '100%', 
+                          height: '120px', 
+                          objectFit: 'cover', 
+                          border: '1px solid #ddd',
+                          cursor: 'pointer',
+                          borderRadius: '4px'
+                        }}
+                        onClick={() => handleImageClick(
+                          selectedAppointment.design_image,
+                          'Design Image'
+                        )}
+                        onError={(e) => {
+                          console.error('Failed to load design image:', e.target.src);
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }}
                       />
                     ) : (
                       <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
                         No design image uploaded
                       </div>
+                    )}
+                    {selectedAppointment.design_image && (
+                      <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px', marginTop: '5px' }}>
+                        Failed to load design image. The file may have been moved or deleted.
+                      </p>
                     )}
                     <div className="image-label">GCash Proof</div>
                     {selectedAppointment.gcash_proof ? (
@@ -292,16 +345,36 @@ const Appointments = () => {
                         src={selectedAppointment.gcash_proof} 
                         alt="GCash Payment"
                         className="modal-image"
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
+                        style={{ 
+                          width: '100%', 
+                          height: '120px', 
+                          objectFit: 'cover', 
+                          border: '1px solid #ddd',
+                          cursor: 'pointer',
+                          borderRadius: '4px'
+                        }}
+                        onClick={() => handleImageClick(
+                          selectedAppointment.gcash_proof,
+                          'GCash Payment Proof'
+                        )}
+                        onError={(e) => {
+                          console.error('Failed to load GCash proof image:', e.target.src);
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }}
                       />
                     ) : (
                       <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
                         No GCash proof uploaded
                       </div>
                     )}
+                    {selectedAppointment.gcash_proof && (
+                      <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px', marginTop: '5px' }}>
+                        Failed to load GCash proof image. The file may have been moved or deleted.
+                      </p>
+                    )}
                   </div>
                 </div>
-                <AiOutlineClose className="modal-exit-icon" onClick={() => setShowDetails(false)} />
               </div>
             </div>
           )}
@@ -346,9 +419,40 @@ const Appointments = () => {
               <h3>Appointment Successfully Deleted!</h3>
             </div>
           )}
-        </div>
+
+          {/* Image Modal for Zoom */}
+          {showImageModal && selectedImage && (
+            <div className="image-modal-bg" onClick={() => setShowImageModal(false)}>
+              <div className="image-modal-panel" onClick={e => e.stopPropagation()}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  width: '100%', 
+                  marginBottom: 15 
+                }}>
+                  <h3 style={{ margin: 0 }}>{selectedImage.alt}</h3>
+                  <AiOutlineClose 
+                    style={{ cursor: 'pointer', fontSize: '24px' }}
+                    onClick={() => setShowImageModal(false)}
+                  />
+                </div>
+                <img 
+                  src={selectedImage.src} 
+                  alt={selectedImage.alt} 
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '50vh', 
+                    objectFit: 'contain',
+                    borderRadius: '8px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+            </div>
+          )}
       </div>
-    </div>
+    </>
   );
 };
 

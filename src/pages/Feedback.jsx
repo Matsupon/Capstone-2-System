@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
 import api from '../api';
 import '../styles/Feedback.css';
+import { FaTrash } from 'react-icons/fa';
 
 const StarRating = ({ value }) => {
   const stars = [1, 2, 3, 4, 5];
@@ -33,6 +32,11 @@ export default function FeedbackPage() {
   const [error, setError] = useState(null);
   const [responding, setResponding] = useState({});
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [deleting, setDeleting] = useState({});
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [animateStats, setAnimateStats] = useState(false);
+  const [displayTotal, setDisplayTotal] = useState(0);
+  const [displayAvg, setDisplayAvg] = useState(0);
   const storageBase = useStorageBase();
 
   const load = async () => {
@@ -48,6 +52,43 @@ export default function FeedbackPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Remove page-level scrolling for this page to enable container scrolling
+  useEffect(() => {
+    document.body.classList.remove('feedback-scroll');
+    return () => document.body.classList.remove('feedback-scroll');
+  }, []);
+
+  const stats = useMemo(() => {
+    if (!items?.length) return { total: 0, avg: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+    const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let sum = 0;
+    for (const it of items) {
+      const r = Math.max(1, Math.min(5, Math.round(Number(it.rating) || 0)));
+      dist[r] += 1;
+      sum += r;
+    }
+    return { total: items.length, avg: sum / items.length, dist };
+  }, [items]);
+
+  useEffect(() => {
+    if (!loading && !error) {
+      setAnimateStats(false);
+      setDisplayTotal(0);
+      setDisplayAvg(0);
+      const start = performance.now();
+      const dur = 1000;
+      const totalTarget = stats.total;
+      const avgTarget = Number(stats.avg.toFixed(1));
+      const tick = (t) => {
+        const p = Math.min(1, (t - start) / dur);
+        setDisplayTotal(Math.round(totalTarget * p));
+        setDisplayAvg(Number((avgTarget * p).toFixed(1)));
+        if (p < 1) requestAnimationFrame(tick); else setAnimateStats(true);
+      };
+      requestAnimationFrame(tick);
+    }
+  }, [loading, error, stats.total, stats.avg]);
 
   const handleSubmit = async (id) => {
     const payload = {};
@@ -78,16 +119,34 @@ export default function FeedbackPage() {
   const setResp = (id, patch) =>
     setResponding((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this feedback? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeleting(prev => ({ ...prev, [id]: true }));
+      const res = await api.delete(`/feedback/${id}`);
+      
+      if (res.data?.success) {
+        // Remove the feedback from the local state
+        setItems(prev => prev.filter(item => item.id !== id));
+        setDeleteSuccess(true);
+        setTimeout(() => setDeleteSuccess(false), 3000);
+      }
+    } catch (e) {
+      alert('Failed to delete feedback');
+    } finally {
+      setDeleting(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
   if (loading) {
     return (
-      <div className="dashboard-layout">
-        <Sidebar />
-        <div className="main-content">
-          <Header />
-          <div className="page-title"><h1>FEEDBACK</h1></div>
-          <div className="feedback-outer">
-            <div className="feedback-card-container">Loading...</div>
-          </div>
+      <div className="page-wrap">
+        <div className="page-title"><h1>FEEDBACK</h1></div>
+        <div className="feedback-outer">
+          <div className="feedback-card-container">Loading...</div>
         </div>
       </div>
     );
@@ -95,33 +154,53 @@ export default function FeedbackPage() {
 
   if (error) {
     return (
-      <div className="dashboard-layout">
-        <Sidebar />
-        <div className="main-content">
-          <Header />
-          <div className="page-title"><h1>FEEDBACK</h1></div>
-          <div className="feedback-outer">
-            <div className="feedback-card-container" style={{ color: '#c62828' }}>{error}</div>
-          </div>
+      <div className="page-wrap">
+        <div className="page-title"><h1>FEEDBACK</h1></div>
+        <div className="feedback-outer">
+          <div className="feedback-card-container" style={{ color: '#c62828' }}>{error}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-layout feedback-page-wrapper">
-      <Sidebar />
-      <div className="main-content">
-        <Header />
-        <div className="page-title"><h1>FEEDBACK</h1></div>
-        <div className="feedback-outer">
+    <div className="page-wrap feedback-page-wrapper">
+      <div className="page-title"><h1>FEEDBACK</h1></div>
+      <div className="feedback-outer">
+          <div className="feedback-stats">
+            <div className="stat-block">
+              <div className="stat-title">Total Reviews</div>
+              <div className="stat-number">{displayTotal}</div>
+              <div className="stat-sub">Growth in reviews this year</div>
+            </div>
+            <div className="stat-sep" />
+            <div className="stat-block">
+              <div className="stat-title">Average Rating</div>
+              <div className="stat-number">{displayAvg.toFixed(1)}</div>
+              <StarRating value={Math.round(stats.avg)} />
+              <div className="stat-sub">Average rating this year</div>
+            </div>
+            <div className="stat-sep" />
+            <div className="stat-block dist-block">
+              {[5,4,3,2,1].map((s) => {
+                const pct = stats.total ? Math.round((stats.dist[s] / stats.total) * 100) : 0;
+                return (
+                  <div key={s} className="dist-row">
+                    <span className="dist-label">{s}</span>
+                    <div className={`dist-bar ${animateStats ? 'animate' : ''} star-${s}`} style={{ width: animateStats ? `${pct}%` : 0 }} />
+                    <span className="dist-value">{stats.dist[s]}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {/* container is now relative so popup can center inside it */}
           <div className="feedback-card-container feedback-card-relative">
             {items.length === 0 ? (
               <p className="feedback-empty">No feedback yet.</p>
             ) : (
               <div className="feedback-list">
-                {items.map((fb) => {
+                {items.slice(0, 5).map((fb) => {
                   const user = fb?.order?.appointment?.user;
                   const appt = fb?.order?.appointment;
                   const pending = responding[fb.id] || {};
@@ -131,7 +210,7 @@ export default function FeedbackPage() {
                     : null;
 
                   return (
-                    <article key={fb.id} className="feedback-item card">
+                    <article key={fb.id} className="feedback-item">
                       <header className="card-header">
                         <div className="card-header-left">
                           {profileUrl ? (
@@ -150,23 +229,45 @@ export default function FeedbackPage() {
                         </div>
                         <div className="card-header-right">
                           <StarRating value={fb.rating} />
-                          <button
-                            className={`check-pill ${responding[fb.id]?.admin_checked ?? fb.admin_checked ? 'on' : ''}`}
-                            title={(responding[fb.id]?.admin_checked ?? fb.admin_checked) ? 'Checked' : 'Mark as checked'}
-                            onClick={() => {
-                              const next = !(responding[fb.id]?.admin_checked ?? fb.admin_checked);
-                              setResp(fb.id, { admin_checked: next });
-                              handleSubmit(fb.id);
-                            }}
-                            style={{
-                              color: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
-                              borderColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
-                              backgroundColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#E8F5E9' : undefined,
-                              fontWeight: 700,
-                            }}
-                          >
-                            ✓
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button
+                              className={`check-pill ${responding[fb.id]?.admin_checked ?? fb.admin_checked ? 'on' : ''}`}
+                              title={(responding[fb.id]?.admin_checked ?? fb.admin_checked) ? 'Checked' : 'Mark as checked'}
+                              onClick={() => {
+                                const next = !(responding[fb.id]?.admin_checked ?? fb.admin_checked);
+                                setResp(fb.id, { admin_checked: next });
+                                handleSubmit(fb.id);
+                              }}
+                              style={{
+                                color: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
+                                borderColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
+                                backgroundColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#E8F5E9' : undefined,
+                                fontWeight: 700,
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              className="delete-btn"
+                              title="Delete feedback"
+                              onClick={() => handleDelete(fb.id)}
+                              disabled={deleting[fb.id]}
+                              style={{
+                                background: 'none',
+                                border: '1px solid #dc3545',
+                                borderRadius: '4px',
+                                padding: '6px 8px',
+                                cursor: deleting[fb.id] ? 'not-allowed' : 'pointer',
+                                color: '#dc3545',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: deleting[fb.id] ? 0.6 : 1,
+                              }}
+                            >
+                              <FaTrash size={12} />
+                            </button>
+                          </div>
                         </div>
                       </header>
 
@@ -202,9 +303,13 @@ export default function FeedbackPage() {
                 <h3>Response sent successfully!</h3>
               </div>
             )}
+            {deleteSuccess && (
+              <div className="popup-success inside-card">
+                <h3>Feedback deleted successfully!</h3>
+              </div>
+            )}
           </div>
         </div>
-      </div>
     </div>
   );
 }

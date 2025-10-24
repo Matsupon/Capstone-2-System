@@ -1,26 +1,95 @@
+/* Pastel Appointments Styles */
+:root {
+  --primary-gradient: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 50%, #81d4fa 100%);
+  --secondary-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 25%, #e2e8f0 50%, #cbd5e1 75%, #94a3b8 100%);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(59, 130, 246, 0.2);
+  --text-primary: #0f172a;
+  --text-secondary: #1e293b;
+  --text-muted: #334155;
+  --accent-color: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.2);
+  --success-color: #059669;
+  --warning-color: #d97706;
+  --error-color: #dc2626;
+  --shadow-glow: 0 4px 20px rgba(59, 130, 246, 0.15);
+  --shadow-strong: 0 8px 30px rgba(59, 130, 246, 0.25);
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-border: rgba(59, 130, 246, 0.15);
+}
+
+.page-title {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  padding: 4px 20px;
+  border-radius: 0 0 12px 12px;
+  box-shadow: var(--shadow-glow);
+  margin: 0 0 4px 0;
+  text-align: center;
+}
+
+.page-title h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(20px, 2.8vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-family: 'Poppins', sans-serif;
+}
+
 .appointments-content {
-  padding: clamp(10px, 2vw, 20px);
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 8px 16px;
+  max-width: 100%;
+  margin: 0;
+  position: relative;
+  z-index: 2;
+  height: calc(100vh - 120px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .placeholder-content {
-  background: white;
-  border-radius: 8px;
-  padding: clamp(20px, 5vw, 40px);
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: clamp(30px, 6vw, 50px);
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.placeholder-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--primary-gradient);
+  opacity: 0.02;
+  z-index: -1;
 }
 
 .placeholder-content h2 {
-  color: #333;
-  margin-bottom: 10px;
-  font-size: clamp(18px, 3vw, 24px);
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: clamp(20px, 3.5vw, 28px);
+  font-weight: 800;
+  background: var(--primary-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
 }
 
 .placeholder-content p {
-  color: #666;
-  font-size: clamp(14px, 2vw, 16px);
+  color: var(--text-secondary);
+  font-size: clamp(16px, 2.5vw, 18px);
+  font-weight: 500;
 }
 
 /* Responsive Design */
@@ -56,74 +125,211 @@
 .appointments-content table {
   width: 100%;
   border-collapse: collapse;
-  font-size: clamp(12px, 1.3vw, 15px);
+  font-size: clamp(14px, 1.4vw, 16px);
   background: transparent;
-}
-.appointments-content th, .appointments-content td {
-  padding: 12px 8px;
-  text-align: center;
-  border-bottom: 1px solid #f0f0f0;
-}
-.appointments-content th {
-  font-weight: 600;
-  color: #333;
-  background: #e8f4fd;
-  font-size: clamp(13px, 1.4vw, 16px);
-}
-.appointments-content td {
-  color: #333;
-  font-size: clamp(12px, 1.3vw, 15px);
-}
-.appointments-content .action-link {
-  color: #3498db;
-  text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-  font-size: clamp(12px, 1.2vw, 14px);
-}
-.appointments-content .action-link:hover {
-  text-decoration: underline;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+  border: none;
+  flex: 1;
+  display: block;
+  overflow-y: visible;
+  max-height: none;
+  font-family: 'Lato', sans-serif;
 }
 
-/* Green Checkbox */
+.appointments-content th, .appointments-content td {
+  padding: 16px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--card-border);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  font-family: 'Lato', sans-serif;
+}
+
+.appointments-content th {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Poppins', sans-serif;
+  letter-spacing: 0.05em;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  font-size: clamp(12px, 1.5vw, 15px);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.appointments-content td {
+  color: var(--text-secondary);
+  font-size: clamp(11px, 1.4vw, 14px);
+  font-weight: 400;
+  border-bottom: none;
+}
+
+/* Match Orders header row background */
+.appointments-content thead tr { background: #e8f4fd; }
+
+.appointments-content .action-link {
+  color: var(--accent-color);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: clamp(12px, 1.4vw, 14px);
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.appointments-content .action-link:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+  text-decoration: none;
+  box-shadow: var(--shadow-glow);
+}
+
+/* Web3 Checkbox */
+input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  position: relative;
+  appearance: none;
+  background: var(--glass-bg);
+  border: 2px solid var(--glass-border);
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--accent-color);
+  background: rgba(99, 102, 241, 0.1);
+  box-shadow: var(--shadow-glow);
+}
+
 input[type="checkbox"]:checked {
-  accent-color: #4caf50;
+  background: var(--primary-gradient);
+  border-color: var(--accent-color);
+  box-shadow: var(--shadow-glow);
+}
+
+input[type="checkbox"]:checked::before {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* Modal Styles */
 .modal-bg {
   position: fixed;
   top: 0;
-  left: 0;
-  width: 100vw;
+  /* exclude the sidebar from being covered */
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
   height: 100vh;
-  background: rgba(0,0,0,0.2);
-  z-index: 1001;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center; /* center vertically */
+  align-items: center;
   justify-content: center;
-  padding: 20px; /* add padding for mobile */
+  padding: 4vh 16px;
+  z-index: 10000;
 }
 
 .modal-panel {
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  background: #fff;
+  border-radius: 12px;
+  width: min(700px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
-  text-align: left;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+  padding: 24px;
 }
 
-.modal-panel h2 {
-  padding-bottom: 20px;
+/* Image Modal Styles */
+.image-modal-bg {
+  position: fixed;
+  top: 0;
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 16px;
+  z-index: 10000;
 }
+
+.image-modal-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: min(600px, 96vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  padding: 20px;
+  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+}
+
+.modal-panel::before { content: none; }
+
+.modal-panel h2 {
+  margin-bottom: 18px;
+  color: #1a3c6c;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Modal header layout for Appointments */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.modal-header h2 { 
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0; 
+  font-weight: 800; 
+  color: #1f2937; 
+  text-align: center;
+  padding-bottom: 0;
+}
+
+.modal-header .exit-btn { 
+  width: 28px; 
+  height: 28px; 
+  display: grid; 
+  place-items: center; 
+  cursor: pointer; 
+  color: #6b7280; 
+  transition: transform 0.15s ease; 
+  margin-left: auto;
+}
+
+.modal-header .exit-btn:hover { transform: scale(1.1); color: #111827; }
 
 /* Details Modal */
 .details-modal {
-  max-width: 700px !important;
-  padding: 32px;
+  max-width: 800px !important;
+  padding: 40px;
 }
 
 /* Success Popups */
@@ -132,21 +338,37 @@ input[type="checkbox"]:checked {
   top: 40px;
   left: 50%;
   transform: translateX(-50%);
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-strong);
   padding: 24px 32px;
   z-index: 1002;
   text-align: center;
-  min-width: 320px;
+  min-width: 350px;
   animation: fadeInDown 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.popup-queue-success::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+  z-index: -1;
 }
 
 .popup-queue-success h3 {
   margin: 0;
   padding: 4px 0;
-  color: #4caf50;
-  font-size: 16px;
+  color: var(--success-color);
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 700;
 }
 
 /* Delete Success Popup */
@@ -155,21 +377,37 @@ input[type="checkbox"]:checked {
   top: 40px;
   left: 50%;
   transform: translateX(-50%);
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-strong);
   padding: 24px 32px;
   z-index: 1002;
   text-align: center;
-  min-width: 320px;
+  min-width: 350px;
   animation: fadeInDown 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.popup-delete-success::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+  z-index: -1;
 }
 
 .popup-delete-success h3 {
   margin: 0;
   padding: 4px 0;
-  color: #e53935;
-  font-size: 16px;
+  color: var(--error-color);
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 700;
 }
 
 /* Checkbox Styles */
@@ -225,44 +463,54 @@ input[type="checkbox"]:checked::before {
 }
 
 .queue-confirm-btns button {
-  min-width: 80px;
-  padding: 10px 20px;
+  min-width: 100px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 15px;
-  transition: background 0.2s;
+  font-weight: 700;
+  font-size: clamp(14px, 1.8vw, 16px);
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-glow);
 }
 
 .queue-confirm-btns .yes {
-  background: #4caf50;
+  background: var(--primary-gradient);
   color: white;
 }
 
 .queue-confirm-btns .yes:hover {
-  background: #388e3c;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-strong);
+  background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #ec4899 100%);
 }
 
 .queue-confirm-btns .no {
-  background: #ccc;
-  color: #333;
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
 }
 
 .queue-confirm-btns .no:hover {
-  background: #b0b0b0;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 /* Trash Icon */
 .delete-icon {
-  color: #e57373;
+  color: #ef4444;
   cursor: pointer;
-  font-size: 20px;
-  transition: color 0.2s;
+  font-size: 18px;
+  transition: color 0.2s ease, transform 0.15s ease;
+  padding: 0;
+  background: transparent;
+  border: none;
 }
-.delete-icon:hover {
-  color: #c62828;
-}
+.delete-icon:hover { color: #dc2626; transform: scale(1.08); }
 
 /* Remove Confirmation Modal */
 .remove-modal {
@@ -281,28 +529,37 @@ input[type="checkbox"]:checked::before {
   margin-top: 24px;
 }
 .remove-btns button {
-  min-width: 80px;
-  padding: 10px 20px;
+  min-width: 100px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 15px;
-  transition: background 0.2s;
+  font-weight: 700;
+  font-size: clamp(14px, 1.8vw, 16px);
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-glow);
 }
 .remove-btns .yes {
-  background: #e57373;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
 }
 .remove-btns .yes:hover {
-  background: #c62828;
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 .remove-btns .no {
-  background: #ccc;
-  color: #333;
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
 }
 .remove-btns .no:hover {
-  background: #b0b0b0;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 /* Deleted Popup */
@@ -336,82 +593,112 @@ input[type="checkbox"]:checked::before {
   align-items: flex-start;
 }
 .detail-label {
-  font-weight: 600;
-  color: #555;
-  font-size: 14px;
-  margin-bottom: 2px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: clamp(12px, 1.5vw, 14px);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .detail-value {
-  color: #333;
-  font-size: 15px;
+  color: var(--text-primary);
+  font-size: clamp(14px, 1.8vw, 16px);
   line-height: 1.4;
+  font-weight: 400;
+  margin-bottom: 16px;
 }
 .image-label {
-  font-weight: 600;
-  color: #555;
-  font-size: 14px;
-  margin-bottom: 6px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: clamp(12px, 1.5vw, 14px);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .modal-image {
-  width: 120px;
-  max-height: 120px;
+  width: 140px;
+  max-height: 140px;
   object-fit: contain;
-  border: 1px solid #eee;
-  border-radius: 6px;
-  background-color: #f9f9f9;
-  padding: 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  padding: 12px;
   box-sizing: border-box;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.modal-image:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-glow);
+  border-color: var(--accent-color);
 }
 
 /* Blue Close Button */
 .modal-button {
-  margin-top: 18px;
-  background: #3498db;
+  margin-top: 24px;
+  background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 10px 24px;
+  border-radius: 12px;
+  padding: 12px 32px;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 16px;
-  transition: background 0.2s;
+  font-weight: 700;
+  font-size: clamp(14px, 1.8vw, 16px);
+  transition: all 0.3s ease;
   width: 100%;
-  max-width: 180px;
+  max-width: 200px;
   display: block;
   margin-left: auto;
   margin-right: auto;
+  box-shadow: var(--shadow-glow);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .modal-button:hover {
-  background: #217dbb;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-strong);
+  background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #ec4899 100%);
 }
 
 
 .modal-exit-icon {
   position: absolute;
-  top: 15px;
-  right: 20px;
+  top: 20px;
+  right: 24px;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: all 0.3s ease;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
 }
 
 .modal-exit-icon:hover {
-  transform: scale(1.2);
+  transform: scale(1.1);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-glow);
 }
 
 
 @media (max-width: 768px) {
-  .details-container {
-    flex-direction: column;
-    gap: 20px;
-  }
-  .details-left, .details-right {
-    width: 100%;
-    align-items: flex-start;
-  }
-  .details-modal {
-    max-width: 90vw !important;
-    padding: 20px;
-  }
+  .image-modal-bg { left: 0; width: 100%; }
+  .modal-bg { left: 0; width: 100%; }
+  .details-container { flex-direction: column; gap: 20px; }
+  .details-modal { max-width: 90vw !important; padding: 20px; }
 }
+
+/* Modal open/close animations */
+@keyframes apptModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes apptModalFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes apptModalPopIn { 0% { opacity: 0; transform: translateY(10px) scale(0.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes apptModalPopOut { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(6px) scale(0.96); } }
+
+.modal-bg.animate-fade { animation: apptModalFadeIn 180ms ease-out forwards; }
+.modal-bg.animate-fade.closing { animation: apptModalFadeOut 160ms ease-in forwards; }
+.modal-panel.animate-pop { animation: apptModalPopIn 200ms ease-out forwards; }
+.modal-panel.animate-pop.closing { animation: apptModalPopOut 160ms ease-in forwards; }

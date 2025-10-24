@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AiOutlineClose } from 'react-icons/ai';
 import { FaUser, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
+// Header and Sidebar are now provided by the persistent layout in App.js
 import api from '../api';
 import '../styles/Dashboard.css';
+import '../styles/Orders.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -133,18 +133,26 @@ const Dashboard = () => {
       }
     };
 
-    const fetchTodaysAppointmentsCount = async () => {
-      try {
-        const response = await api.get('/orders/today-appointments-count');
-        console.log('Today appointments count response:', response.data);
-        if (response.data?.success) {
-          setTodaysAppointmentsCount(response.data.data?.todays_appointments || 0);
-        }
-      } catch (err) {
-        console.error('Failed to fetch today\'s appointments count:', err);
-        setTodaysAppointmentsCount(0);
+  const fetchTodaysAppointmentsCount = async () => {
+    try {
+      const response = await api.get('/orders/today-appointments-count');
+      console.log('Today appointments count response:', response.data);
+      if (response.data?.success) {
+        const allTodaysAppointments = response.data.data?.todays_appointments || 0;
+        
+        // Filter to only count appointments that haven't passed their time yet
+        const upcomingAppointments = acceptedAppointments.filter(appointment => {
+          if (!appointment.appointment_date || !appointment.appointment_time) return false;
+          return isUpcomingToday(appointment.appointment_date, appointment.appointment_time);
+        });
+        
+        setTodaysAppointmentsCount(upcomingAppointments.length);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch today\'s appointments count:', err);
+      setTodaysAppointmentsCount(0);
+    }
+  };
 
     // Initial data fetch
     const fetchAllData = async () => {
@@ -152,9 +160,10 @@ const Dashboard = () => {
         fetchAppointments(),
         fetchAcceptedAppointments(),
         fetchOrderStats(),
-        fetchTodayQueue(),
-        fetchTodaysAppointmentsCount()
+        fetchTodayQueue()
       ]);
+      // Fetch today's appointments count after acceptedAppointments is loaded
+      await fetchTodaysAppointmentsCount();
     };
 
     fetchAllData();
@@ -245,14 +254,27 @@ const Dashboard = () => {
     return `${formattedHour}:${minutes} ${period}`;
   };
 
-  // Helper to determine if a time (HH:mm or HH:mm:ss) today is still upcoming
-  const isUpcomingToday = (timeString) => {
+  // Helper: check if a date string refers to "today"
+  const isSameDayAsToday = (dateString) => {
+    if (!dateString) return false;
+    const d = new Date(dateString);
+    const today = new Date();
+    return (
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate()
+    );
+  };
+
+  // Helper to determine if a date (YYYY-MM-DD) is today and its time (HH:mm or HH:mm:ss) is still upcoming
+  const isUpcomingToday = (dateString, timeString) => {
     if (!timeString) return false;
+    // If date is provided and it's not today, return false. If no date provided, assume today (queue API already filters for today).
+    if (dateString && !isSameDayAsToday(dateString)) return false;
     const [h, m] = timeString.split(':');
     const now = new Date();
     const t = new Date();
     t.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    // Only treat as upcoming if the appointment is for today and time >= now
     return t.getTime() >= now.getTime();
   };
 
@@ -289,6 +311,34 @@ const Dashboard = () => {
     }
   };
 
+  const getAppointmentsForDate = (day) => {
+    if (!day) return [];
+    
+    return acceptedAppointments.filter(appointment => {
+      if (!appointment.preferred_due_date) return false;
+      const dueDate = new Date(appointment.preferred_due_date);
+      return dueDate.getDate() === day && 
+             dueDate.getMonth() === calendarMonth && 
+             dueDate.getFullYear() === calendarYear;
+    });
+  };
+
+  const handleDateMouseEnter = (day, event) => {
+    const appointments = getAppointmentsForDate(day);
+    if (appointments.length > 0) {
+      setHoveredDate({ day, appointments });
+      const rect = event.target.getBoundingClientRect();
+      setTooltipPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10
+      });
+    }
+  };
+
+  const handleDateMouseLeave = () => {
+    setHoveredDate(null);
+  };
+
   const quickStats = [
     { title: "Today's Appointments", value: todaysAppointmentsCount, color: "blue" },
     { title: "Pending Orders", value: orderStats.pending_orders, color: "yellow" },
@@ -297,18 +347,57 @@ const Dashboard = () => {
 
   const [showDetails, setShowDetails] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [hoveredDate, setHoveredDate] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [showQueueModal, setShowQueueModal] = useState(false);
+  const [openedFromDueDates, setOpenedFromDueDates] = useState(false);
+  const [detailsClosing, setDetailsClosing] = useState(false);
+  const [queueClosing, setQueueClosing] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState(null);
+
+  useEffect(() => {
+    const loadOrderForDetails = async () => {
+      if (!showDetails || !selectedAppointment) {
+        setSelectedOrder(null);
+        return;
+      }
+      try {
+        const res = await api.get('/orders');
+        const list = res.data?.data || [];
+        const match = list.find(o => {
+          if (!o) return false;
+          // Direct id matches (order clicked scenarios)
+          if (o.id && selectedAppointment.id && o.id === selectedAppointment.id) return true;
+          // Appointment id matches (common case)
+          if (o.appointment?.id && selectedAppointment.id && o.appointment.id === selectedAppointment.id) return true;
+          // Match by user and exact date/time if available
+          const ou = o.appointment?.user?.id;
+          const su = selectedAppointment.user?.id || selectedAppointment.appointment?.user?.id;
+          const od = o.appointment?.appointment_date || o.appointment?.preferred_due_date;
+          const sd = selectedAppointment.appointment_date || selectedAppointment.preferred_due_date || selectedAppointment.appointment?.appointment_date || selectedAppointment.appointment?.preferred_due_date;
+          const ot = o.appointment?.appointment_time;
+          const st = selectedAppointment.appointment_time || selectedAppointment.appointment?.appointment_time;
+          if (ou && su && ou === su && od && sd && od === sd) {
+            if (!ot || !st || ot === st) return true;
+          }
+          return false;
+        });
+        setSelectedOrder(match || null);
+      } catch (_) {
+        setSelectedOrder(null);
+      }
+    };
+    loadOrderForDetails();
+  }, [showDetails, selectedAppointment]);
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
-      <div className="main-content">
-        <Header />
-        
-        <div className="page-title">
-          <h1>DASHBOARD</h1>
-        </div>
-        
-        <div className="dashboard-content">
+    <div className="page-wrap">
+      <div className="page-title">
+        <h1>DASHBOARD</h1>
+      </div>
+      
+      <div className="dashboard-content">
           <div className="left-panel">
             {/* Quick Stats */}
             <div className="panel quick-stats">
@@ -323,11 +412,12 @@ const Dashboard = () => {
               </div>
             </div>
 
-            
-
             {/* Recent Appointments */}
             <div className="panel recent-appointments">
-              <h3>Recent Appointments</h3>
+              <div className="panel-header">
+                <h3>Recent Appointments</h3>
+                <Link to="/appointments" className="view-all-link">View All</Link>
+              </div>
               <div className="table-container">
                 {isLoading ? (
                   <p>Loading appointments...</p>
@@ -346,7 +436,7 @@ const Dashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {appointments.map((appointment, index) => (
+                      {appointments.slice(0, 5).map((appointment, index) => (
                         <tr key={index}>
                           <td>{formatDateTime(appointment.appointment_date, appointment.appointment_time)}</td>
                           <td>{appointment.user?.name || 'N/A'}</td>
@@ -357,6 +447,7 @@ const Dashboard = () => {
                               style={{ cursor: 'pointer' }}
                               onClick={() => {
                                 setSelectedAppointment(appointment);
+                                setOpenedFromDueDates(false);
                                 setShowDetails(true);
                               }}
                             >
@@ -371,147 +462,217 @@ const Dashboard = () => {
               </div>
             </div>
 
-{/* Live Queue */}
-<div className="panel live-queue">
-  <h3>Live Queue - Today</h3>
-  <div className="queue-info">
-    {queueData.has_queue ? (
-      <>
-        {/* Current Customer */}
-        {queueData.current_customer && isUpcomingToday(queueData.current_customer?.appointment_time) && (
-          <div className="current-customer">
-            <strong>Current Customer:</strong>{' '}
-            <span className="queue-number">
-              #{queueData.current_customer?.queue_number || 'N/A'}
-            </span>{' '}
-            {queueData.current_customer?.name || 'N/A'}
-            <span className="queue-time">
-              ({formatTime(queueData.current_customer?.appointment_time)})
-            </span>
-          </div>
-        )}
+            {/* Live Queue */}
+            <div className="panel live-queue">
+              <div className="panel-header">
+                <h3>Live Queue - Today</h3>
+                <button
+                  type="button"
+                  className="view-all-link"
+                  onClick={() => setShowQueueModal(true)}
+                  disabled={!queueData?.has_queue || !(queueData?.all_orders || []).length}
+                >
+                  View All
+                </button>
+              </div>
+              <div className="queue-info">
+                {queueData.has_queue ? (
+                  <>
+                    {/* Current Customer */}
+                    {queueData.current_customer && isUpcomingToday(
+                      queueData.current_customer?.appointment_date || queueData.current_customer?.appointment?.appointment_date,
+                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                    ) && (
+                      <div className="current-customer">
+                        <strong>Upcoming Customer:</strong>{' '}
+                        <span className="queue-number">
+                          #{queueData.current_customer?.queue_number || 'N/A'}
+                        </span>{' '}
+                        {queueData.current_customer?.name || 'N/A'}
+                        <span className="queue-time">
+                          ({formatTime(queueData.current_customer?.appointment_time)})
+                        </span>
+                      </div>
+                    )}
 
-        {/* Next Customer */}
-        {queueData.next_customer && isUpcomingToday(queueData.next_customer?.appointment_time) && (
-          <div className="next-customer">
-            <strong>Next Customer:</strong>{' '}
-            <span className="queue-number">
-              #{queueData.next_customer?.queue_number || 'N/A'}
-            </span>{' '}
-            {queueData.next_customer?.name || 'N/A'}
-            <span className="queue-time">
-              ({formatTime(queueData.next_customer?.appointment_time)})
-            </span>
-          </div>
-        )}
+                    {/* Next Customer */}
+                    {queueData.next_customer && isUpcomingToday(
+                      queueData.next_customer?.appointment_date || queueData.next_customer?.appointment?.appointment_date,
+                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                    ) && (
+                      <div className="next-customer">
+                        <strong>Next Customer:</strong>{' '}
+                        <span className="queue-number">
+                          #{queueData.next_customer?.queue_number || 'N/A'}
+                        </span>{' '}
+                        {queueData.next_customer?.name || 'N/A'}
+                        <span className="queue-time">
+                          ({formatTime(queueData.next_customer?.appointment_time)})
+                        </span>
+                      </div>
+                    )}
 
-        {/* If both current and next are not upcoming, show message */}
-        {!isUpcomingToday(queueData.current_customer?.appointment_time) &&
-          !isUpcomingToday(queueData.next_customer?.appointment_time) && (
-            <div className="no-queue-message">
-              <div className="queue-status">
-                <span className="status-indicator inactive"></span>
-                <span>{queueData.message || 'No upcoming customers for the rest of today'}</span>
+                    {/* If both current and next are not upcoming, show message */}
+                    {!isUpcomingToday(
+                        queueData.current_customer?.appointment_date || queueData.current_customer?.appointment?.appointment_date,
+                        queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                      ) &&
+                      !isUpcomingToday(
+                        queueData.next_customer?.appointment_date || queueData.next_customer?.appointment?.appointment_date,
+                        queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                      ) && (
+                        <div className="no-queue-message">
+                          <div className="queue-status">
+                            <span className="status-indicator inactive"></span>
+                            <span>{queueData.message || 'No upcoming customers for the rest of today'}</span>
+                          </div>
+                        </div>
+                    )}
+
+                  </>
+                ) : (
+                  <div className="no-queue-message">
+                    <div className="queue-status">
+                      <span className="status-indicator inactive"></span>
+                      <span>{queueData.message || 'No appointments scheduled for today'}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-        )}
 
-      </>
-    ) : (
-      <div className="no-queue-message">
-        <div className="queue-status">
-          <span className="status-indicator inactive"></span>
-          <span>{queueData.message || 'No appointments scheduled for today'}</span>
-        </div>
-      </div>
-    )}
-  </div>
-</div>
-
-            {/* Modal for Appointment Details */}
             {showDetails && selectedAppointment && (
-              <div className="dashboard-modal-bg" onClick={() => setShowDetails(false)}>
-                <div className="dashboard-modal-panel" style={{ position: 'relative', maxHeight: '90vh', width: 'min(700px, 95vw)', fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }} onClick={(e) => e.stopPropagation()}>
+              <div
+                className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+                onClick={() => {
+                  setDetailsClosing(true);
+                  setTimeout(() => {
+                    setShowDetails(false);
+                    setDetailsClosing(false);
+                  }, 200);
+                }}
+              >
+                <div
+                  className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <AiOutlineClose
                     className="dashboard-modal-exit-icon"
-                    onClick={() => setShowDetails(false)}
+                    onClick={() => {
+                      setDetailsClosing(true);
+                      setTimeout(() => {
+                        setShowDetails(false);
+                        setDetailsClosing(false);
+                      }, 200);
+                    }}
                   />
-                  <h2 className="dashboard-modal-title">Appointment Details</h2>
-                  <div className="dashboard-details-container" style={{flexDirection: 'row', gap: '30px', flexWrap: 'wrap'}}>
+                  <h2 className="dashboard-modal-title">Order Details</h2>
+                  <div className="dashboard-details-container" style={{ flexWrap: 'wrap' }}>
                     <div className="dashboard-details-left">
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Full Name</div>
-                        <div className="dashboard-detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.appointment?.user?.name || selectedAppointment.user?.name || 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Queue Number</div>
+                        <div className="dashboard-detail-value">
+                          {selectedOrder?.queue_number ?? selectedAppointment.queue_number ?? selectedAppointment.appointment?.queue_number ?? 'N/A'}
+                        </div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Appointment Date Accepted</div>
+                        <div className="dashboard-detail-value">{(selectedAppointment.appointment?.appointment_date || selectedAppointment.appointment_date) ? new Date(selectedAppointment.appointment?.appointment_date || selectedAppointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
                       </div>
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Service Type</div>
-                        <div className="dashboard-detail-value">{selectedAppointment.service_type}</div>
-                      </div>
-
-                      <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Size</div>
-                        <div className="dashboard-detail-value">
-                          {selectedAppointment.sizes && typeof selectedAppointment.sizes === 'object' && Object.keys(selectedAppointment.sizes).length > 0 ? (
-                            <>
-                              {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
-                                <div key={size}>{size} - {qty} pcs.</div>
-                              ))}
-                            </>
-                          ) : selectedAppointment.sizes ? (
-                            selectedAppointment.sizes
-                          ) : 'N/A'}
-                        </div>
-                      </div>
-
-                      <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Quantity</div>
-                        <div className="dashboard-detail-value">
-                          {selectedAppointment.total_quantity ? `${selectedAppointment.total_quantity} pcs.` : 'N/A'}
-                        </div>
+                        <div className="dashboard-detail-value">{selectedAppointment.appointment?.service_type || selectedAppointment.service_type || 'N/A'}</div>
                       </div>
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Phone Number</div>
-                        <div className="dashboard-detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.appointment?.user?.phone || selectedAppointment.appointment?.user?.phone_number || selectedAppointment.user?.phone || selectedAppointment.user?.phone_number || 'N/A'}</div>
                       </div>
-                      
                       <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Due Date</div>
+                        <div className="dashboard-detail-label">Size</div>
                         <div className="dashboard-detail-value">
-                          {selectedAppointment.preferred_due_date ? formatDate(selectedAppointment.preferred_due_date) : 'N/A'}
+                          {(() => {
+                            const rawSizes = selectedAppointment.appointment?.sizes ?? selectedAppointment.sizes;
+                            if (!rawSizes) return 'N/A';
+                            try {
+                              const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                              if (parsed && typeof parsed === 'object') {
+                                return (
+                                  <>
+                                    {Object.entries(parsed).map(([size, qty]) => (
+                                      <div key={size}>{size} - {qty} pcs.</div>
+                                    ))}
+                                  </>
+                                );
+                              }
+                              return String(rawSizes);
+                            } catch (_) {
+                              return String(rawSizes);
+                            }
+                          })()}
                         </div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Quantity</div>
+                        <div className="dashboard-detail-value">{(selectedAppointment.appointment?.total_quantity ?? selectedAppointment.total_quantity) ? `${selectedAppointment.appointment?.total_quantity ?? selectedAppointment.total_quantity} pcs.` : 'N/A'}</div>
                       </div>
                     </div>
                     <div className="dashboard-details-right">
                       <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Notes</div>
-                        <div className="dashboard-detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
+                        <div className="dashboard-detail-label">Due Date</div>
+                        <div className="dashboard-detail-value">{(selectedAppointment.appointment?.preferred_due_date || selectedAppointment.preferred_due_date) ? new Date(selectedAppointment.appointment?.preferred_due_date || selectedAppointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                       </div>
-                      <div className="dashboard-image-group">
+                      {((selectedAppointment.status === 'Completed' || selectedAppointment.appointment?.status === 'Completed') && (selectedAppointment.total_amount || selectedAppointment.appointment?.total_amount)) && (
+                        <div className="dashboard-detail-group">
+                          <div className="dashboard-detail-label">Total Payment Fee</div>
+                          <div className="dashboard-detail-value">₱{selectedAppointment.total_amount ?? selectedAppointment.appointment?.total_amount}</div>
+                        </div>
+                      )}
+                      {((selectedAppointment.status === 'Completed' || selectedAppointment.appointment?.status === 'Completed') && (selectedAppointment.completed_at || selectedAppointment.appointment?.completed_at)) && (
+                        <div className="dashboard-detail-group">
+                          <div className="dashboard-detail-label">Completion Date</div>
+                          <div className="dashboard-detail-value">{new Date(selectedAppointment.completed_at || selectedAppointment.appointment?.completed_at).toLocaleString()}</div>
+                        </div>
+                      )}
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Current Status</div>
+                        <div className="dashboard-detail-value" style={{ color: getStatusColor(selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status) }}>
+                          {selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Notes</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.appointment?.notes || selectedAppointment.notes || 'No notes provided.'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
                         <div className="dashboard-image-label">Design Image</div>
-                        {selectedAppointment.design_image ? (
-                         <img 
-                         src={selectedAppointment.design_image} 
-                         alt="Jersey Design"
-                         className="dashboard-modal-image"
-                         style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-                       />
+                        {selectedAppointment.appointment?.design_image || selectedAppointment.design_image ? (
+                          <img 
+                            src={selectedAppointment.appointment?.design_image || selectedAppointment.design_image} 
+                            alt="Design" 
+                            className="dashboard-modal-image"
+                            onClick={() => setPreviewImageUrl(selectedAppointment.appointment?.design_image || selectedAppointment.design_image)}
+                          />
                         ) : (
-                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', marginTop: 8 }}>
                             No design image uploaded
                           </div>
                         )}
                       </div>
-                      <div className="dashboard-image-group">
-                        <div className="dashboard-image-label">Gcash Downpayment</div>
-                        {selectedAppointment.gcash_proof ? (
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-image-label">GCash Proof</div>
+                        {selectedAppointment.appointment?.gcash_proof || selectedAppointment.gcash_proof ? (
                           <img 
-                          src={selectedAppointment.gcash_proof} 
-                          alt="Gcash Payment"
-                          className="dashboard-modal-image"
-                          style={{ width: '100%', height: '120px', objectFit: 'cover', border: '1px solid #ddd' }}
-                        />
+                            src={selectedAppointment.appointment?.gcash_proof || selectedAppointment.gcash_proof} 
+                            alt="GCash Payment" 
+                            className="dashboard-modal-image"
+                            onClick={() => setPreviewImageUrl(selectedAppointment.appointment?.gcash_proof || selectedAppointment.gcash_proof)}
+                          />
                         ) : (
-                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', marginTop: 8 }}>
                             No GCash proof uploaded
                           </div>
                         )}
@@ -522,95 +683,228 @@ const Dashboard = () => {
               </div>
             )}
 
+            {/* Image Preview Modal */}
+            {previewImageUrl && (
+              <div
+                className="dashboard-modal-bg animate-fade"
+                onClick={() => setPreviewImageUrl(null)}
+              >
+                <div
+                  className="dashboard-modal-panel animate-pop"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ padding: 12 }}
+                >
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
+                    onClick={() => setPreviewImageUrl(null)}
+                  />
+                  <img
+                    src={previewImageUrl}
+                    alt="Preview"
+                    style={{ maxWidth: '90vw', maxHeight: '80vh', width: 'auto', height: 'auto', borderRadius: 6 }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Live Queue - Full List Modal */}
+            {showQueueModal && (
+              <div
+                className={`dashboard-modal-bg animate-fade${queueClosing ? ' closing' : ''}`}
+                onClick={() => {
+                  setQueueClosing(true);
+                  setTimeout(() => {
+                    setShowQueueModal(false);
+                    setQueueClosing(false);
+                  }, 200);
+                }}
+              >
+                <div
+                  className={`dashboard-modal-panel animate-pop${queueClosing ? ' closing' : ''}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
+                    onClick={() => {
+                      setQueueClosing(true);
+                      setTimeout(() => {
+                        setShowQueueModal(false);
+                        setQueueClosing(false);
+                      }, 200);
+                    }}
+                  />
+                  <h2 className="dashboard-modal-title">Today's Queue</h2>
+                  <div className="table-container" style={{ overflowY: 'auto' }}>
+                    {!(queueData?.all_orders || []).length ? (
+                      <p style={{ padding: '8px 4px', color: '#687076' }}>{queueData?.message || 'No queued customers for today.'}</p>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#e8f4fd' }}>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Queue #</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Name</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Time</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '40%' }}>Service</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(queueData.all_orders || [])
+                            .slice()
+                            .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))
+                            .map((o, i) => (
+                              <tr key={o.id || i}>
+                                <td style={{ padding: '8px' }}>{o.queue_number ?? 'N/A'}</td>
+                                <td style={{ padding: '8px' }}>{o.name || o.appointment?.user?.name || 'N/A'}</td>
+                                <td style={{ padding: '8px' }}>{formatTime(o.appointment_time || o.appointment?.appointment_time)}</td>
+                                <td style={{ padding: '8px' }}>{o.service_type || o.appointment?.service_type || 'N/A'}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
 
           <div className="right-panel">
-            <div className="panel calendar-due-container">
-              {/* Calendar */}
-              <div className="calendar-section">
-                <div className="calendar-header">
-                  <h3>{currentMonthName} {calendarYear}</h3>
-                  <div className="calendar-nav">
-                    <button className="nav-btn" onClick={handlePrevMonth}><FaChevronLeft /></button>
-                    <button className="nav-btn" onClick={handleNextMonth}><FaChevronRight /></button>
-                  </div>
-                </div>
-                <div className="calendar-grid">
-                  <div className="calendar-days">
-                    <span>SUN</span>
-                    <span>MON</span>
-                    <span>TUE</span>
-                    <span>WED</span>
-                    <span>THU</span>
-                    <span>FRI</span>
-                    <span>SAT</span>
-                  </div>
-                  <div className="calendar-dates">
-                    {calendarDays.map((day, index) => {
-                      let isToday = isCurrentMonth && day === todayDate;
-                      let isPast = false;
-                      if (day && (calendarYear < currentYear || (calendarYear === currentYear && (calendarMonth < currentMonth || (calendarMonth === currentMonth && day < todayDate))))) {
-                        isPast = true;
-                      }
-                      return (
-                        <div key={index} className={`calendar-date ${!day ? 'empty' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}`}>
-                          {day && (
-                            <>
-                              <span className="date-number">{day}</span>
-                              {markedDates.includes(day) && <span className="red-dot"></span>}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+            {/* Calendar */}
+            <div className="panel calendar-section">
+              <div className="calendar-header">
+                <h3>{currentMonthName} {calendarYear}</h3>
+                <div className="calendar-nav">
+                  <button className="nav-btn" onClick={handlePrevMonth}><FaChevronLeft /></button>
+                  <button className="nav-btn" onClick={handleNextMonth}><FaChevronRight /></button>
                 </div>
               </div>
-
-              {/* Upcoming Due Dates */}
-              <div className="upcoming-dates-section">
-                <div className="panel-header">
-                  <h3>Upcoming Due Dates</h3>
-                  <Link to="/orders" className="view-all-link">View All</Link>
+              <div className="calendar-grid">
+                <div className="calendar-days">
+                  <span>SUN</span>
+                  <span>MON</span>
+                  <span>TUE</span>
+                  <span>WED</span>
+                  <span>THU</span>
+                  <span>FRI</span>
+                  <span>SAT</span>
                 </div>
-                <div className="due-dates-list">
-                  {acceptedAppointments
-                    .filter(app => {
-                      if (!app.preferred_due_date) return false;
-                      const due = new Date(app.preferred_due_date);
-                      const now = new Date();
-                      // include today and allow showing items that became overdue since yesterday
-                      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-                      return due >= yesterday;
-                    })
-                    .sort((a, b) => new Date(a.preferred_due_date) - new Date(b.preferred_due_date))
-                    .slice(0, 2)
-                    .map((appointment, index) => (
-                      <div key={index} className="due-date-item">
-                        <div className="avatar">
-                          <FaUser />
-                        </div>
-                        <div className="due-date-info">
-                          <div className="customer-name">{appointment.user?.name || 'N/A'}</div>
-                          <div className="service">{appointment.service_type}</div>
-                          <div className="date-time">{appointment.preferred_due_date ? formatDate(appointment.preferred_due_date) : 'N/A'}</div>
-                        </div>
+                <div className="calendar-dates">
+                  {calendarDays.map((day, index) => {
+                    let isToday = isCurrentMonth && day === todayDate;
+                    let isPast = false;
+                    if (day && (calendarYear < currentYear || (calendarYear === currentYear && (calendarMonth < currentMonth || (calendarMonth === currentMonth && day < todayDate))))) {
+                      isPast = true;
+                    }
+                    const hasAppointments = day && getAppointmentsForDate(day).length > 0;
+                    return (
+                      <div 
+                        key={index} 
+                        className={`calendar-date ${!day ? 'empty' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${hasAppointments ? 'has-appointments' : ''}`}
+                        onMouseEnter={(e) => handleDateMouseEnter(day, e)}
+                        onMouseLeave={handleDateMouseLeave}
+                      >
+                        {day && (
+                          <>
+                            <span className="date-number">{day}</span>
+                            {markedDates.includes(day) && <span className="red-dot"></span>}
+                          </>
+                        )}
                       </div>
-                    ))}
-                  {acceptedAppointments.filter(app => {
-                    if (!app.preferred_due_date) return false;
-                    const due = new Date(app.preferred_due_date);
-                    const now = new Date();
-                    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-                    return due >= yesterday;
-                  }).length === 0 && (
-                    <p style={{ color: '#687076', padding: '8px 4px' }}>No upcoming due dates.</p>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             </div>
+
+            {/* Calendar Tooltip */}
+            {hoveredDate && (
+              <div 
+                className="calendar-tooltip"
+                style={{
+                  position: 'fixed',
+                  left: tooltipPosition.x,
+                  top: tooltipPosition.y,
+                  transform: 'translateX(-50%)',
+                  zIndex: 1000
+                }}
+              >
+                <div className="tooltip-content">
+                  <div className="tooltip-header">
+                    {monthNames[calendarMonth]} {hoveredDate.day}
+                  </div>
+                  {hoveredDate.appointments.map((appointment, index) => (
+                    <div key={index} className="tooltip-item">
+                      <div className="tooltip-customer">{appointment.user?.name || 'N/A'}</div>
+                      <div className="tooltip-service">{appointment.service_type}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Upcoming Due Dates */}
+            <div className="panel upcoming-dates-section">
+              <div className="panel-header">
+                <h3>Upcoming Due Dates</h3>
+                <Link to="/orders" className="view-all-link">View All</Link>
+              </div>
+              <div className="due-dates-list">
+                {acceptedAppointments
+                  .filter(app => {
+                    if (!app.preferred_due_date) return false;
+                    const due = new Date(app.preferred_due_date);
+                    const now = new Date();
+                    // Only show items for current month and next month
+                    const currentMonth = now.getMonth();
+                    const currentYear = now.getFullYear();
+                    const dueMonth = due.getMonth();
+                    const dueYear = due.getFullYear();
+                    
+                    // Include current month and next month only
+                    const isCurrentMonth = dueMonth === currentMonth && dueYear === currentYear;
+                    const isNextMonth = dueMonth === (currentMonth + 1) % 12 && dueYear === (currentMonth === 11 ? currentYear + 1 : currentYear);
+                    
+                    return isCurrentMonth || isNextMonth;
+                  })
+                  .sort((a, b) => new Date(a.preferred_due_date) - new Date(b.preferred_due_date))
+                  .slice(0, 2)
+                  .map((appointment, index) => (
+                    <div
+                      key={index}
+                      className="due-date-item"
+                      onClick={() => { setSelectedAppointment(appointment); setOpenedFromDueDates(true); setShowDetails(true); }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="avatar">
+                        <FaUser />
+                      </div>
+                      <div className="due-date-info">
+                        <div className="customer-name">{appointment.user?.name || 'N/A'}</div>
+                        <div className="service">{appointment.service_type}</div>
+                        <div className="date-time">{appointment.preferred_due_date ? formatDate(appointment.preferred_due_date) : 'N/A'}</div>
+                      </div>
+                    </div>
+                  ))}
+                {acceptedAppointments.filter(app => {
+                  if (!app.preferred_due_date) return false;
+                  const due = new Date(app.preferred_due_date);
+                  const now = new Date();
+                  const currentMonth = now.getMonth();
+                  const currentYear = now.getFullYear();
+                  const dueMonth = due.getMonth();
+                  const dueYear = due.getFullYear();
+                  
+                  const isCurrentMonth = dueMonth === currentMonth && dueYear === currentYear;
+                  const isNextMonth = dueMonth === (currentMonth + 1) % 12 && dueYear === (currentMonth === 11 ? currentYear + 1 : currentYear);
+                  
+                  return isCurrentMonth || isNextMonth;
+                }).length === 0 && (
+                  <p style={{ color: '#687076', padding: '8px 4px' }}>No upcoming due dates.</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
       </div>
     </div>
   );

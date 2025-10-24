@@ -9,12 +9,6 @@ const Header = () => {
   const adminData = JSON.parse(localStorage.getItem('adminData') || '{}');
   const adminToken = localStorage.getItem('adminToken');
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminData');
-    navigate('/login');
-  };
-
   if (!adminToken) {
     navigate('/login');
     return null;
@@ -32,20 +26,6 @@ const Header = () => {
             </div>
           </Link>
           <span className="user-role">{adminData.fullname || 'Administrator'}</span>
-          <button 
-            onClick={handleLogout}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#666',
-              cursor: 'pointer',
-              marginLeft: '15px',
-              fontSize: '14px',
-              textDecoration: 'underline'
-            }}
-          >
-            Logout
-          </button>
         </div>
       </div>
     </header>
