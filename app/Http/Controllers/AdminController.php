@@ -65,4 +65,30 @@ class AdminController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get admin contact information (public endpoint for customers)
+     * Customers need this for payment instructions
+     */
+    public function getContactInfo()
+    {
+        // Get the first admin (or you could get a specific admin)
+        $admin = \App\Models\Admin::first();
+
+        if (!$admin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Admin contact information not available'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'phone' => $admin->phone ?? '0912 345 6789',
+                'email' => $admin->email ?? null,
+                'address' => $admin->address ?? null,
+            ],
+        ]);
+    }
 }

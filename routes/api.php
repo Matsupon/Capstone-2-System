@@ -32,8 +32,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/profile', [ProfileController::class, 'update']);
+        
+        // Admin profile endpoints (admin only)
         Route::patch('/admin/profile', [AdminController::class, 'update']);
         Route::get('/admin/profile', [AdminController::class, 'me']);
+        
+        // Public endpoint for customers to get admin contact info
+        Route::get('/admin/contact', [AdminController::class, 'getContactInfo']);
 
     Route::get('/appointments/test', [AppointmentController::class, 'test']);
     
