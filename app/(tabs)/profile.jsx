@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', password: '' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [showPassword, setShowPassword] = useState(false);
 
   const showSuccessMessage = () => {
     setShowSuccessModal(true);
@@ -275,14 +276,28 @@ export default function ProfilePage() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={[styles.input, isEditing && styles.inputEditing]}
-            value={isEditing ? form.password : '********'}
-            secureTextEntry
-            editable={isEditing}
-            onChangeText={(t) => setForm((p) => ({ ...p, password: t }))}
-            placeholder={isEditing ? 'Leave blank to keep current password' : undefined}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={[styles.passwordInput, isEditing && styles.inputEditing]}
+              value={isEditing ? form.password : '********'}
+              secureTextEntry={!showPassword}
+              editable={isEditing}
+              onChangeText={(t) => setForm((p) => ({ ...p, password: t }))}
+              placeholder={isEditing ? 'Leave blank to keep current password' : undefined}
+            />
+            {isEditing && (
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <MaterialIcons 
+                  name={showPassword ? 'visibility' : 'visibility-off'} 
+                  size={24} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -406,6 +421,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#f9f9f9',
+  },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    paddingRight: 45,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 10,
+    padding: 5,
   },
   inputEditing: {
     borderColor: '#4682B4',

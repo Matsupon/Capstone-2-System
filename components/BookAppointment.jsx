@@ -17,6 +17,7 @@ const SERVICE_TYPES = [
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
 // Generate time slots with 30-minute intervals (8:00 AM to 8:00 PM)
+// Excluding lunch time (12:00 PM and 12:30 PM)
 const generateTimeSlots = () => {
   const slots = [];
   for (let hour = 8; hour <= 20; hour++) {
@@ -24,7 +25,10 @@ const generateTimeSlots = () => {
       const hourStr = hour < 10 ? `0${hour}` : `${hour}`;
       const minuteStr = minute < 10 ? `0${minute}` : `${minute}`;
       const time = `${hourStr}:${minuteStr}`;
-      slots.push(time);
+      // Exclude lunch time (12:00 and 12:30)
+      if (time !== '12:00' && time !== '12:30') {
+        slots.push(time);
+      }
     }
   }
   return slots;
@@ -55,6 +59,7 @@ export default function BookAppointment({ visible, onClose }) {
   const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789'); // Default fallback
       
 
   useEffect(() => {
@@ -85,6 +90,22 @@ export default function BookAppointment({ visible, onClose }) {
       console.log("Current token:", token);
     };
     checkToken();
+    
+    // Fetch admin phone number (using customer-accessible endpoint)
+    const fetchAdminPhone = async () => {
+      try {
+        const response = await api.get('/admin/contact');
+        console.log('Admin contact response:', response.data);
+        if (response.data?.success && response.data?.data?.phone) {
+          setAdminPhoneNumber(response.data.data.phone);
+          console.log('Admin phone number set to:', response.data.data.phone);
+        }
+      } catch (error) {
+        console.log('Could not fetch admin phone, using default:', error);
+        // Fallback to default if API fails
+      }
+    };
+    fetchAdminPhone();
   }, [visible]);
 
   useEffect(() => {
@@ -154,7 +175,7 @@ export default function BookAppointment({ visible, onClose }) {
   // No pre-choice dialog. For design images we enable cropping by default; for gcash we don't crop.
 
   // Validate step 1 inputs before proceeding to step 2
-  const handleNextStep = () => {
+  const handleNextStep1 = () => {
     const total = Object.values(sizes).reduce((a, b) => a + (b || 0), 0);
     if (!serviceType) {
       Alert.alert('Missing Service Type', 'Please select a service type to continue.');
@@ -169,6 +190,19 @@ export default function BookAppointment({ visible, onClose }) {
       return;
     }
     setStep(2);
+  };
+
+  // Validate step 2 inputs before proceeding to step 3
+  const handleNextStep2 = () => {
+    if (!designImage && !gcashImage) {
+      Alert.alert('Missing Files', 'Please upload at least one file to continue.');
+      return;
+    }
+    if (!gcashImage) {
+      Alert.alert('Missing GCash Proof', 'Please upload your GCash payment proof to continue.');
+      return;
+    }
+    setStep(3);
   };
 
   const formatTo12Hour = (time24) => {
@@ -225,11 +259,7 @@ export default function BookAppointment({ visible, onClose }) {
 
   const handleBookAppointment = async () => {
     try {
-      // Step 2 validations with specific messages
-      if (!gcashImage) {
-        Alert.alert('Missing GCash Proof', 'Please upload your GCash payment proof to continue.');
-        return;
-      }
+      // Step 3 validations with specific messages
       if (!preferredDueDateRaw) {
         Alert.alert('Missing Preferred Due Date', 'Please select your preferred due date.');
         return;
@@ -344,6 +374,32 @@ export default function BookAppointment({ visible, onClose }) {
     }
   };
 
+  // Progress Indicator Component
+  const ProgressIndicator = () => (
+    <View style={styles.progressContainer}>
+      <View style={styles.progressStep}>
+        <View style={[styles.progressCircle, step >= 1 && styles.progressCircleActive]}>
+          <Text style={[styles.progressNumber, step >= 1 && styles.progressNumberActive]}>1</Text>
+        </View>
+        <Text style={[styles.progressLabel, step >= 1 && styles.progressLabelActive]}>Details</Text>
+      </View>
+      <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
+      <View style={styles.progressStep}>
+        <View style={[styles.progressCircle, step >= 2 && styles.progressCircleActive]}>
+          <Text style={[styles.progressNumber, step >= 2 && styles.progressNumberActive]}>2</Text>
+        </View>
+        <Text style={[styles.progressLabel, step >= 2 && styles.progressLabelActive]}>Upload</Text>
+      </View>
+      <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
+      <View style={styles.progressStep}>
+        <View style={[styles.progressCircle, step >= 3 && styles.progressCircleActive]}>
+          <Text style={[styles.progressNumber, step >= 3 && styles.progressNumberActive]}>3</Text>
+        </View>
+        <Text style={[styles.progressLabel, step >= 3 && styles.progressLabelActive]}>Schedule</Text>
+      </View>
+    </View>
+  );
+
   return (
     <Modal
       visible={visible}
@@ -352,30 +408,37 @@ export default function BookAppointment({ visible, onClose }) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={step === 1 ? onClose : () => setStep(step - 1)} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={28} color="#222" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Book an Appointment</Text>
+        </View>
+
+        {/* Progress Indicator */}
+        <ProgressIndicator />
+
         {step === 1 ? (
           <View style={{ flex: 1 }}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity onPress={onClose} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={24} color="#222" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Book an Appointment</Text>
-            </View>
-
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              {/* Section Title */}
+              <Text style={styles.sectionTitle}>🧾 Order Details</Text>
+              
               <Text style={styles.label}>Select Service Type:</Text>
               <TouchableOpacity style={styles.inputRow} onPress={() => setServiceDropdown(!serviceDropdown)}>
-                <MaterialCommunityIcons name="tshirt-crew" size={22} color="#4682B4" style={{ marginRight: 10 }} />
-                <Text style={{ flex: 1, color: serviceType ? '#000' : '#aaa' }}>
+                <MaterialCommunityIcons name="tshirt-crew" size={24} color="#4682B4" style={{ marginRight: 10 }} />
+                <Text style={{ flex: 1, color: serviceType ? '#000' : '#aaa', fontSize: 16 }}>
                   {serviceType || 'Select service...'}
                 </Text>
-                <MaterialIcons name={serviceDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={22} color="#222" />
+                <MaterialIcons name={serviceDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={24} color="#222" />
               </TouchableOpacity>
 
               {serviceDropdown && (
                 <View style={styles.dropdownMenu}>
                   {SERVICE_TYPES.map((type) => (
                     <TouchableOpacity key={type} style={styles.dropdownItem} onPress={() => { setServiceType(type); setServiceDropdown(false); }}>
-                      <Text style={{ color: '#222' }}>{type}</Text>
+                      <Text style={{ color: '#222', fontSize: 16 }}>{type}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -390,11 +453,11 @@ export default function BookAppointment({ visible, onClose }) {
                   >
                     <MaterialIcons
                       name={sizes[size] ? 'check-box' : 'check-box-outline-blank'}
-                      size={22}
+                      size={24}
                       color={sizes[size] ? '#4682B4' : '#aaa'}
                     />
                   </TouchableOpacity>
-                  <Text style={{ flex: 1 }}>{size}</Text>
+                  <Text style={{ flex: 1, fontSize: 16 }}>{size}</Text>
                   {sizes[size] !== undefined && (
                     <TextInput
                       style={[styles.inputField, { width: 80, height: 40, marginBottom: 0 }]}
@@ -421,139 +484,153 @@ export default function BookAppointment({ visible, onClose }) {
                 placeholderTextColor="#aaa"
               />
 
-              <Text style={[styles.label, { marginTop: 18 }]}>Additional Information:</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="Type 'None' if don't have any."
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                placeholderTextColor="#aaa"
-              />
-
-              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDesignImage, true)}>
-                <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
-                <Text style={{ color: '#687076' }}>Upload Design if applicable</Text>
-                {designImage && <Image source={{ uri: designImage }} style={styles.uploadedImg} />}
-              </TouchableOpacity>
-
-              <View style={{ alignItems: 'flex-end', marginTop: 18 }}>
+              <View style={{ alignItems: 'center', marginTop: 30 }}>
                 <TouchableOpacity
-                  style={styles.nextBtn}
-                  onPress={handleNextStep}
+                  style={styles.nextBtnCentered}
+                  onPress={handleNextStep1}
                 >
-                  <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 16 }}>Next</Text>
-                  <MaterialIcons name="chevron-right" size={22} color="#222" />
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Next</Text>
+                  <MaterialIcons name="chevron-right" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        ) : step === 2 ? (
+          <View style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              {/* Section Title */}
+              <Text style={styles.sectionTitle}>📎 Upload Files</Text>
+
+              <Text style={styles.label}>📷 Design Reference (Optional)</Text>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDesignImage, true)}>
+                <MaterialIcons name="photo-camera" size={32} color="#687076" style={{ marginRight: 10 }} />
+                <Text style={{ color: '#687076', fontSize: 16 }}>Upload Design if applicable</Text>
+              </TouchableOpacity>
+              {designImage && <Image source={{ uri: designImage }} style={styles.uploadedPreview} />}
+
+              <View style={styles.gcashBox}>
+                <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
+                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
+                <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>{adminPhoneNumber}</Text></Text>
+              </View>
+
+              <Text style={styles.label}>💸 GCash Payment Proof (Required)</Text>
+              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage, true)}>
+                <MaterialIcons name="photo-camera" size={32} color="#687076" style={{ marginRight: 10 }} />
+                <Text style={{ color: '#687076', fontSize: 16 }}>Upload Gcash payment proof</Text>
+              </TouchableOpacity>
+              {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedPreview} />}
+
+              <View style={{ alignItems: 'center', marginTop: 30 }}>
+                <TouchableOpacity
+                  style={styles.nextBtnCentered}
+                  onPress={handleNextStep2}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Next</Text>
+                  <MaterialIcons name="chevron-right" size={24} color="#fff" />
                 </TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         ) : (
-          <View style={{ flex: 1 }}>
-            {/* Back header for Step 2 */}
-            <View style={styles.headerRow}>
-              <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={24} color="#222" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Payment & Schedule</Text>
-            </View>
-            <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.gcashBox}>
-                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
-                <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>0912 345 6789</Text></Text>
-              </View>
+<View style={{ flex: 1 }}>
+  <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    {/* Section Title */}
+    <Text style={styles.sectionTitle}>🗓️ Appointment Schedule</Text>
 
-              <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setGcashImage, true)}>
-                <MaterialIcons name="photo-camera" size={28} color="#687076" style={{ marginRight: 10 }} />
-                <Text style={{ color: '#687076' }}>Upload Gcash payment proof</Text>
-                {gcashImage && <Image source={{ uri: gcashImage }} style={styles.uploadedImg} />}
-              </TouchableOpacity>
+    <Text style={[styles.label, { fontSize: 18 }]}>📅 Preferred Due Date</Text>
+    <Text style={[styles.helperText, { fontSize: 15 }]}>When do you want it finished?</Text>
+    <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
+      <Text style={{ color: preferredDueDate ? '#000' : '#aaa', fontSize: 17 }}>
+        {preferredDueDate || 'Pick a date'}
+      </Text>
+    </TouchableOpacity>
+    <DateTimePickerModal
+      isVisible={isDatePickerVisible}
+      mode="date"
+      onConfirm={handleConfirm}
+      onCancel={hideDatePicker}
+      minimumDate={new Date()}
+    />
 
-              <Text style={styles.label}>Preferred Due Date (When do you want it finished?)</Text>
-              <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
-                <Text style={{ color: preferredDueDate ? '#000' : '#aaa' }}>
-                  {preferredDueDate || 'Pick a date'}
-                </Text>
-              </TouchableOpacity>
-              <DateTimePickerModal
-                isVisible={isDatePickerVisible}
-                mode="date"
-                onConfirm={handleConfirm}
-                onCancel={hideDatePicker}
-                minimumDate={new Date()}
-              />
+    <Text style={[styles.label, { fontSize: 18 }]}>📅 Select Date and Time</Text>
+    <TouchableOpacity onPress={showAppointmentDatePicker} style={styles.inputField}>
+      <Text style={{ color: appointmentDate ? '#000' : '#aaa', fontSize: 17 }}>
+        {appointmentDate || 'Pick appointment date'}
+      </Text>
+    </TouchableOpacity>
+    <DateTimePickerModal
+      isVisible={isAppointmentDatePickerVisible}
+      mode="date"
+      onConfirm={handleAppointmentDateConfirm}
+      onCancel={hideAppointmentDatePicker}
+      minimumDate={new Date()}
+    />
 
-              <Text style={styles.label}>Select Date and Time to Book Appointment</Text>
-              <TouchableOpacity onPress={showAppointmentDatePicker} style={styles.inputField}>
-                <Text style={{ color: appointmentDate ? '#000' : '#aaa' }}>
-                  {appointmentDate || 'Pick appointment date'}
-                </Text>
-              </TouchableOpacity>
-              <DateTimePickerModal
-                isVisible={isAppointmentDatePickerVisible}
-                mode="date"
-                onConfirm={handleAppointmentDateConfirm}
-                onCancel={hideAppointmentDatePicker}
-                minimumDate={new Date()}
-              />
-
-              {appointmentDate && (
-                <>
-                  <Text style={styles.label}>Select Time</Text>
-                  <TouchableOpacity style={styles.inputRow} onPress={showAppointmentTimePicker}>
-                    <MaterialIcons name="schedule" size={22} color="#4682B4" style={{ marginRight: 10 }} />
-                    <Text style={{ flex: 1, color: appointmentTime ? '#000' : '#aaa' }}>
-                      {appointmentTime || 'Select time...'}
-                    </Text>
-                    <MaterialIcons name={timeDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={22} color="#222" />
-                  </TouchableOpacity>
-
-                  {timeDropdown && (
-  <View style={styles.dropdownMenu}>
-    {generateTimeSlots().map((time) => {
-      const isAvailable = availableSlots.includes(time);
-      return (
-        <TouchableOpacity
-          key={time}
-          style={[
-            styles.dropdownItem, 
-            !isAvailable && styles.unavailableSlot
-          ]}
-          onPress={() => isAvailable && handleTimeSelect(time)}
-          disabled={!isAvailable}
-        >
-          <Text style={{
-            color: isAvailable ? '#222' : '#aaa',
-            fontWeight: isAvailable ? '600' : '400'
-          }}>
-            {formatTo12Hour(time)}
-            {!isAvailable && " (Not Available)"}
+    {appointmentDate && (
+      <>
+        <Text style={[styles.label, { fontSize: 17 }]}>Select Time</Text>
+        <TouchableOpacity style={styles.inputRow} onPress={showAppointmentTimePicker}>
+          <MaterialIcons name="schedule" size={24} color="#4682B4" style={{ marginRight: 10 }} />
+          <Text style={{ flex: 1, color: appointmentTime ? '#000' : '#aaa', fontSize: 17 }}>
+            {appointmentTime || 'Select time...'}
           </Text>
+          <MaterialIcons
+            name={timeDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+            size={24}
+            color="#222"
+          />
         </TouchableOpacity>
-      );
-    })}
-  </View>
-)}
-                </>
-              )}
-            </ScrollView>
 
-            <TouchableOpacity 
-              style={[styles.bookBtn, isLoading && styles.bookBtnDisabled]} 
-              onPress={handleBookAppointment}
-              disabled={isLoading}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
-                {isLoading ? 'Booking...' : 'Book an Appointment'}
-              </Text>
-            </TouchableOpacity>
+        {timeDropdown && (
+          <View style={styles.dropdownMenu}>
+            {generateTimeSlots().map((time) => {
+              const isAvailable = availableSlots.includes(time);
+              return (
+                <TouchableOpacity
+                  key={time}
+                  style={[
+                    styles.dropdownItem,
+                    !isAvailable && styles.unavailableSlot,
+                  ]}
+                  onPress={() => isAvailable && handleTimeSelect(time)}
+                  disabled={!isAvailable}
+                >
+                  <Text
+                    style={{
+                      color: isAvailable ? '#222' : '#aaa',
+                      fontWeight: isAvailable ? '600' : '400',
+                      fontSize: 16,
+                    }}
+                  >
+                    {formatTo12Hour(time)}
+                    {!isAvailable && ' (Not Available)'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+        )}
+      </>
+    )}
+  </ScrollView>
+
+  <TouchableOpacity
+    style={[styles.bookBtn, isLoading && styles.bookBtnDisabled]}
+    onPress={handleBookAppointment}
+    disabled={isLoading}
+  >
+    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+      {isLoading ? 'Booking...' : 'Book an Appointment'}
+    </Text>
+  </TouchableOpacity>
+</View>
         )}
 
         {successVisible && (
           <Animated.View style={[styles.successPopup, { opacity: fadeAnim }]}>
-            <MaterialIcons name="check-circle" size={40} color="#22C55E" />
-            <Text style={{ fontWeight: 'bold', fontSize: 16, marginTop: 8, textAlign: 'center' }}>
+            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center' }}>
               You have successfully booked an appointment!
             </Text>
           </Animated.View>
@@ -581,7 +658,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#222',
     flex: 1,
@@ -598,6 +675,7 @@ const styles = StyleSheet.create({
     borderColor: '#4682B4',
   },
   label: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#222',
     marginBottom: 6,
@@ -611,7 +689,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     paddingHorizontal: 12,
-    height: 48,
+    height: 52,
     marginBottom: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -629,7 +707,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dropdownItem: {
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -639,10 +717,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     paddingHorizontal: 12,
-    height: 48,
+    height: 52,
     marginBottom: 8,
     color: '#222',
-    fontSize: 15,
+    fontSize: 17,
   },
   uploadBox: {
     backgroundColor: '#fff',
@@ -687,7 +765,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   gcashLabel: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#222',
     marginBottom: 6,
   },
@@ -721,5 +799,89 @@ const styles = StyleSheet.create({
   unavailableSlot: {
     backgroundColor: '#f8f8f8',
     opacity: 0.7
-  }
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  progressStep: {
+    alignItems: 'center',
+  },
+  progressCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  progressCircleActive: {
+    backgroundColor: '#3B82F6',
+  },
+  progressNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#999',
+  },
+  progressNumberActive: {
+    color: '#fff',
+  },
+  progressLabel: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '500',
+  },
+  progressLabelActive: {
+    color: '#3B82F6',
+    fontWeight: 'bold',
+  },
+  progressLine: {
+    width: 50,
+    height: 2,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 8,
+  },
+  progressLineActive: {
+    backgroundColor: '#3B82F6',
+  },
+  sectionTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#222',
+    textAlign: 'center',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  nextBtnCentered: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  uploadedPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    marginTop: 10,
+    marginBottom: 16,
+    resizeMode: 'cover',
+  },
+  helperText: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
 });
