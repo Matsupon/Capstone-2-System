@@ -399,12 +399,24 @@ const Appointments = () => {
 
           {/* Queue Confirmation Modal */}
           {queueConfirmId !== null && (
-            <div className="modal-bg" onClick={() => setQueueConfirmId(null)}>
-              <div className="modal-panel queue-confirm-modal" onClick={(e) => e.stopPropagation()}>
-                <h3>Add this appointment to the queue?</h3>
-                <div className="queue-confirm-btns">
-                  <button className="yes" onClick={confirmAddToQueue}>Yes</button>
-                  <button className="no" onClick={() => setQueueConfirmId(null)}>No</button>
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setQueueConfirmId(null)}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Add this appointment to the queue?</h3>
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => setQueueConfirmId(null)}
+                  >
+                    No
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={confirmAddToQueue}
+                  >
+                    Yes
+                  </button>
                 </div>
               </div>
             </div>
@@ -420,12 +432,24 @@ const Appointments = () => {
 
           {/* Remove Confirmation Modal */}
           {removeId !== null && (
-            <div className="modal-bg" onClick={() => setRemoveId(null)}>
-              <div className="modal-panel remove-modal" onClick={(e) => e.stopPropagation()}>
-                <h3>Are you sure you want to delete this appointment?</h3>
-                <div className="remove-btns">
-                  <button className="yes" onClick={confirmRemove}>Yes</button>
-                  <button className="no" onClick={() => setRemoveId(null)}>No</button>
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setRemoveId(null)}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure you want to delete this appointment?</h3>
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={confirmRemove}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => setRemoveId(null)}
+                  >
+                    No
+                  </button>
                 </div>
               </div>
             </div>

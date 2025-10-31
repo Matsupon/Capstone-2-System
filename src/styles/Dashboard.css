@@ -127,6 +127,8 @@
   flex-direction: column;
 }
 
+.panel.quick-stats { flex: 0 0 auto; }
+
 .panel::before {
   content: '';
   position: absolute;
@@ -164,12 +166,12 @@
 }
 
 .stat-card {
-  padding: 12px 8px;
+  padding: 10px 8px;
   border-radius: 8px;
   text-align: center;
   color: var(--text-primary);
   font-weight: 700;
-  min-height: 60px;
+  min-height: 52px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -217,6 +219,15 @@
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
+.stat-card.teal {
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.12) 0%, rgba(13, 148, 136, 0.06) 100%);
+  border-color: rgba(13, 148, 136, 0.3);
+}
+
+.stat-card.teal::before {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+}
+
 .stat-card:hover {
   transform: none;
   box-shadow: none;
@@ -254,15 +265,29 @@
   max-height: 200px;
 }
 
-/* Hide scrollbar UI for internal scroll containers while preserving scroll */
-.table-container,
+/* Style the scrollbar for table-container to make it visible */
+.table-container::-webkit-scrollbar {
+  width: 8px;
+}
+.table-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.table-container::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.4);
+  border-radius: 4px;
+}
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.6);
+}
+
+/* Hide scrollbar UI for other internal scroll containers while preserving scroll */
 .queue-info,
 .queue-items,
 .dashboard-modal-panel__do_not_hide_scrollbar_placeholder {
   -ms-overflow-style: none; /* IE/Edge */
   scrollbar-width: none; /* Firefox */
 }
-.table-container::-webkit-scrollbar,
 .queue-info::-webkit-scrollbar,
 .queue-items::-webkit-scrollbar,
 .dashboard-modal-panel__do_not_hide_scrollbar_placeholder::-webkit-scrollbar {
@@ -309,10 +334,10 @@ td {
 }
 
 /* Recent Appointments: smaller table like Orders */
-.recent-appointments .table-container { max-height: 160px; }
+.recent-appointments .table-container { max-height: 140px; }
 .recent-appointments thead tr { background: #e8f4fd; }
 .recent-appointments table { font-size: clamp(11px, 1.3vw, 13px); }
-.recent-appointments th { font-size: clamp(10px, 1.4vw, 13px); padding: 6px; }
+.recent-appointments th { font-size: clamp(9px, 1.2vw, 11px); padding: 4px; }
 .recent-appointments td { font-size: clamp(10px, 1.3vw, 13px); padding: 6px; }
 
 .action-link {
@@ -984,13 +1009,13 @@ td {
   }
   
   .stats-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 4px;
   }
   
   .stat-card {
     padding: 6px 4px;
-    min-height: 45px;
+    min-height: 44px;
   }
   
   .table-container {
@@ -1075,17 +1100,17 @@ td {
   
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
 .stat-card {
-  padding: 10px 8px; /* Reduced padding */
+  padding: 8px 6px;
   border-radius: 6px;
   text-align: center;
   color: #4B5563;
   font-weight: 600;
-  min-height: 60px; /* Added fixed height */
+  min-height: 42px;
   display: flex;
   flex-direction: column;
   justify-content: center;

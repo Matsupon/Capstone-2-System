@@ -9,8 +9,9 @@ const getStatusColor = (status) => {
     case 'Ongoing':
       return '#cddc39';
     case 'Completed':
-    case 'Finished':
       return '#4caf50';
+    case 'Finished':
+      return '#2196f3';
     case 'Pending':
       return '#ff9800';
     case 'Ready to Check':
@@ -221,23 +222,11 @@ const Customers = () => {
                           <div className="customers-modal-detail-label">Phone Number</div>
                           <div className="customers-modal-detail-value">{order.phone}</div>
 
-                          <div className="customers-modal-detail-label">Current Status</div>
-                          <div className="customers-modal-detail-value" style={{ color: getStatusColor(order.status) }}>
-                            {order.status}
-                          </div>
-
-                          {order.status === 'Completed' && (
-                            <>
-                              <div className="customers-modal-detail-label">Total Payment Fee</div>
-                              <div className="customers-modal-detail-value">₱{order.paymentFee?.toLocaleString() || '0.00'}</div>
-                            </>
-                          )}
+                          <div className="customers-modal-detail-label">Notes</div>
+                          <div className="customers-modal-detail-value">{order.notes || 'N/A'}</div>
                         </div>
 
                         <div className="customers-modal-details-right">
-                          <div className="customers-modal-detail-label">Notes</div>
-                          <div className="customers-modal-detail-value">{order.notes || 'N/A'}</div>
-
                           {order.designImg && (
                             <>
                               <div className="customers-modal-image-label">Design Image</div>
@@ -264,9 +253,9 @@ const Customers = () => {
                             </>
                           )}
 
-                          {order.feedback && (
-                            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #E5E5E5' }}>
-                              <div className="customers-modal-detail-label">Feedback</div>
+                          <div className="customers-modal-detail-label" style={{ marginTop: order.designImg || order.gcashImg ? 12 : 0 }}>Feedback</div>
+                          {order.feedback ? (
+                            <div>
                               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
                                 {[1, 2, 3, 4, 5].map((v) => (
                                   <span key={v} style={{ color: v <= (order.feedback.rating || 0) ? '#f5a623' : '#ccc', fontSize: 16, marginRight: 2 }}>★</span>
@@ -295,6 +284,10 @@ const Customers = () => {
                                 )}
                               </div>
                             </div>
+                          ) : (
+                            <div className="customers-modal-detail-value" style={{ fontStyle: 'italic', color: '#999' }}>
+                              No feedbacks
+                            </div>
                           )}
                         </div>
                       </div>
@@ -309,9 +302,9 @@ const Customers = () => {
         </div>
       )}
 
-      {/* Image Modal for Zoom - reuse Dashboard/Orders design */}
+      {/* Image Modal for Zoom - ensure above profile modal */}
       {showImageModal && selectedImage && (
-        <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
+        <div className="dashboard-modal-bg animate-fade customers-zoom" onClick={() => setShowImageModal(false)}>
           <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
             <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
             <img

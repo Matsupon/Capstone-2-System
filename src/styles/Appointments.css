@@ -252,7 +252,6 @@ input[type="checkbox"]:checked::before {
   overflow-y: auto;
   position: relative;
   box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
   padding: 24px;
 }
 
@@ -382,9 +381,9 @@ input[type="checkbox"]:checked::before {
 /* Success Popups */
 .popup-queue-success {
   position: fixed;
-  top: 40px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
@@ -394,8 +393,7 @@ input[type="checkbox"]:checked::before {
   z-index: 1002;
   text-align: center;
   min-width: 350px;
-  animation: fadeInDown 0.5s ease;
-  position: relative;
+  animation: fadeInCenter 0.5s ease;
   overflow: hidden;
 }
 
@@ -421,9 +419,9 @@ input[type="checkbox"]:checked::before {
 /* Delete Success Popup */
 .popup-delete-success {
   position: fixed;
-  top: 40px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
@@ -433,8 +431,7 @@ input[type="checkbox"]:checked::before {
   z-index: 1002;
   text-align: center;
   min-width: 350px;
-  animation: fadeInDown 0.5s ease;
-  position: relative;
+  animation: fadeInCenter 0.5s ease;
   overflow: hidden;
 }
 
@@ -745,6 +742,7 @@ input[type="checkbox"]:checked::before {
 @keyframes apptModalFadeOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes apptModalPopIn { 0% { opacity: 0; transform: translateY(10px) scale(0.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes apptModalPopOut { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(6px) scale(0.96); } }
+@keyframes fadeInCenter { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 
 .modal-bg.animate-fade { animation: apptModalFadeIn 180ms ease-out forwards; }
 .modal-bg.animate-fade.closing { animation: apptModalFadeOut 160ms ease-in forwards; }

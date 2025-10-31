@@ -40,7 +40,7 @@ const OrdersHistory = () => {
     switch (status?.toLowerCase()) {
       case 'completed':
       case 'finished':
-        return '#4caf50';
+        return '#2196f3';
       case 'pending':
         return '#ff9800';
       case 'ongoing':
@@ -153,7 +153,7 @@ const OrdersHistory = () => {
                             fontWeight: 500,
                           }}
                         >
-                          {order.status || 'Unknown'}
+                          {order.status === 'Completed' ? 'Finished' : (order.status || 'Unknown')}
                         </span>
                         {order.total_amount && (
                           <span style={{ fontSize: '12px', color: '#000' }}>
@@ -251,7 +251,7 @@ const OrdersHistory = () => {
                       {selectedOrder.appointment?.total_quantity || 0} pcs.
                     </div>
                   </div>
-                  {selectedOrder.status === 'Completed' && selectedOrder.total_amount && (
+                  {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.total_amount && (
                     <div className="detail-group" style={{ marginBottom: 8 }}>
                       <div className="detail-label" style={{ fontWeight: 600 }}>Total Payment Fee</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>₱{selectedOrder.total_amount}</div>
@@ -263,7 +263,7 @@ const OrdersHistory = () => {
                     <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
                     <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                   </div>
-                  {selectedOrder.status === 'Completed' && selectedOrder.completed_at && (
+                  {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.completed_at && (
                     <div className="detail-group" style={{ marginBottom: 8 }}>
                       <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
@@ -272,7 +272,7 @@ const OrdersHistory = () => {
                   <div className="detail-group" style={{ marginBottom: 8 }}>
                     <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
                     <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
-                      {selectedOrder.status}
+                      {selectedOrder.status === 'Completed' ? 'Finished' : selectedOrder.status}
                     </div>
                   </div>
                   <div className="detail-group" style={{ marginBottom: 8 }}>

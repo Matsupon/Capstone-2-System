@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';

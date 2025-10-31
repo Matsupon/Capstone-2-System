@@ -382,6 +382,47 @@
 .dist-bar.star-2 { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
 .dist-bar.star-1 { background: linear-gradient(90deg, #f43f5e, #fb7185); }
 
+/* Dashboard modal styles (match Appointments) */
+.dashboard-modal-bg {
+  position: fixed;
+  top: 0;
+  left: clamp(200px, 20vw, 250px);
+  width: calc(100% - clamp(200px, 20vw, 250px));
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.dashboard-modal-panel {
+  background: white;
+  border-radius: 10px;
+  padding: 32px 28px 24px 28px;
+  max-width: 620px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Modal animations */
+@keyframes feedbackModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes feedbackModalFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes feedbackModalPopIn { 0% { opacity: 0; transform: translateY(10px) scale(0.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes feedbackModalPopOut { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(6px) scale(0.96); } }
+
+.dashboard-modal-bg.animate-fade { animation: feedbackModalFadeIn 180ms ease-out forwards; }
+.dashboard-modal-bg.animate-fade.closing { animation: feedbackModalFadeOut 160ms ease-in forwards; }
+.dashboard-modal-panel.animate-pop { animation: feedbackModalPopIn 200ms ease-out forwards; }
+.dashboard-modal-panel.animate-pop.closing { animation: feedbackModalPopOut 160ms ease-in forwards; }
+
 @media (max-width: 768px) {
   .feedback-item .card-body, .feedback-item .card-footer { padding-left: 0; }
   .feedback-card-container { padding: 16px; }
@@ -389,4 +430,5 @@
     grid-template-columns: 1fr;
   }
   .stat-sep { display: none; }
+  .dashboard-modal-bg { left: 0; width: 100%; }
 }

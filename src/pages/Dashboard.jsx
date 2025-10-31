@@ -509,7 +509,10 @@ const Dashboard = () => {
                 {queueData.has_queue ? (
                   <>
                     {/* Current Customer */}
-                    {queueData.current_customer && (
+                    {queueData.current_customer && isUpcomingToday(
+                      undefined,
+                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                    ) && (
                       <div className="current-customer">
                         <strong>Upcoming Customer:</strong>{' '}
                         <span className="queue-number">
@@ -523,7 +526,10 @@ const Dashboard = () => {
                     )}
 
                     {/* Next Customer */}
-                    {queueData.next_customer && (
+                    {queueData.next_customer && isUpcomingToday(
+                      undefined,
+                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                    ) && (
                       <div className="next-customer">
                         <strong>Next Customer:</strong>{' '}
                         <span className="queue-number">
@@ -536,8 +542,15 @@ const Dashboard = () => {
                       </div>
                     )}
 
-                    {/* If neither present, show message */}
-                    {!queueData.current_customer && !queueData.next_customer && (
+                    {/* If neither upcoming, show message */}
+                    {!(queueData.current_customer && isUpcomingToday(
+                      undefined,
+                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                    )) &&
+                     !(queueData.next_customer && isUpcomingToday(
+                      undefined,
+                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                    )) && (
                       <div className="no-queue-message">
                         <div className="queue-status">
                           <span className="status-indicator inactive"></span>
@@ -583,19 +596,21 @@ const Dashboard = () => {
                       }, 200);
                     }}
                   />
-                  <h2 className="dashboard-modal-title">Order Details</h2>
+                  <h2 className="dashboard-modal-title">{openedFromDueDates ? 'Order Details' : 'Appointment Details'}</h2>
                   <div className="dashboard-details-container" style={{ flexWrap: 'wrap' }}>
                     <div className="dashboard-details-left">
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Full Name</div>
                         <div className="dashboard-detail-value">{selectedAppointment.appointment?.user?.name || selectedAppointment.user?.name || 'N/A'}</div>
                       </div>
-                      <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Queue Number</div>
-                        <div className="dashboard-detail-value">
-                          {selectedOrder?.queue_number ?? selectedAppointment.queue_number ?? selectedAppointment.appointment?.queue_number ?? 'N/A'}
+                      {openedFromDueDates && (
+                        <div className="dashboard-detail-group">
+                          <div className="dashboard-detail-label">Queue Number</div>
+                          <div className="dashboard-detail-value">
+                            {selectedOrder?.queue_number ?? selectedAppointment.queue_number ?? selectedAppointment.appointment?.queue_number ?? 'N/A'}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Appointment Date Accepted</div>
                         <div className="dashboard-detail-value">{(selectedAppointment.appointment?.appointment_date || selectedAppointment.appointment_date) ? new Date(selectedAppointment.appointment?.appointment_date || selectedAppointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
@@ -654,12 +669,14 @@ const Dashboard = () => {
                           <div className="dashboard-detail-value">{new Date(selectedAppointment.completed_at || selectedAppointment.appointment?.completed_at).toLocaleString()}</div>
                         </div>
                       )}
-                      <div className="dashboard-detail-group">
-                        <div className="dashboard-detail-label">Current Status</div>
-                        <div className="dashboard-detail-value" style={{ color: getStatusColor(selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status) }}>
-                          {selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status || 'N/A'}
+                      {openedFromDueDates && (
+                        <div className="dashboard-detail-group">
+                          <div className="dashboard-detail-label">Current Status</div>
+                          <div className="dashboard-detail-value" style={{ color: getStatusColor(selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status) }}>
+                            {selectedOrder?.status || selectedAppointment.status || selectedAppointment.appointment?.status || 'N/A'}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="dashboard-detail-group">
                         <div className="dashboard-detail-label">Notes</div>
                         <div className="dashboard-detail-value">{selectedAppointment.appointment?.notes || selectedAppointment.notes || 'No notes provided.'}</div>
@@ -766,6 +783,10 @@ const Dashboard = () => {
                         </thead>
                         <tbody>
                           {(queueData.all_orders || [])
+                            .filter(o => isUpcomingToday(
+                              o.appointment?.appointment_date,
+                              o.appointment_time || o.appointment?.appointment_time
+                            ))
                             .slice()
                             .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))
                             .map((o, i) => (

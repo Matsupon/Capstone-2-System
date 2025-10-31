@@ -37,6 +37,7 @@ export default function HomePage() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+  const [restrictionWarningVisible, setRestrictionWarningVisible] = useState(false);
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -351,12 +352,21 @@ export default function HomePage() {
                   const activeIdx =
                     status === 'Pending' ? 0 : status === 'Ready to Check' ? 1 : 2;
                   const isActive = idx === activeIdx;
+                  
+                  // Determine the color based on which step is active
+                  let activeStyle = styles.stepCurrent; // default green
+                  if (isActive) {
+                    if (idx === 0) activeStyle = styles.stepOrange; // Pending
+                    else if (idx === 1) activeStyle = styles.stepRed; // Ready to Check
+                    else activeStyle = styles.stepCurrent; // Completed (green)
+                  }
+                  
                   return (
                     <View
                       key={step}
                       style={[
                         styles.progressStep,
-                        isActive ? styles.stepCurrent : styles.stepDone,
+                        isActive ? activeStyle : styles.stepDone,
                       ]}
                     />
                   );
@@ -461,7 +471,17 @@ export default function HomePage() {
 
       <BookAppointment visible={modalVisible} onClose={() => setModalVisible(false)} />
 
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => {
+          // Check if user has an ongoing order
+          if (latestOrder && latestOrder.status !== 'Finished') {
+            setRestrictionWarningVisible(true);
+          } else {
+            setModalVisible(true);
+          }
+        }}
+      >
         <MaterialIcons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
@@ -621,6 +641,28 @@ export default function HomePage() {
         </View>
       </Modal>
 
+      {/* Restriction Warning Modal */}
+      <Modal
+        visible={restrictionWarningVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRestrictionWarningVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Booking Restricted</Text>
+              <TouchableOpacity onPress={() => setRestrictionWarningVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.modalBody, { fontSize: 16, textAlign: 'center', marginTop: 10 }]}>
+              We're sorry but you cannot book more than one appointment. Please wait until your current order is finished.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       {feedbackSuccess && (
         <View style={{ position: 'absolute', left: 20, right: 20, bottom: 90, backgroundColor: '#E8F5E9', borderRadius: 12, padding: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }}>
           <Text style={{ color: '#16A34A', fontWeight: '700' }}>Feedback sent successfully!</Text>
@@ -754,7 +796,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#A9A9A9',
   },
   stepCurrent: {
-    backgroundColor: '#2E8B57',
+    backgroundColor: '#2E8B57', // Green for Completed
+  },
+  stepOrange: {
+    backgroundColor: '#FFA500', // Orange for Pending
+  },
+  stepRed: {
+    backgroundColor: '#e91e63', // Red for Ready to Check
   },
   stepPending: {
     backgroundColor: '#A9A9A9',

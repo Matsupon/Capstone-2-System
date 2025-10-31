@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/Orders.css';
-import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
 
@@ -74,6 +74,9 @@ const Orders = () => {
   const [completionSelectedDay, setCompletionSelectedDay] = useState(null);
   const [completionSelectedTime, setCompletionSelectedTime] = useState('');
   const [bookedPickupTimes, setBookedPickupTimes] = useState([]);
+  const [filterOption, setFilterOption] = useState('none');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const today = new Date();
   const todayDate = today.getDate();
@@ -131,13 +134,16 @@ const Orders = () => {
       if (showUpdateDropdown && !event.target.closest('.update-dropdown') && !event.target.closest('.update-btn')) {
         setShowUpdateDropdown(null);
       }
+      if (showFilterDropdown && !event.target.closest('.filter-dropdown') && !event.target.closest('button')) {
+        setShowFilterDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showUpdateDropdown]);
+  }, [showUpdateDropdown, showFilterDropdown]);
 
   const handleCalendarPrevMonth = () => {
     if (calendarMonth === 0) {
@@ -283,7 +289,7 @@ const Orders = () => {
       case 'Completed':
         return '#4caf50';
       case 'Finished':
-        return '#4caf50';
+        return '#2196f3';
       default:
         return '#333';
     }
@@ -553,7 +559,10 @@ const Orders = () => {
         const hourStr = hour < 10 ? `0${hour}` : `${hour}`;
         const minuteStr = minute < 10 ? `0${minute}` : `${minute}`;
         const time = `${hourStr}:${minuteStr}`;
-        slots.push(time);
+        // Exclude lunch time (12:00 and 12:30)
+        if (time !== '12:00' && time !== '12:30') {
+          slots.push(time);
+        }
       }
     }
     return slots;
@@ -585,6 +594,76 @@ const Orders = () => {
     );
   }
 
+  // Helper function to get filter display name
+  const getFilterDisplayName = (filter) => {
+    switch(filter) {
+      case 'none':
+        return 'No Filter';
+      case 'deadline-nearest':
+        return 'Nearest Deadline';
+      case 'oldest-newest':
+        return 'Oldest to Newest';
+      case 'newest-oldest':
+        return 'Newest to Oldest';
+      case 'status-pending':
+        return 'Status: Pending';
+      case 'status-ready':
+        return 'Status: Ready to Check';
+      case 'status-completed':
+        return 'Status: Completed';
+      default:
+        return 'No Filter';
+    }
+  };
+
+  // Filter and sort orders based on selected filter and search query
+  const getFilteredOrders = () => {
+    let filteredOrders = [...orders];
+    
+    // Apply search filter first
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filteredOrders = filteredOrders.filter(order => {
+        const name = order.appointment?.user?.name?.toLowerCase() || '';
+        const service = order.appointment?.service_type?.toLowerCase() || '';
+        return name.includes(query) || service.includes(query);
+      });
+    }
+    
+    switch(filterOption) {
+      case 'deadline-nearest':
+        // Sort by nearest deadline (preferred_due_date)
+        filteredOrders.sort((a, b) => {
+          const dateA = a.appointment?.preferred_due_date ? new Date(a.appointment.preferred_due_date) : new Date('9999-12-31');
+          const dateB = b.appointment?.preferred_due_date ? new Date(b.appointment.preferred_due_date) : new Date('9999-12-31');
+          return dateA - dateB;
+        });
+        break;
+      case 'oldest-newest':
+        // Sort by order creation date (oldest first)
+        filteredOrders.sort((a, b) => a.id - b.id);
+        break;
+      case 'newest-oldest':
+        // Sort by order creation date (newest first)
+        filteredOrders.sort((a, b) => b.id - a.id);
+        break;
+      case 'status-pending':
+        filteredOrders = filteredOrders.filter(order => order.status === 'Pending');
+        break;
+      case 'status-ready':
+        filteredOrders = filteredOrders.filter(order => order.status === 'Ready to Check');
+        break;
+      case 'status-completed':
+        filteredOrders = filteredOrders.filter(order => order.status === 'Completed');
+        break;
+      default:
+        // No filter applied
+        break;
+    }
+    
+    return filteredOrders;
+  };
+
   return (
     <div className="page-wrap">
       <div className="page-title">
@@ -592,29 +671,216 @@ const Orders = () => {
       </div>
       <div className="orders-content">
           <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, margin: '0 16px', overflow: 'visible' }}>
+            {/* Search and Filter Section */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
+              {/* Search Bar */}
+              <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+                <FaSearch style={{
+                  position: 'absolute',
+                  left: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af',
+                  fontSize: 14
+                }} />
+                <input
+                  type="text"
+                  placeholder="Search orders by name or service"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px 8px 36px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+              
+              {/* Current Filter Display and Filter Button */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* Display current filter */}
+                <div style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: filterOption === 'none' ? '#6b7280' : '#2563eb',
+                  padding: '6px 12px',
+                  background: filterOption === 'none' ? '#f3f4f6' : '#dbeafe',
+                  borderRadius: 6,
+                  border: filterOption === 'none' ? '1px solid #e5e7eb' : '1px solid #93c5fd',
+                  transition: 'all 0.2s'
+                }}>
+                  {getFilterDisplayName(filterOption)}
+                </div>
+                
+                <div style={{ position: 'relative' }}>
+                  <button 
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 16px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
+              >
+                    <FaFilter /> Filter Orders
+                  </button>
+                </div>
+              </div>
+              {showFilterDropdown && (
+                <div className="filter-dropdown" style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 8,
+                  background: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  minWidth: 220
+                }}>
+                  <div style={{ padding: '8px 0' }}>
+                    <div 
+                      onClick={() => { setFilterOption('none'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'none' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'none' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'none' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 No Filter
+                    </div>
+                    <div 
+                      onClick={() => { setFilterOption('deadline-nearest'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'deadline-nearest' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Nearest Deadline
+                    </div>
+                    <div 
+                      onClick={() => { setFilterOption('oldest-newest'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'oldest-newest' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'oldest-newest' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'oldest-newest' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Oldest to Newest
+                    </div>
+                    <div 
+                      onClick={() => { setFilterOption('newest-oldest'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'newest-oldest' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'newest-oldest' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'newest-oldest' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Newest to Oldest
+                    </div>
+                    <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                    <div 
+                      onClick={() => { setFilterOption('status-pending'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'status-pending' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'status-pending' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-pending' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Status: Pending
+                    </div>
+                    <div 
+                      onClick={() => { setFilterOption('status-ready'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'status-ready' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'status-ready' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-ready' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Status: Ready to Check
+                    </div>
+                    <div 
+                      onClick={() => { setFilterOption('status-completed'); setShowFilterDropdown(false); }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        background: filterOption === 'status-completed' ? '#f3f4f6' : 'white',
+                        fontWeight: filterOption === 'status-completed' ? 600 : 400
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-completed' ? '#f3f4f6' : 'white'}
+                    >
+                      🔹 Status: Completed
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', overflow: 'visible' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
-                <th style={{ width: '5%' }}>Order #</th>
                  <th style={{ width: '5%' }}>Queue #</th>
                  <th style={{ width: '15%' }}>Name</th>
-                 <th style={{ width: '20%' }}>Services</th> {/* a bit less wide */}
-                 <th style={{ width: '20%' }}>Status</th>
-                 <th style={{ width: '20%' }}>Next Appoint.</th> {/* wider column */}
-                 <th style={{ width: '15%' }}>Layout/Notes</th>
-                 <th style={{ width: '12%' }}>Actions</th>
+                 <th style={{ width: '18%' }}>Services</th>
+                 <th style={{ width: '15%' }}>Deadline</th>
+                 <th style={{ width: '15%' }}>Status</th>
+                 <th style={{ width: '17%' }}>Next Appoint.</th>
+                 <th style={{ width: '10%' }}>Layout/Notes</th>
+                 <th style={{ width: '10%' }}>Actions</th>
                </tr>
               </thead>
               <tbody>
-                {orders.slice(0, 5).map((order) => (
+                {getFilteredOrders().slice(0, 5).map((order) => (
                   <tr key={order.id}>
-                    <td>{order.id}</td>
                     <td>{order.queue_number}</td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>
                     <td>{order.appointment?.service_type || 'N/A'}</td>
+                    <td>
+                      {order.appointment?.preferred_due_date ? (
+                        <span>{new Date(order.appointment.preferred_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      ) : (
+                        <span style={{ color: '#999' }}>N/A</span>
+                      )}
+                    </td>
                     <td>
                       <div>
                         <span style={{ color: getStatusColor(order.status), display: 'block' }}>
@@ -690,15 +956,15 @@ const Orders = () => {
                           <div className="update-dropdown">
                             <div
                               className="dropdown-item"
-                              onClick={() => handleUpdateStatus(order.id, 'Ready to Check')}
-                            >
-                              Ready to check
-                            </div>
-                            <div
-                              className="dropdown-item"
                               onClick={() => handleUpdateStatus(order.id, 'Pending')}
                             >
                               Pending
+                            </div>
+                            <div
+                              className="dropdown-item"
+                              onClick={() => handleUpdateStatus(order.id, 'Ready to Check')}
+                            >
+                              Ready to check
                             </div>
                             <div
                               className="dropdown-item"
@@ -752,6 +1018,10 @@ const Orders = () => {
                 <h2 className="dashboard-modal-title">Order Details</h2>
                 <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
                   <div className="details-left">
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Order Number</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>#{selectedOrder.id}</div>
+                    </div>
                     <div className="detail-group" style={{ marginBottom: 8 }}>
                       <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>

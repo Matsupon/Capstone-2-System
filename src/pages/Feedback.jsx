@@ -15,15 +15,34 @@ const StarRating = ({ value }) => {
 };
 
 const useStorageBase = () =>
-  useMemo(
-    () => (process.env.NODE_ENV === 'development' ? 'http://192.168.10.87:8000' : ''),
-    []
-  );
+  useMemo(() => {
+    const base = (api?.defaults?.baseURL) || '';
+    if (!base) return '';
+    // Derive the non-API origin/path from axios baseURL (e.g., http://IP:8000/api -> http://IP:8000)
+    try {
+      const u = new URL(base, window.location.origin);
+      const path = u.pathname.replace(/\/?api\/?$/, '');
+      return `${u.origin}${path.endsWith('/') ? path.slice(0, -1) : path}`;
+    } catch {
+      // Fallback for odd baseURL values
+      return base.replace(/\/?api\/?$/, '');
+    }
+  }, []);
 
 const formatDate = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+};
+
+// Safely build a public URL for a storage-backed image path
+const buildImageUrl = (storageBase, path) => {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const cleanBase = storageBase?.replace(/\/$/, '') || '';
+  const cleanPath = String(path).replace(/^\//, '');
+  if (cleanPath.startsWith('storage/')) return `${cleanBase}/${cleanPath}`;
+  return `${cleanBase}/storage/${cleanPath}`;
 };
 
 export default function FeedbackPage() {
@@ -34,6 +53,7 @@ export default function FeedbackPage() {
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [deleting, setDeleting] = useState({});
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [animateStats, setAnimateStats] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
   const [displayAvg, setDisplayAvg] = useState(0);
@@ -119,10 +139,13 @@ export default function FeedbackPage() {
   const setResp = (id, patch) =>
     setResponding((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this feedback? This action cannot be undone.')) {
-      return;
-    }
+  const handleDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
 
     try {
       setDeleting(prev => ({ ...prev, [id]: true }));
@@ -205,9 +228,7 @@ export default function FeedbackPage() {
                   const appt = fb?.order?.appointment;
                   const pending = responding[fb.id] || {};
 
-                  const profileUrl = user?.profile_image
-                    ? `${storageBase}/storage/${user.profile_image}`
-                    : null;
+                  const profileUrl = buildImageUrl(storageBase, user?.profile_image);
 
                   return (
                     <article key={fb.id} className="feedback-item">
@@ -309,6 +330,31 @@ export default function FeedbackPage() {
               </div>
             )}
           </div>
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirmId !== null && (
+            <div className="dashboard-modal-bg animate-fade" onClick={() => setDeleteConfirmId(null)}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure you want to delete this feedback?</h3>
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={confirmDelete}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => setDeleteConfirmId(null)}
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
     </div>
   );

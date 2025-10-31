@@ -273,6 +273,8 @@
   flex-direction: column;
   gap: 12px;
   align-items: flex-start;
+  padding-left: 20px;
+  border-left: 1px solid #e5e7eb;
 }
 .customers-modal-detail-label {
   font-weight: 600;
@@ -322,31 +324,28 @@
 .image-modal-bg {
   position: fixed;
   top: 0;
-  /* exclude the sidebar from being covered */
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
+  left: 0;
+  width: 100%;
   height: 100%;
-  background: rgba(128, 128, 128, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: flex-start;
-  padding-top: 10vh;
-  z-index: 10000;
+  padding: 4vh 16px;
+  z-index: 11000;
 }
 
 .image-modal-panel {
-  background: white;
-  border-radius: 8px;
-  max-width: 500px;
-  width: 80%;
-  max-height: 70vh;
+  background: #fff;
+  border-radius: 12px;
+  width: min(600px, 96vw);
+  max-height: 80vh;
   overflow-y: auto;
   position: relative;
-  transform: translateX(calc(clamp(200px, 20vw, 250px) / 2));
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  /* Center within full viewport */
+  transform: none;
 }
 
 @media (max-width: 768px) {
@@ -360,6 +359,15 @@
 @media (max-width: 600px) {
   .customers-profile-row { flex-direction: column; }
   .customers-profile-col.right { align-items: flex-start; text-align: left; }
+  .customers-modal-order-details {
+    flex-direction: column;
+  }
+  .customers-modal-details-right {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
+  }
 }
 
 
@@ -380,6 +388,12 @@
     width: 100%;
     min-width: unset;
     align-items: flex-start;
+  }
+  .customers-modal-details-right {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
   }
 }
 
@@ -411,4 +425,9 @@
     max-height: 90px;
     padding: 5px;
   }
-} 
+}
+
+/* Ensure Customers zoom modal appears above the profile modal */
+.customers-zoom {
+  z-index: 11050 !important; /* higher than .customers-modal-bg (10000) and Orders dashboard modal (2000) */
+}
