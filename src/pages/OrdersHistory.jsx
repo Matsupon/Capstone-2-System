@@ -123,7 +123,7 @@ const OrdersHistory = () => {
             background: 'white',
             borderRadius: 8,
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            padding: 24,
+            padding: '24px 24px 8px 24px',
             margin: '0 16px',
           }}
         >
@@ -139,7 +139,7 @@ const OrdersHistory = () => {
             </thead>
             <tbody>
               {orders.length > 0 ? (
-                orders.slice(0, 5).map((order) => (
+                orders.map((order) => (
                   <tr key={order.id}>
                     <td>{order.id}</td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>

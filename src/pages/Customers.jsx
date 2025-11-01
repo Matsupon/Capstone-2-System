@@ -119,39 +119,64 @@ const Customers = () => {
         <h1>CUSTOMERS</h1>
       </div>
       <div className="customers-table-content">
-        <div className="customers-table-wrapper">
-          <table className="customers-table">
+        <div
+          style={{
+            background: 'white',
+            borderRadius: 8,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            padding: '24px 24px 8px 24px',
+            margin: '0 16px',
+          }}
+        >
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="customers-table-header-row">
-                <th className="customers-th">#</th>
-                <th className="customers-th">Name</th>
-                <th className="customers-th">Contact Number</th>
-                <th className="customers-th">Total Orders</th>
-                <th className="customers-th">Last Appoint.</th>
-                <th className="customers-th">Last Order Status</th>
-                <th className="customers-th">Actions</th>
+              <tr style={{ background: '#e8f4fd' }}>
+                <th>#</th>
+                <th>Name</th>
+                <th>Contact Number</th>
+                <th>Total Orders</th>
+                <th>Last Appoint.</th>
+                <th>Last Order Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {customersData.slice(0, 5).map((customer, idx) => (
-                <tr key={customer.id} className="customers-table-row">
-                  <td className="customers-td">{idx + 1}</td>
-                  <td className="customers-td">{customer.name}</td>
-                  <td className="customers-td">{customer.contact}</td>
-                  <td className="customers-td">{customer.totalOrders}</td>
-                  <td className="customers-td">{customer.lastAppointment}</td>
-                  <td className="customers-td">
-                    <span style={{ color: getStatusColor(customer.lastOrderStatus), fontWeight: 500 }}>
-                      {customer.lastOrderStatus}
-                    </span>
-                  </td>
-                  <td className="customers-td">
-                    <button className="customers-view-profile-btn" onClick={() => handleViewProfile(customer)}>
-                      View Profile
-                    </button>
+              {customersData.length > 0 ? (
+                customersData.map((customer) => (
+                  <tr key={customer.id}>
+                    <td>{customer.id}</td>
+                    <td>{customer.name}</td>
+                    <td>{customer.contact}</td>
+                    <td>{customer.totalOrders}</td>
+                    <td>{customer.lastAppointment}</td>
+                    <td>
+                      <span
+                        style={{
+                          color: getStatusColor(customer.lastOrderStatus),
+                          fontWeight: 500,
+                        }}
+                      >
+                        {customer.lastOrderStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="action-link"
+                        onClick={() => handleViewProfile(customer)}
+                        style={{ color: '#007bff', cursor: 'pointer' }}
+                      >
+                        View Details
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: 20 }}>
+                    No customers found.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

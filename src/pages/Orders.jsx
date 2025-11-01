@@ -670,7 +670,7 @@ const Orders = () => {
         <h1>ORDERS</h1>
       </div>
       <div className="orders-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, margin: '0 16px', overflow: 'visible' }}>
+          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 16px' }}>
             {/* Search and Filter Section */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
               {/* Search Bar */}
@@ -855,7 +855,7 @@ const Orders = () => {
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', overflow: 'visible' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
                  <th style={{ width: '5%' }}>Queue #</th>
@@ -869,7 +869,7 @@ const Orders = () => {
                </tr>
               </thead>
               <tbody>
-                {getFilteredOrders().slice(0, 5).map((order) => (
+                {getFilteredOrders().map((order) => (
                   <tr key={order.id}>
                     <td>{order.queue_number}</td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>

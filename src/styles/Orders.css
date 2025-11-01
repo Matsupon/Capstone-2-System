@@ -237,6 +237,48 @@
 .dropdown-item { padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .dropdown-item:hover { background: #f3f4f6; }
 
+/* Orders Content - scrolling container */
+.orders-content {
+  padding: 8px 16px;
+  max-width: 100%;
+  margin: 0;
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+/* Orders Table Styling */
+.orders-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.orders-content th,
+.orders-content td {
+  padding: 12px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.orders-content th {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+  background: #e8f4fd;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.orders-content td {
+  color: #374151;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.orders-content tr:last-child td {
+  border-bottom: none;
+}
+
 /* Success popups - centered relative to content area (ignore sidebar) */
 .orders-calendar-success-popup,
 .popup-success {

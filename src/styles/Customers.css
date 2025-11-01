@@ -38,87 +38,53 @@
   max-width: 100%;
   margin: 0;
   height: calc(100vh - 120px);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.customers-table-wrapper {
-  background: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: var(--shadow-glow);
-  padding: 8px 10px; /* tighter to allow wider table */
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--card-border);
+  overflow-y: auto;
 }
 
-.customers-table {
+/* Match OrdersHistory table styling */
+.customers-table-content table {
   width: 100%;
   border-collapse: collapse;
-  font-size: clamp(13px, 1.4vw, 16px);
-  background: transparent;
-  flex: 1;
-  display: table; /* allow natural table layout to stretch full width */
-  /* no internal scroll by default */
-  overflow-y: visible;
-  max-height: none;
-  font-family: 'Lato', sans-serif;
-  /* Make columns distribute evenly to fill available width */
-  table-layout: fixed;
-  margin: 0;
 }
 
-/* Enable internal scroll only when there are more than 5 rows */
-.customers-table-wrapper.scrollable .customers-table {
-  overflow-y: auto;
-  max-height: calc(100vh - 250px);
-}
-
-.customers-th, .customers-td {
-  padding: 8px 6px;
+.customers-table-content th,
+.customers-table-content td {
+  padding: 12px;
   text-align: center;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  font-family: 'Lato', sans-serif;
-  /* Prevent layout shift and ensure cells share width evenly */
-  width: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-bottom: 1px solid #e5e7eb;
 }
-.customers-th {
+
+.customers-table-content th {
   font-weight: 600;
-  color: var(--text-primary);
-  background: var(--glass-bg);
-  font-size: clamp(12px, 1.5vw, 15px);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-family: 'Poppins', sans-serif;
-  border-bottom: 1px solid var(--card-border);
+  color: #1f2937;
+  font-size: 14px;
+  background: #e8f4fd;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-.customers-td {
-  color: var(--text-secondary);
-  font-size: clamp(11px, 1.4vw, 14px);
-  border-bottom: 1px solid #f0f0f0;
+
+.customers-table-content td {
+  color: #374151;
+  font-size: 14px;
+  font-weight: 400;
 }
-.customers-table thead tr { background: #e8f4fd; }
-.customers-table-row:last-child .customers-td {
+
+.customers-table-content tr:last-child td {
   border-bottom: none;
 }
 
-.customers-view-profile-btn {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 14px;
+.action-link {
+  color: #007bff;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
-.customers-view-profile-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
-.customers-view-profile-btn:active { transform: translateY(0); }
+
+.action-link:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
 
 /* Modal Styles */
 .customers-modal-bg {

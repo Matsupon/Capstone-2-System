@@ -207,7 +207,7 @@ const Appointments = () => {
       </div>
       
       <div className="appointments-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, margin: '0 16px' }}>
+          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 16px' }}>
             {isLoading ? (
               <p>Loading appointments...</p>
             ) : error ? (
@@ -227,7 +227,7 @@ const Appointments = () => {
     </tr>
   </thead>
   <tbody>
-    {appointments.slice(0, 5).map((appt) => (
+    {appointments.map((appt) => (
       <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
         <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
         <td>{appt.user?.name || 'N/A'}</td>
