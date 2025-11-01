@@ -4,9 +4,11 @@ import { format } from 'date-fns';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Alert, Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import api from '../utils/api';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SERVICE_TYPES = [
   'Jersey Production',
@@ -381,14 +383,14 @@ export default function BookAppointment({ visible, onClose }) {
         <View style={[styles.progressCircle, step >= 1 && styles.progressCircleActive]}>
           <Text style={[styles.progressNumber, step >= 1 && styles.progressNumberActive]}>1</Text>
         </View>
-        <Text style={[styles.progressLabel, step >= 1 && styles.progressLabelActive]}>Details</Text>
+        <Text style={[styles.progressLabel, step >= 1 && styles.progressLabelActive]}>Order Details</Text>
       </View>
       <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
       <View style={styles.progressStep}>
         <View style={[styles.progressCircle, step >= 2 && styles.progressCircleActive]}>
           <Text style={[styles.progressNumber, step >= 2 && styles.progressNumberActive]}>2</Text>
         </View>
-        <Text style={[styles.progressLabel, step >= 2 && styles.progressLabelActive]}>Upload</Text>
+        <Text style={[styles.progressLabel, step >= 2 && styles.progressLabelActive]}>Upload Images</Text>
       </View>
       <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
       <View style={styles.progressStep}>
@@ -538,21 +540,6 @@ export default function BookAppointment({ visible, onClose }) {
     {/* Section Title */}
     <Text style={styles.sectionTitle}>🗓️ Appointment Schedule</Text>
 
-    <Text style={[styles.label, { fontSize: 18 }]}>📅 Preferred Due Date</Text>
-    <Text style={[styles.helperText, { fontSize: 15 }]}>When do you want it finished?</Text>
-    <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
-      <Text style={{ color: preferredDueDate ? '#000' : '#aaa', fontSize: 17 }}>
-        {preferredDueDate || 'Pick a date'}
-      </Text>
-    </TouchableOpacity>
-    <DateTimePickerModal
-      isVisible={isDatePickerVisible}
-      mode="date"
-      onConfirm={handleConfirm}
-      onCancel={hideDatePicker}
-      minimumDate={new Date()}
-    />
-
     <Text style={[styles.label, { fontSize: 18 }]}>📅 Select Date and Time</Text>
     <TouchableOpacity onPress={showAppointmentDatePicker} style={styles.inputField}>
       <Text style={{ color: appointmentDate ? '#000' : '#aaa', fontSize: 17 }}>
@@ -613,6 +600,21 @@ export default function BookAppointment({ visible, onClose }) {
         )}
       </>
     )}
+
+    <Text style={[styles.label, { fontSize: 18 }]}>📅 Preferred Due Date</Text>
+    <Text style={[styles.helperText, { fontSize: 15 }]}>When do you want it finished?</Text>
+    <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
+      <Text style={{ color: preferredDueDate ? '#000' : '#aaa', fontSize: 17 }}>
+        {preferredDueDate || 'Pick a date'}
+      </Text>
+    </TouchableOpacity>
+    <DateTimePickerModal
+      isVisible={isDatePickerVisible}
+      mode="date"
+      onConfirm={handleConfirm}
+      onCancel={hideDatePicker}
+      minimumDate={new Date()}
+    />
   </ScrollView>
 
   <TouchableOpacity
@@ -805,15 +807,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: SCREEN_WIDTH < 350 ? 8 : 12,
   },
   progressStep: {
     alignItems: 'center',
+    maxWidth: SCREEN_WIDTH < 350 ? 65 : SCREEN_WIDTH < 380 ? 85 : 110,
   },
   progressCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: SCREEN_WIDTH < 350 ? 32 : 40,
+    height: SCREEN_WIDTH < 350 ? 32 : 40,
+    borderRadius: SCREEN_WIDTH < 350 ? 16 : 20,
     backgroundColor: '#e0e0e0',
     alignItems: 'center',
     justifyContent: 'center',
@@ -823,7 +826,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3B82F6',
   },
   progressNumber: {
-    fontSize: 18,
+    fontSize: SCREEN_WIDTH < 350 ? 14 : 18,
     fontWeight: 'bold',
     color: '#999',
   },
@@ -831,19 +834,21 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   progressLabel: {
-    fontSize: 13,
+    fontSize: SCREEN_WIDTH < 350 ? 9 : SCREEN_WIDTH < 380 ? 10 : 11,
     color: '#999',
     fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: SCREEN_WIDTH < 350 ? 12 : 14,
   },
   progressLabelActive: {
     color: '#3B82F6',
     fontWeight: 'bold',
   },
   progressLine: {
-    width: 50,
+    width: SCREEN_WIDTH < 350 ? 20 : SCREEN_WIDTH < 380 ? 30 : 40,
     height: 2,
     backgroundColor: '#e0e0e0',
-    marginHorizontal: 8,
+    marginHorizontal: SCREEN_WIDTH < 350 ? 4 : 6,
   },
   progressLineActive: {
     backgroundColor: '#3B82F6',

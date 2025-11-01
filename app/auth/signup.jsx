@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
 import api from '../../utils/api';
 
 export default function SignUp() {
@@ -13,8 +13,10 @@ export default function SignUp() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [address, setAddress] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSignUp = async () => {
+    setIsLoading(true);
     try {
       const response = await api.post('/register', {
         name: fullName,
@@ -44,6 +46,8 @@ export default function SignUp() {
     } catch (error) {
       console.error('Registration failed:', error.response?.data || error.message);
       alert('Could not register. Check your inputs.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,9 +58,14 @@ export default function SignUp() {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.container}>
             <Image
               source={require('../../assets/images/logo.png')}
@@ -138,8 +147,19 @@ export default function SignUp() {
                 />
               </View>
 
-              <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
-                <Text style={styles.signupButtonText}>SIGN UP</Text>
+              <TouchableOpacity 
+                style={[styles.signupButton, isLoading && styles.signupButtonDisabled]} 
+                onPress={handleSignUp}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 10 }} />
+                    <Text style={styles.signupButtonText}>SIGNING UP...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.signupButtonText}>SIGN UP</Text>
+                )}
               </TouchableOpacity>
 
               <View style={styles.loginContainer}>
@@ -165,7 +185,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingTop: 5,
-    paddingBottom: 30,
+    paddingBottom: 80,
   },
   container: {
     alignItems: 'center',
@@ -226,6 +246,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
+  signupButtonDisabled: {
+    backgroundColor: '#a0a0a0',
+  },
   signupButtonText: {
     color: '#fff',
     fontSize: 16,
@@ -235,6 +258,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 30,
+    marginBottom: 40,
   },
   loginText: {
     color: '#687076',

@@ -38,6 +38,7 @@ export default function HomePage() {
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
   const [restrictionWarningVisible, setRestrictionWarningVisible] = useState(false);
+  const [appointmentBookModal, setAppointmentBookModal] = useState(false);
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -54,7 +55,7 @@ export default function HomePage() {
     try {
       const res = await api.get('/notifications');
       if (res.data?.success) {
-        const list = (res.data.data || []).filter(n => n.type !== 'appointment_book');
+        const list = (res.data.data || []);
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setNotifications(list);
       }
@@ -190,6 +191,11 @@ export default function HomePage() {
   };
 
   const openDetails = (n) => {
+    if (n.type === 'appointment_book') {
+      setAppointmentBookModal(true);
+      return;
+    }
+
     if (n.type === 'ready_to_check') {
       setDetails({
         type: 'ready_to_check',
@@ -238,13 +244,16 @@ export default function HomePage() {
   };
 
   const renderActivityItem = (n) => {
+    const isAppointmentBook = n.type === 'appointment_book';
     const isReadyToCheck = n.type === 'ready_to_check';
     const isOrderCompleted = n.type === 'order_completed';
     const isOrderFinished = n.type === 'order_finished';
     const isFeedbackResponded = n.type === 'feedback_responded';
     const isAppointmentRejected = n.type === 'appointment_rejected';
-    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished;
-    const title = isReadyToCheck
+    const showViewMore = isAppointmentBook || isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished;
+    const title = isAppointmentBook
+      ? 'You have successfully booked an appointment!'
+      : isReadyToCheck
       ? 'Your order is now ready to check'
       : isOrderCompleted
       ? 'Your order is now completed'
@@ -668,6 +677,28 @@ export default function HomePage() {
           <Text style={{ color: '#16A34A', fontWeight: '700' }}>Feedback sent successfully!</Text>
         </View>
       )}
+
+      {/* Appointment Book Info Modal */}
+      <Modal
+        visible={appointmentBookModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAppointmentBookModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>You have successfully booked an appointment!</Text>
+              <TouchableOpacity onPress={() => setAppointmentBookModal(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.modalBody, { fontSize: 16, lineHeight: 24 }]}>
+              Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

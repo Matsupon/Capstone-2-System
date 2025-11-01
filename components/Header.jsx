@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';
 
 export default function Header({ userName = 'User', onNotificationsViewed }) {
@@ -10,13 +10,14 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastSeenAt, setLastSeenAt] = useState(null);
+  const [appointmentBookModal, setAppointmentBookModal] = useState(false);
 
   const loadNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get('/notifications');
       if (res.data?.success) {
-        const list = (res.data.data || []).filter(n => n.type !== 'appointment_book');
+        const list = (res.data.data || []);
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setNotifications(list);
       }
@@ -81,7 +82,9 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
   };
 
   const getNotificationTitle = (notification) => {
-    if (notification.type === 'ready_to_check') {
+    if (notification.type === 'appointment_book') {
+      return 'You have successfully booked an appointment!';
+    } else if (notification.type === 'ready_to_check') {
       return 'Your order is now ready to check';
     } else if (notification.type === 'order_completed') {
       return 'Your order is now completed';
@@ -96,29 +99,35 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
   };
 
   const getNotificationBody = (notification) => {
-    if (notification.type === 'ready_to_check') {
-      return 'Your order is now ready to check. Please visit us to review your order.';
-    } else if (notification.type === 'order_completed') {
-      const amount = notification.data?.total_amount 
-        ? `Please prepare ₱${Number(notification.data.total_amount).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })} to get your order.`
-        : '';
-      return `Your order is now completed. ${amount}`.trim();
-    } else if (notification.type === 'appointment_rejected') {
-      return 'Please ensure you uploaded the correct gcash payment proof and try again next time';
-    } else if (notification.type === 'feedback_responded') {
-      const checked = notification.data?.admin_checked;
-      const resp = notification.data?.admin_response;
-      if (resp) return resp;
-      if (checked) return 'The admin has reviewed your feedback.';
-      return notification.body || '';
-    } else if (notification.type === 'order_finished') {
-      return 'Please check through the "My Orders" page under the History section to view your completed order';
-    }
+  if (notification.type === 'appointment_book') {
+    return (
+      <Text style={{ color: '#306b9bff' }}>
+        View More
+      </Text>
+    );
+  } else if (notification.type === 'ready_to_check') {
+    return 'Your order is now ready to check. Please visit us to review your order.';
+  } else if (notification.type === 'order_completed') {
+    const amount = notification.data?.total_amount
+      ? `Please prepare ₱${Number(notification.data.total_amount).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} to get your order.`
+      : '';
+    return `Your order is now completed. ${amount}`.trim();
+  } else if (notification.type === 'appointment_rejected') {
+    return 'Please ensure you uploaded the correct GCash payment proof and try again next time.';
+  } else if (notification.type === 'feedback_responded') {
+    const checked = notification.data?.admin_checked;
+    const resp = notification.data?.admin_response;
+    if (resp) return resp;
+    if (checked) return 'The admin has reviewed your feedback.';
     return notification.body || '';
-  };
+  } else if (notification.type === 'order_finished') {
+    return 'Please check through the "My Orders" page under the History section to view your completed order.';
+  }
+  return notification.body || '';
+};
 
   return (
     <View style={styles.container}>
@@ -168,19 +177,50 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
               <Text style={styles.noNotificationsText}>No notifications yet</Text>
             ) : (
               notifications.map((notification) => (
-                <View key={notification.id} style={styles.notificationItem}>
+                <TouchableOpacity
+                  key={notification.id}
+                  style={styles.notificationItem}
+                  onPress={() => {
+                    if (notification.type === 'appointment_book') {
+                      setAppointmentBookModal(true);
+                    }
+                  }}
+                  activeOpacity={notification.type === 'appointment_book' ? 0.7 : 1}
+                >
                   <Text style={styles.notificationDate}>{formatMonthDay(notification.created_at)}</Text>
                   <View style={styles.notificationContent}>
                     <Text style={styles.notificationTitle}>{getNotificationTitle(notification)}</Text>
                     <Text style={styles.notificationBody}>{getNotificationBody(notification)}</Text>
                     <Text style={styles.notificationTime}>{formatTime12(notification.created_at)}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </ScrollView>
         </View>
       )}
+
+      {/* Appointment Book Info Modal */}
+      <Modal
+        visible={appointmentBookModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAppointmentBookModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>You have successfully booked an appointment!</Text>
+              <TouchableOpacity onPress={() => setAppointmentBookModal(false)}>
+                <MaterialIcons name="close" size={22} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalBody}>
+              Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -323,5 +363,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#687076',
     fontSize: 14,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 22,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    flex: 1,
+    marginRight: 10,
+  },
+  modalBody: {
+    fontSize: 16,
+    color: '#687076',
+    lineHeight: 24,
   },
 }); 
