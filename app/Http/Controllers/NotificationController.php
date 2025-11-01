@@ -64,9 +64,35 @@ class NotificationController extends Controller
     // Admin utilities for new appointments counter
     public function countUnviewedAppointments(): \Illuminate\Http\JsonResponse
     {
+        // Only count appointments with status 'pending' AND viewed_at is NULL
+        // Step 1: Get appointment IDs from unviewed notifications
+        $notificationAppointmentIds = Notification::where('type', 'appointment_book')
+            ->where(function ($q) {
+                $q->whereNull('viewed_at')->orWhere('viewed_at', '0000-00-00 00:00:00');
+            })
+            ->get()
+            ->map(function ($notification) {
+                $data = $notification->data;
+                return is_array($data) ? ($data['appointment_id'] ?? null) : null;
+            })
+            ->filter()
+            ->unique();
+
+        // Step 2: Check which of these appointment IDs have status 'pending'
+        $pendingAppointmentIds = \App\Models\Appointment::whereIn('id', $notificationAppointmentIds)
+            ->where('status', 'pending')
+            ->pluck('id');
+
+        // Step 3: Count notifications that match pending appointments
         $count = Notification::where('type', 'appointment_book')
             ->where(function ($q) {
-                $q->whereNull('is_viewed')->orWhere('is_viewed', false);
+                $q->whereNull('viewed_at')->orWhere('viewed_at', '0000-00-00 00:00:00');
+            })
+            ->get()
+            ->filter(function ($notification) use ($pendingAppointmentIds) {
+                $data = $notification->data;
+                $appointmentId = is_array($data) ? ($data['appointment_id'] ?? null) : null;
+                return $appointmentId && $pendingAppointmentIds->contains($appointmentId);
             })
             ->count();
 

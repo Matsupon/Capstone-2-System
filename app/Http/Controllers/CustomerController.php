@@ -13,8 +13,14 @@ class CustomerController extends Controller
     public function index()
 {
     try {
-        $customers = User::whereHas('appointments.order') 
-            ->with(['appointments.order'])
+        // Only get users with appointments that have been accepted (have orders)
+        $customers = User::whereHas('appointments', function ($query) {
+                $query->where('status', 'accepted');
+            })
+            ->whereHas('appointments.order')
+            ->with(['appointments' => function ($query) {
+                $query->where('status', 'accepted')->with('order');
+            }])
             ->get()
             ->map(function ($user) {
                 $totalOrders = $user->appointments->filter(function ($appointment) {
