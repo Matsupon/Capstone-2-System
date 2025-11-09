@@ -11,6 +11,7 @@ class Order extends Model
         'appointment_id',
         'queue_number',
         'status',
+        'handled',
         'scheduled_at', 
         'completed_at',
         'total_amount',
@@ -21,6 +22,7 @@ class Order extends Model
     ];
     
     protected $casts = [
+        'handled' => 'boolean',
         'scheduled_at' => 'datetime',
         'completed_at' => 'datetime',
         'total_amount' => 'decimal:2',

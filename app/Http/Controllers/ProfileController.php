@@ -11,7 +11,10 @@ class ProfileController extends Controller
     public function update(Request $request)
 {
     Log::info('✅ Received updateProfile request');
+    Log::info('✅ Request method:', ['method' => $request->method()]);
+    Log::info('✅ Content-Type:', ['content_type' => $request->header('Content-Type')]);
     Log::info('✅ Has file:', ['has_file' => $request->hasFile('profile_image')]);
+    Log::info('✅ Request data:', ['data' => $request->all()]);
 
     $user = $request->user();
 

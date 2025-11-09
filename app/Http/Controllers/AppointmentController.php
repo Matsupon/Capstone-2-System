@@ -60,8 +60,15 @@ class AppointmentController extends Controller
         }
     
         // Check conflicts across both appointments and admin-set order schedules
+        // EXCLUDE appointments that are linked to finished orders (those slots are now available)
         $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
             ->where('appointment_time', $validated['appointment_time'])
+            ->where(function ($q) {
+                $q->whereDoesntHave('order') // Appointments without orders (still pending)
+                  ->orWhereHas('order', function ($q2) {
+                      $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
+                  });
+            })
             ->exists();
 
         // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
@@ -118,11 +125,12 @@ class AppointmentController extends Controller
                 'user_id' => $appointment->user_id
             ]);
         
+            // Customer-facing notification
             Notification::create([
                 'user_id' => $appointment->user_id,
                 'type'    => 'appointment_booked',
                 'title'   => 'You have successfully booked an appointment!',
-                'body'    => null,
+                'body'    => 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.',
                 'data'    => [
                     'appointment_id'  => $appointment->id,
                     'appointment_date'=> $appointment->appointment_date,
@@ -131,9 +139,9 @@ class AppointmentController extends Controller
                 ],
             ]);
 
-            // Admin-facing notification used for dashboard/Appointments counters
+            // Admin-facing notification for dashboard tracking (will be filtered out for customers)
             Notification::create([
-                'user_id' => $appointment->user_id, // stored with customer id; admin views are global
+                'user_id' => $appointment->user_id,
                 'type'    => 'appointment_book',
                 'title'   => 'New appointment submitted',
                 'body'    => null,
@@ -168,38 +176,178 @@ class AppointmentController extends Controller
 
     public function getAvailableSlots(Request $request)
     {
-        $validated = $request->validate(['date' => 'required|date|after_or_equal:today']);
-        $date = $validated['date'];
+        $dateInput = $request->input('date');
+        $excludeOrderId = $request->input('exclude_order_id'); // Optional: exclude this order's appointment when editing
+        $excludeAppointmentId = $request->input('exclude_appointment_id'); // Optional: exclude this appointment when editing (for pending appointments without orders)
         
-        // Generate 30-minute time slots from 8:00 AM to 8:00 PM
+        if (!$dateInput) {
+            return response()->json([
+                'message' => 'Date parameter is required',
+                'errors' => ['date' => ['The date field is required.']]
+            ], 422);
+        }
+        
+        try {
+            // Parse and normalize the date
+            $date = \Carbon\Carbon::parse($dateInput)->format('Y-m-d');
+            $today = \Carbon\Carbon::today()->format('Y-m-d');
+            
+            // Check if date is today or in the future
+            if ($date < $today) {
+                return response()->json([
+                    'message' => 'Date must be today or in the future',
+                    'errors' => ['date' => ['The date must be today or in the future.']]
+                ], 422);
+            }
+        } catch (\Exception $parseError) {
+            return response()->json([
+                'message' => 'Invalid date format',
+                'errors' => ['date' => ['The date must be a valid date.']]
+            ], 422);
+        }
+        
+        // Generate 30-minute time slots from 8:00 AM to 8:00 PM (excluding 12:00 and 12:30)
         $allowedSlots = [];
         for ($hour = 8; $hour <= 20; $hour++) {
             for ($minute = 0; $minute < 60; $minute += 30) {
-                $allowedSlots[] = sprintf('%02d:%02d', $hour, $minute);
+                $time = sprintf('%02d:%02d', $hour, $minute);
+                if ($time !== '12:00' && $time !== '12:30') {
+                    $allowedSlots[] = $time;
+                }
             }
         }
 
-        // Booked from customer appointments for the same date
-        $bookedFromAppointments = Appointment::whereDate('appointment_date', $date)
+        $allBooked = collect();
+
+        // 1. Booked from Appointment model: appointment_date and appointment_time (ALL appointments, regardless of order status)
+        // If exclude_order_id is provided, exclude appointments linked to that order
+        // If exclude_appointment_id is provided, exclude that specific appointment (for pending appointments without orders)
+        $appointmentsQuery = Appointment::whereDate('appointment_date', $date)
+            ->whereNotNull('appointment_time');
+        
+        if ($excludeOrderId) {
+            $appointmentsQuery->whereDoesntHave('order', function($q) use ($excludeOrderId) {
+                $q->where('id', $excludeOrderId);
+            });
+        }
+        
+        if ($excludeAppointmentId) {
+            $appointmentsQuery->where('id', '!=', $excludeAppointmentId);
+        }
+        
+        $bookedFromAppointments = $appointmentsQuery
             ->pluck('appointment_time')
-            ->map(function ($time) { return \Carbon\Carbon::parse($time)->format('H:i'); })
+            ->map(function ($time) { 
+                try {
+                    // Try to parse as datetime first
+                    $parsed = \Carbon\Carbon::parse($time);
+                    return $parsed->format('H:i');
+                } catch (\Exception $e) {
+                    // If already in H:i format, return as is
+                    if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $time)) {
+                        return substr($time, 0, 5); // Return HH:MM format
+                    }
+                    return null;
+                }
+            })
+            ->filter()
             ->toArray();
+        $allBooked = $allBooked->merge($bookedFromAppointments);
 
-        // Booked from admin-set orders (check and pickup appointments) - EXCLUDE FINISHED ORDERS
-        $bookedFromOrders = collect();
-        $bookedCheck = \App\Models\Order::whereDate('check_appointment_date', $date)
-            ->whereNotNull('check_appointment_time')
-            ->where('status', '!=', 'Finished') // Exclude finished orders
+        // 2. Booked from Order model: scheduled_at (extract time from datetime)
+        $scheduledQuery = \App\Models\Order::whereDate('scheduled_at', $date)
+            ->whereNotNull('scheduled_at');
+        
+        if ($excludeOrderId) {
+            $scheduledQuery->where('id', '!=', $excludeOrderId);
+        }
+        
+        $bookedFromScheduled = $scheduledQuery
+            ->get()
+            ->map(function ($order) {
+                try {
+                    return \Carbon\Carbon::parse($order->scheduled_at)->format('H:i');
+                } catch (\Exception $e) {
+                    return null;
+                }
+            })
+            ->filter()
+            ->toArray();
+        $allBooked = $allBooked->merge($bookedFromScheduled);
+
+        // 3. Booked from Order model: completed_at (extract time from datetime)
+        $completedQuery = \App\Models\Order::whereDate('completed_at', $date)
+            ->whereNotNull('completed_at');
+        
+        if ($excludeOrderId) {
+            $completedQuery->where('id', '!=', $excludeOrderId);
+        }
+        
+        $bookedFromCompleted = $completedQuery
+            ->get()
+            ->map(function ($order) {
+                try {
+                    return \Carbon\Carbon::parse($order->completed_at)->format('H:i');
+                } catch (\Exception $e) {
+                    return null;
+                }
+            })
+            ->filter()
+            ->toArray();
+        $allBooked = $allBooked->merge($bookedFromCompleted);
+
+        // 4. Booked from Order model: check_appointment_date and check_appointment_time
+        $checkQuery = \App\Models\Order::whereDate('check_appointment_date', $date)
+            ->whereNotNull('check_appointment_time');
+        
+        if ($excludeOrderId) {
+            $checkQuery->where('id', '!=', $excludeOrderId);
+        }
+        
+        $bookedFromCheck = $checkQuery
             ->pluck('check_appointment_time')
-            ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
-        $bookedPickup = \App\Models\Order::whereDate('pickup_appointment_date', $date)
-            ->whereNotNull('pickup_appointment_time')
-            ->where('status', '!=', 'Finished') // Exclude finished orders
-            ->pluck('pickup_appointment_time')
-            ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
-        $bookedFromOrders = $bookedCheck->merge($bookedPickup)->unique()->values();
+            ->map(function ($t) { 
+                try {
+                    $parsed = \Carbon\Carbon::parse($t);
+                    return $parsed->format('H:i');
+                } catch (\Exception $e) {
+                    if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
+                        return substr($t, 0, 5);
+                    }
+                    return null;
+                }
+            })
+            ->filter()
+            ->toArray();
+        $allBooked = $allBooked->merge($bookedFromCheck);
 
-        $allBooked = collect($bookedFromAppointments)->merge($bookedFromOrders)->unique()->values()->toArray();
+        // 5. Booked from Order model: pickup_appointment_date and pickup_appointment_time
+        $pickupQuery = \App\Models\Order::whereDate('pickup_appointment_date', $date)
+            ->whereNotNull('pickup_appointment_time');
+        
+        if ($excludeOrderId) {
+            $pickupQuery->where('id', '!=', $excludeOrderId);
+        }
+        
+        $bookedFromPickup = $pickupQuery
+            ->pluck('pickup_appointment_time')
+            ->map(function ($t) { 
+                try {
+                    $parsed = \Carbon\Carbon::parse($t);
+                    return $parsed->format('H:i');
+                } catch (\Exception $e) {
+                    if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
+                        return substr($t, 0, 5);
+                    }
+                    return null;
+                }
+            })
+            ->filter()
+            ->toArray();
+        $allBooked = $allBooked->merge($bookedFromPickup);
+
+        // Get unique booked times
+        $allBooked = $allBooked->unique()->values()->toArray();
 
         $available = array_values(array_diff($allowedSlots, $allBooked));
 
@@ -236,6 +384,9 @@ public function adminGetAllAppointments()
                 : null,
             'gcash_proof' => $appointment->gcash_proof 
                 ? asset('storage/' . $appointment->gcash_proof) 
+                : null,
+            'refund_image' => $appointment->refund_image 
+                ? asset('storage/' . $appointment->refund_image) 
                 : null,
             'status' => $appointment->status,
             'created_at' => $appointment->created_at->toDateTimeString(),
@@ -362,6 +513,10 @@ public function adminGetAppointmentById($id)
             'gcash_proof'        => $appointment->gcash_proof 
                                     ? asset('storage/' . $appointment->gcash_proof) 
                                     : null,
+            'refund_image'       => $appointment->refund_image 
+                                    ? asset('storage/' . $appointment->refund_image) 
+                                    : null,
+            'status'             => $appointment->status,
             'created_at'         => $appointment->created_at->toDateTimeString(),
         ];
 
@@ -393,30 +548,64 @@ public function dashboard()
 
 
 
-    public function adminRejectAppointment($id)
+    public function adminRejectAppointment(Request $request, $id)
     {
         try {
-            $appointment = Appointment::findOrFail($id);
+            // Validate refund image is required
+            $validated = $request->validate([
+                'refund_image' => 'required|file|image|max:5120',
+            ]);
+
+            $appointment = Appointment::with('order')->findOrFail($id);
+            $appointmentUserId = $appointment->user_id;
+            $order = $appointment->order;
+
+            // Upload refund image
+            $refundImagePath = null;
+            if ($request->hasFile('refund_image')) {
+                $refundImagePath = $request->file('refund_image')->store('refunds', 'public');
+                \Log::info('Refund image uploaded', ['path' => $refundImagePath]);
+            }
+
+            // Update appointment status to rejected and save refund image
+            $appointment->status = 'rejected';
+            $appointment->refund_image = $refundImagePath;
+            $appointment->save();
+
+            // Delete the order if it exists (rejected appointments shouldn't have orders)
+            if ($order) {
+                $order->delete();
+            }
 
             // Create a notification to inform the user their appointment was rejected by admin
             Notification::create([
-                'user_id' => $appointment->user_id,
+                'user_id' => $appointmentUserId,
                 'type'    => 'appointment_rejected',
                 'title'   => "We're sorry, unfortunately your appointment has been rejected by the admin.",
-                'body'    => 'Please ensure you uploaded the correct gcash payment proof and try again next time',
+                'body'    => 'Please ensure you uploaded the correct gcash payment proof and try again next time. Your payment has been refunded.',
                 'data'    => [
                     'appointment_id' => $appointment->id,
-                    'reason'         => 'deleted_by_admin',
+                    'refund_image'   => $refundImagePath ? asset('storage/' . $refundImagePath) : null,
+                    'reason'         => 'rejected_by_admin',
                 ],
             ]);
 
-            $appointment->delete();
-
             return response()->json([
                 'success' => true,
-                'message' => 'Appointment rejected and deleted successfully'
+                'message' => 'Appointment rejected successfully'
             ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error rejecting appointment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'appointment_id' => $id
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to reject appointment',
@@ -430,7 +619,10 @@ public function dashboard()
     public function index()
     {
         try {
-            $appointments = Appointment::with('user')->get();
+            // Only return pending and accepted appointments (exclude rejected)
+            $appointments = Appointment::with('user')
+                ->whereIn('status', ['pending', 'accepted'])
+                ->get();
             return response()->json($appointments);
         } catch (\Exception $e) {
             return response()->json([
@@ -444,11 +636,13 @@ public function dashboard()
     public function destroy($id)
     {
         try {
-            $appointment = Appointment::findOrFail($id);
+            $appointment = Appointment::with('order')->findOrFail($id);
+            $appointmentUserId = $appointment->user_id;
+            $order = $appointment->order;
 
             // Create a notification to inform the user their appointment was deleted/rejected by admin
             Notification::create([
-                'user_id' => $appointment->user_id,
+                'user_id' => $appointmentUserId,
                 'type'    => 'appointment_rejected',
                 'title'   => "We're sorry, unfortunately your appointment has been rejected by the admin.",
                 'body'    => 'Please ensure you uploaded the correct gcash payment proof and try again next time',
@@ -458,10 +652,21 @@ public function dashboard()
                 ],
             ]);
 
+            // Delete the order first (if exists) to maintain referential integrity
+            if ($order) {
+                $order->delete();
+            }
+
+            // Delete the appointment
             $appointment->delete();
 
             return response()->json(['message' => 'Appointment rejected and deleted.']);
         } catch (\Exception $e) {
+            \Log::error('Error deleting appointment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'appointment_id' => $id
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete appointment',
@@ -536,6 +741,412 @@ public function dashboard()
         ]);
     }
 
+    public function updateOrderDetails(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'order_id' => 'required|exists:orders,id',
+                'appointment_date' => 'required|date|after_or_equal:today',
+                'appointment_time' => 'required|date_format:H:i',
+                'preferred_due_date' => 'required|date',
+            ]);
 
+            $order = \App\Models\Order::with('appointment')->findOrFail($validated['order_id']);
+            $userId = $request->user()->id;
+
+            // Verify the order belongs to the authenticated user
+            if ($order->appointment->user_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            // Update appointment date and time
+            $order->appointment->appointment_date = $validated['appointment_date'];
+            $order->appointment->appointment_time = $validated['appointment_time'];
+            $order->appointment->preferred_due_date = $validated['preferred_due_date'];
+            $order->appointment->save();
+
+            // Create customer notification
+            Notification::create([
+                'user_id' => $userId,
+                'type' => 'order_details_updated',
+                'title' => 'You have successfully updated your Order Details!',
+                'body' => null,
+                'data' => [
+                    'order_id' => $order->id,
+                    'appointment_id' => $order->appointment->id,
+                    'appointment_date' => $validated['appointment_date'],
+                    'appointment_time' => $validated['appointment_time'],
+                    'preferred_due_date' => $validated['preferred_due_date'],
+                ],
+            ]);
+
+            // Create admin notification - store with user_id = 0 to indicate it's for all admins
+            // Note: This requires user_id to be nullable in the notifications table or foreign key check disabled
+            try {
+                // Temporarily disable foreign key checks
+                \DB::statement('SET FOREIGN_KEY_CHECKS=0');
+                \DB::table('notifications')->insert([
+                    'user_id' => 0,
+                    'type' => 'customer_appointment_updated',
+                    'title' => $order->appointment->user->name . ' updated their next appointment date and time!',
+                    'body' => 'Your next appointment date and time with them will be ' . 
+                        Carbon::parse($validated['appointment_date'])->format('F j, Y') . ' at ' . 
+                        Carbon::parse($validated['appointment_time'])->format('g:i A'),
+                    'data' => json_encode([
+                        'order_id' => $order->id,
+                        'appointment_id' => $order->appointment->id,
+                        'customer_name' => $order->appointment->user->name,
+                        'customer_user_id' => $order->appointment->user_id,
+                        'appointment_date' => $validated['appointment_date'],
+                        'appointment_time' => $validated['appointment_time'],
+                        'preferred_due_date' => $validated['preferred_due_date'],
+                    ]),
+                    'is_viewed' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            } catch (\Exception $e) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1'); // Re-enable in case of error
+                \Log::warning('Failed to create admin notification: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order details updated successfully',
+                'data' => [
+                    'appointment_date' => $order->appointment->appointment_date,
+                    'appointment_time' => $order->appointment->appointment_time,
+                    'preferred_due_date' => $order->appointment->preferred_due_date,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error updating order details', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update order details',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateAppointmentDetails(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'appointment_id' => 'required|exists:appointments,id',
+                'appointment_date' => 'required|date|after_or_equal:today',
+                'appointment_time' => 'required|date_format:H:i',
+                'preferred_due_date' => 'required|date',
+            ]);
+
+            $appointment = Appointment::findOrFail($validated['appointment_id']);
+            $userId = $request->user()->id;
+
+            // Verify the appointment belongs to the authenticated user
+            if ($appointment->user_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            // Only allow updating pending appointments (those without orders or with pending orders)
+            if ($appointment->status !== 'pending') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending appointments can be updated directly'
+                ], 400);
+            }
+
+            // Check for conflicts across both appointments and admin-set order schedules
+            // EXCLUDE the current appointment when checking for conflicts
+            $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
+                ->where('appointment_time', $validated['appointment_time'])
+                ->where('id', '!=', $appointment->id)
+                ->where(function ($q) {
+                    $q->whereDoesntHave('order') // Appointments without orders (still pending)
+                      ->orWhereHas('order', function ($q2) {
+                          $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
+                      });
+                })
+                ->exists();
+
+            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
+            $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished')
+                ->where(function ($q) use ($validated) {
+                    $q->whereDate('check_appointment_date', $validated['appointment_date'])
+                      ->where('check_appointment_time', $validated['appointment_time']);
+                })
+                ->orWhere(function ($q) use ($validated) {
+                    $q->whereDate('pickup_appointment_date', $validated['appointment_date'])
+                      ->where('pickup_appointment_time', $validated['appointment_time']);
+                })
+                ->exists();
+
+            $conflict = $conflictInAppointments || $conflictInOrders;
+
+            if ($conflict) {
+                return response()->json([
+                    'message' => 'This time slot is already taken.',
+                    'errors' => ['appointment_time' => ['Already booked.']]
+                ], 422);
+            }
+
+            // Update appointment date, time, and due date
+            $appointment->appointment_date = $validated['appointment_date'];
+            $appointment->appointment_time = $validated['appointment_time'];
+            $appointment->preferred_due_date = $validated['preferred_due_date'];
+            $appointment->save();
+
+            // Create customer notification
+            Notification::create([
+                'user_id' => $userId,
+                'type' => 'appointment_updated',
+                'title' => 'You have successfully updated your appointment details!',
+                'body' => null,
+                'data' => [
+                    'appointment_id' => $appointment->id,
+                    'appointment_date' => $validated['appointment_date'],
+                    'appointment_time' => $validated['appointment_time'],
+                    'preferred_due_date' => $validated['preferred_due_date'],
+                ],
+            ]);
+
+            // Create admin notification
+            try {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=0');
+                \DB::table('notifications')->insert([
+                    'user_id' => 0,
+                    'type' => 'customer_appointment_updated',
+                    'title' => $appointment->user->name . ' updated their appointment date and time!',
+                    'body' => 'Appointment date and time: ' . 
+                        Carbon::parse($validated['appointment_date'])->format('F j, Y') . ' at ' . 
+                        Carbon::parse($validated['appointment_time'])->format('g:i A'),
+                    'data' => json_encode([
+                        'appointment_id' => $appointment->id,
+                        'customer_name' => $appointment->user->name,
+                        'customer_user_id' => $appointment->user_id,
+                        'appointment_date' => $validated['appointment_date'],
+                        'appointment_time' => $validated['appointment_time'],
+                        'preferred_due_date' => $validated['preferred_due_date'],
+                    ]),
+                    'is_viewed' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            } catch (\Exception $e) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1');
+                \Log::warning('Failed to create admin notification: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Appointment details updated successfully',
+                'data' => [
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                    'preferred_due_date' => $appointment->preferred_due_date,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error updating appointment details', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update appointment details',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function myAppointments(Request $request)
+    {
+        try {
+            $userId = $request->user()->id;
+            
+            $appointments = Appointment::with('order')
+                ->where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($appointment) {
+                    $order = $appointment->order;
+                    $appointmentStatus = $appointment->status; // 'pending', 'accepted', 'rejected'
+                    $orderStatus = $order ? $order->status : null; // 'Pending', 'Ready to Check', 'Completed', 'Finished'
+                    $handled = $order ? (bool)($order->handled ?? false) : false;
+                    
+                    // Determine display status for filtering
+                    // pending -> Requesting (whether or not order exists - pending appointments may not have orders yet)
+                    // accepted -> Accepted (when order exists)
+                    // rejected -> Rejected
+                    $displayStatus = 'Requesting'; // Default for pending appointments
+                    if ($appointmentStatus === 'accepted' && $order) {
+                        $displayStatus = 'Accepted';
+                    } elseif ($appointmentStatus === 'rejected') {
+                        $displayStatus = 'Rejected';
+                    }
+                    // Note: pending appointments without orders should still show as "Requesting"
+                    // because they're waiting for admin approval, not rejected
+                    
+                    return [
+                        'id' => $appointment->id,
+                        'service_type' => $appointment->service_type,
+                        'sizes' => json_decode($appointment->sizes, true),
+                        'total_quantity' => $appointment->total_quantity,
+                        'notes' => $appointment->notes,
+                        'design_image' => $appointment->design_image 
+                            ? asset('storage/' . $appointment->design_image) 
+                            : null,
+                        'gcash_proof' => $appointment->gcash_proof 
+                            ? asset('storage/' . $appointment->gcash_proof) 
+                            : null,
+                        'refund_image' => $appointment->refund_image 
+                            ? asset('storage/' . $appointment->refund_image) 
+                            : null,
+                        'preferred_due_date' => $appointment->preferred_due_date 
+                            ? \Carbon\Carbon::parse($appointment->preferred_due_date)->format('Y-m-d') 
+                            : null,
+                        'appointment_date' => $appointment->appointment_date 
+                            ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') 
+                            : null,
+                        'appointment_time' => $appointment->appointment_time 
+                            ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i') 
+                            : null,
+                        'status' => $appointmentStatus, // Appointment status: pending, accepted, rejected
+                        'display_status' => $displayStatus, // For filtering: Requesting, Accepted, Rejected
+                        'created_at' => $appointment->created_at->toDateTimeString(),
+                        'order' => $order ? [
+                            'id' => $order->id,
+                            'status' => $orderStatus,
+                            'handled' => $handled,
+                            'queue_number' => $order->queue_number,
+                            'scheduled_at' => $order->scheduled_at,
+                            'completed_at' => $order->completed_at,
+                            'total_amount' => $order->total_amount,
+                            'check_appointment_date' => $order->check_appointment_date,
+                            'check_appointment_time' => $order->check_appointment_time,
+                            'pickup_appointment_date' => $order->pickup_appointment_date,
+                            'pickup_appointment_time' => $order->pickup_appointment_time,
+                        ] : null,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $appointments
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching user appointments', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch appointments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function cancelAppointment(Request $request, $id)
+    {
+        try {
+            $userId = $request->user()->id;
+            $appointment = Appointment::with('order')->findOrFail($id);
+
+            // Verify the appointment belongs to the authenticated user
+            if ($appointment->user_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            // Only allow cancellation if:
+            // - Appointment status is 'pending' (Requesting)
+            // - OR if order exists: Order status is 'Pending' AND Order handled is 0 (false)
+            $order = $appointment->order;
+            
+            if ($appointment->status !== 'pending') {
+                // If appointment is accepted, check order status
+                if (!$order) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Only pending appointments can be cancelled'
+                    ], 400);
+                }
+                
+                if ($order->status !== 'Pending') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Only pending orders can be cancelled'
+                    ], 400);
+                }
+                
+                if ($order->handled) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This order has already been handled and cannot be cancelled'
+                    ], 400);
+                }
+            }
+
+            // Store user_id before deletion for notification
+            $appointmentUserId = $appointment->user_id;
+
+            // Delete the order first (if exists) - this will cascade delete if foreign key constraints are set
+            if ($order) {
+                $order->delete();
+            }
+
+            // Delete the appointment
+            $appointment->delete();
+
+            // Create notification for the user
+            try {
+                Notification::create([
+                    'user_id' => $appointmentUserId,
+                    'type' => 'order_cancelled',
+                    'title' => 'You have successfully cancelled an order!',
+                    'body' => null,
+                    'data' => [
+                        'appointment_id' => $id,
+                        'cancelled_at' => now()->toDateTimeString(),
+                    ],
+                ]);
+            } catch (\Exception $notifError) {
+                \Log::error('Failed to create cancellation notification', [
+                    'error' => $notifError->getMessage(),
+                    'user_id' => $appointmentUserId,
+                    'appointment_id' => $id
+                ]);
+                // Don't fail the request if notification creation fails
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Appointment and order cancelled successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error cancelling appointment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cancel appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 
 }

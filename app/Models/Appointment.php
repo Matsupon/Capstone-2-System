@@ -14,6 +14,7 @@ class Appointment extends Model
         'notes',
         'design_image',
         'gcash_proof',
+        'refund_image',
         'preferred_due_date',
         'appointment_date',
         'appointment_time',
@@ -21,10 +22,8 @@ class Appointment extends Model
     ];
 
     protected $casts = [
-        'sizes' => 'array',
         'preferred_due_date' => 'date',
         'appointment_date' => 'date',
-        'appointment_time' => 'datetime:H:i',
     ];
 
     public function user()

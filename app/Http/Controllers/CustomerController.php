@@ -108,7 +108,7 @@ class CustomerController extends Controller
                     'service' => $order->appointment->service_type,
                     'sizes' => $sizes,
                     'phone' => $order->appointment->user->phone,
-                    'status' => $order->status === 'Finished' ? 'Completed' : $order->status,
+                    'status' => $order->status,
                     'designImg' => $order->appointment->design_image 
                         ? asset('storage/' . $order->appointment->design_image) 
                         : 'jersey.jpg', // fallback

@@ -51,6 +51,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me/orders/history', [OrderController::class, 'myHistory']);
     Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
     Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
+    Route::patch('/appointments/update-order-details', [AppointmentController::class, 'updateOrderDetails']);
+    Route::patch('/appointments/update-appointment-details', [AppointmentController::class, 'updateAppointmentDetails']);
+    Route::get('/me/appointments', [AppointmentController::class, 'myAppointments']);
+    Route::delete('/appointments/{id}/cancel', [AppointmentController::class, 'cancelAppointment']);
 
     // Customers
     Route::get('/customers', [CustomerController::class, 'index']);
@@ -63,13 +67,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/appointments/accepted', [AppointmentController::class, 'adminGetAcceptedAppointments']); 
     Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); 
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
-    Route::delete('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); 
+    Route::post('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); 
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/history', [OrderController::class, 'history']); 
     Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::patch('/orders/{orderId}/handled', [OrderController::class, 'toggleHandled']);
     Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
     Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
     Route::get('/orders/today-queue', [OrderController::class, 'getTodayQueue']);
@@ -83,6 +88,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/appointments/unviewed-count', [NotificationController::class, 'countUnviewedAppointments']);
     Route::patch('/notifications/appointments/{appointmentId}/viewed', [NotificationController::class, 'markAppointmentAsViewed']);
     Route::get('/notifications/appointments/view-states', [NotificationController::class, 'getAppointmentViewStates']);
+    // Update old appointment_booked notifications
+    Route::post('/notifications/update-appointment-booked', [NotificationController::class, 'updateAppointmentBookedNotifications']);
+    // Admin notifications for customer appointment updates
+    Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
+    Route::get('/admin/notifications/unviewed-count', [NotificationController::class, 'adminUnviewedCount']);
+    Route::patch('/admin/notifications/{id}/viewed', [NotificationController::class, 'markAdminNotificationAsViewed']);
 
     //Admin DASHBOARD
     Route::get('/orders/today-appointments-count', [OrderController::class, 'getTodayAppointmentsCount']);
