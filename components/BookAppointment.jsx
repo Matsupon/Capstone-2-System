@@ -297,8 +297,8 @@ export default function BookAppointment({ visible, onClose }) {
       setIsLoading(true);
       
       // Log connection info before attempting upload
-      const serverURL = api.defaults.baseURL;
-      const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'unknown';
+      const apiBaseURL = api.defaults.baseURL;
+      const serverHost = apiBaseURL ? apiBaseURL.replace('/api', '').replace(/\/$/, '') : 'unknown';
       console.log('📤 Starting appointment booking...', {
         server: serverHost,
         hasDesignImage: !!designImage,
@@ -444,43 +444,64 @@ export default function BookAppointment({ visible, onClose }) {
       console.log('   - Timeout: 120s');
       console.log('   - Retries: DISABLED (__disableRetry: true)');
       
-      // Don't set Content-Type header - let axios automatically set it with boundary for FormData
-      // Use longer timeout for weak connections with file uploads
-      // IMPORTANT: Disable retries for FormData uploads - they can't be retried reliably
-      const response = await api.post('/appointments', formData, {
-        timeout: 120000, // 120 seconds (2 minutes) for weak network connections with file uploads
+      // CRITICAL FIX: Use React Native's fetch API directly for FormData uploads
+      // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
+      // Using fetch API directly ensures FormData is handled correctly with multipart/form-data
+      const token = await AsyncStorage.getItem('authToken');
+      const apiBaseUrl = api.defaults.baseURL;
+      const fullUrl = `${apiBaseUrl}/appointments`;
+      
+      console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
+        method: 'POST',
         headers: {
           'Accept': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+          // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
         },
-        // Disable retries for FormData uploads to prevent FormData corruption
-        __disableRetry: true,
-        // Add upload progress tracking for debugging
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            console.log(`📤 Upload progress: ${percentCompleted}% (${Math.round(progressEvent.loaded / 1024)}KB / ${Math.round(progressEvent.total / 1024)}KB)`);
-          }
-        },
+        body: formData,
       });
       
-      console.log("Booking response:", response.data);
+      // Check if response is OK
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw {
+          response: {
+            status: response.status,
+            statusText: response.statusText,
+            data: errorData,
+          },
+          message: errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+        };
+      }
+      
+      const responseData = await response.json();
+      // Convert fetch response to axios-like response for compatibility
+      const axiosLikeResponse = {
+        data: responseData,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      };
+      
+      console.log("Booking response:", axiosLikeResponse.data);
       showSuccess();
       
     } catch (error) {
       console.error('Booking failed:', error);
       console.error('Error details:', {
         message: error.message,
-        code: error.code,
-        response: error.response?.data,
+        response: error.response,
         status: error.response?.status,
-        request: error.request,
       });
       
       let errorMessage = 'Failed to book appointment.';
       let errorTitle = 'Booking Failed';
       
-      // Check if we got a server response with validation errors
-      if (error.response?.data) {
+      // Handle fetch API errors
+      if (error.response) {
+        // Server responded with an error status
         const responseData = error.response.data;
         if (responseData.errors) {
           // Validation errors from Laravel
@@ -504,56 +525,21 @@ export default function BookAppointment({ visible, onClose }) {
             errorMessage = 'Server encountered an error. Please try again later.';
           }
         }
-      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        // Get the server URL from the API instance (from utils/api.js)
+      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
+        // Network error (fetch API doesn't have error.code like axios)
         const serverURL = api.defaults.baseURL;
-        // Extract host and port (remove /api suffix)
         const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
         
         errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot upload appointment data. This might be due to:\n\n' +
-                      '📤 File upload issues\n' +
-                      '🌐 Network connectivity problems\n\n' +
-                      'Please try:\n' +
+        errorMessage = 'Cannot upload appointment data. Please try:\n\n' +
                       '1. Check your internet connection\n' +
                       '2. Verify server is running on ' + serverHost + '\n' +
                       '3. Try using smaller image files\n' +
                       '4. Wait a moment and try again';
-      } else if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
-        errorTitle = 'Upload Timeout';
-        errorMessage = 'The file upload is taking too long. This might be due to:\n\n' +
-                      '1. Weak network connection (strong winds affecting signal)\n' +
-                      '2. Large image files taking time to upload\n' +
-                      '3. Server processing delay\n\n' +
-                      'Please try:\n' +
-                      '- Moving closer to the WiFi router\n' +
-                      '- Using smaller image files\n' +
-                      '- Trying again when network is stable';
-      } else if (error.response) {
-        console.error('Error response:', error.response.data);
-        const responseMessage = error.response.data?.message || error.response.data?.error;
-        errorMessage = responseMessage || `Server error: ${error.response.status}`;
-        if (error.response.status === 422) {
-          errorTitle = 'Validation Error';
-          errorMessage = responseMessage || 'Please check your input and try again.';
-        } else if (error.response.status === 401) {
-          errorTitle = 'Authentication Error';
-          errorMessage = 'Please log in again.';
-        }
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-        // Get the server URL from the API instance (from utils/api.js)
-        const serverURL = api.defaults.baseURL;
-        // Extract host and port (remove /api suffix)
-        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-        
-        errorMessage = 'No response from server. Please check:\n\n' +
-                      `1. Server is running on ${serverHost}\n` +
-                      '2. Your device is connected to the network\n' +
-                      '3. Server is accessible from your device';
       } else {
-        console.error('Request setup error:', error.message);
-        errorMessage = `Request error: ${error.message || 'Unknown error occurred'}`;
+        // Unknown error
+        console.error('Request error:', error.message);
+        errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       
       Alert.alert(errorTitle, errorMessage);

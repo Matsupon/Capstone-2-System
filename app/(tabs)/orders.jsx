@@ -15,7 +15,7 @@ import Header from '../../components/Header';
 import api from '../../utils/api';
 
 export default function AppointmentsPage() {
-  const [expandedRecent, setExpandedRecent] = useState(false);
+  const [expandedRecent, setExpandedRecent] = useState(null); // Changed to store order ID
   const [expandedHistory, setExpandedHistory] = useState({
     first: false,
     second: false,
@@ -25,13 +25,14 @@ export default function AppointmentsPage() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [nextAppointment, setNextAppointment] = useState(null);
   const [latestOrder, setLatestOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [finishedOrders, setFinishedOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const toggleRecent = () => {
-    setExpandedRecent(!expandedRecent);
+  const toggleRecent = (orderId) => {
+    setExpandedRecent(expandedRecent === orderId ? null : orderId);
   };
 
   const toggleHistory = (key) => {
@@ -99,26 +100,19 @@ export default function AppointmentsPage() {
         setNextAppointment(null);
       }
     } catch (err) {
-      // Handle network errors gracefully - don't update state if server is unreachable
-      if (err?.response?.status === 404) {
-        // 404 is expected if no appointment exists
-        setNextAppointment(null);
-      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
-        // Network errors are expected if server is down - keep previous appointment if available
-        return;
-      } else {
-        // Other errors
-        setNextAppointment(null);
-      }
+      setNextAppointment(null);
     }
   }, []);
 
   const loadLatestOrder = useCallback(async () => {
     try {
       setOrderLoading(true);
-      const res = await api.get('/me/orders/latest');
+      const res = await api.get('/me/orders');
       if (res.data?.success) {
-        setLatestOrder(res.data.data || null);
+        const ordersData = res.data.data || [];
+        setOrders(ordersData);
+        // Set latestOrder to the first order for backward compatibility
+        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
       }
     } catch (e) {
     } finally {
@@ -211,68 +205,92 @@ export default function AppointmentsPage() {
 
         {/* Recent Section */}
         <Text style={styles.sectionTitle}>Recent</Text>
-        <View style={styles.appointmentCard}>
-          <View style={[styles.indicator, {backgroundColor: getStatusColor(latestOrder?.status || 'Pending')}]} />
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardDate}>
-                {latestOrder ? `${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent orders for now'}
-              </Text>
-              {latestOrder && (
-                <TouchableOpacity onPress={toggleRecent} style={styles.statusContainer}>
-                  {latestOrder?.status ? (
-                    <Text
-                      style={[
-                        styles.statusText,
-                        latestOrder?.status === 'Completed'
-                          ? styles.statusCompleted
-                          : latestOrder?.status === 'Ready to Check'
-                          ? styles.statusReadyToCheck
-                          : styles.statusPending,
-                      ]}
-                    >
-                      {latestOrder?.status}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
-                  )}
-                  <MaterialIcons
-                    name={expandedRecent ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                    size={24}
-                    color={getStatusColor(latestOrder?.status || 'Pending')}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            {expandedRecent && latestOrder && (
-              <View style={styles.dropdownContent}>
-                <Text style={styles.dropdownTitle}>Order Details:</Text>
-                <Text style={styles.dropdownText}>{`• Service: ${latestOrder?.appointment?.service_type || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Phone Number: ${latestOrder?.appointment?.user?.phone || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Size: ${parseSizesToText(latestOrder?.appointment?.sizes) || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Quantity: ${latestOrder?.appointment?.total_quantity ?? 'N/A'} pcs.`}</Text>
-                <Text style={styles.dropdownText}>{`• Due Date: ${
-  latestOrder?.appointment?.preferred_due_date
-    ? new Date(latestOrder.appointment.preferred_due_date).toLocaleDateString()
-    : 'N/A'
-}`}</Text>
-                <Text style={styles.dropdownText}>{`• Notes: ${latestOrder?.appointment?.notes || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>• Design Image:</Text>
-                {latestOrder?.appointment?.design_image ? (
-                  <TouchableOpacity onPress={() => handleImagePress({ uri: latestOrder.appointment.design_image })}>
-                    <Image source={{ uri: latestOrder.appointment.design_image }} style={styles.image} />
-                  </TouchableOpacity>
-                ) : null}
-                <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
-                {latestOrder?.appointment?.gcash_proof ? (
-                  <TouchableOpacity onPress={() => handleImagePress({ uri: latestOrder.appointment.gcash_proof })}>
-                    <Image source={{ uri: latestOrder.appointment.gcash_proof }} style={styles.image} />
-                  </TouchableOpacity>
-                ) : null}
+        {orders.length > 0 ? (
+          orders.map((order, orderIndex) => {
+            const isExpanded = expandedRecent === order.id;
+            return (
+              <View key={order.id} style={{ marginBottom: orderIndex < orders.length - 1 ? 15 : 0 }}>
+                <Text style={[styles.sectionTitle, { fontSize: 16, marginTop: orderIndex === 0 ? 0 : 15, marginBottom: 10 }]}>
+                  Order #{order.id}
+                  {order.queue_number ? ` - Queue #${order.queue_number}` : ''}
+                </Text>
+                <View style={styles.appointmentCard}>
+                  <View style={[styles.indicator, {backgroundColor: getStatusColor(order?.status || 'Pending')}]} />
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.orderInfo}>
+                        <Text style={styles.cardDate} numberOfLines={1} ellipsizeMode="tail">
+                          {`Order: ${order?.appointment?.service_type || 'N/A'}`}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => toggleRecent(order.id)} style={styles.statusContainer}>
+                        {order?.status ? (
+                          <Text
+                            style={[
+                              styles.statusText,
+                              order?.status === 'Completed'
+                                ? styles.statusCompleted
+                                : order?.status === 'Ready to Check'
+                                ? styles.statusReadyToCheck
+                                : styles.statusPending,
+                            ]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {order?.status}
+                          </Text>
+                        ) : (
+                          <Text style={[styles.statusText, styles.statusPending]} numberOfLines={1} ellipsizeMode="tail">Pending</Text>
+                        )}
+                        <MaterialIcons
+                          name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                          size={24}
+                          color={getStatusColor(order?.status || 'Pending')}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    {isExpanded && (
+                      <View style={styles.dropdownContent}>
+                        <Text style={styles.dropdownTitle}>Order Details:</Text>
+                        <Text style={styles.dropdownText}>{`• Service: ${order?.appointment?.service_type || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Phone Number: ${order?.appointment?.user?.phone || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Size: ${parseSizesToText(order?.appointment?.sizes) || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Quantity: ${order?.appointment?.total_quantity ?? 'N/A'} pcs.`}</Text>
+                        <Text style={styles.dropdownText}>{`• Due Date: ${
+                          order?.appointment?.preferred_due_date
+                            ? new Date(order.appointment.preferred_due_date).toLocaleDateString()
+                            : 'N/A'
+                        }`}</Text>
+                        <Text style={styles.dropdownText}>{`• Notes: ${order?.appointment?.notes || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>• Design Image:</Text>
+                        {order?.appointment?.design_image ? (
+                          <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.design_image })}>
+                            <Image source={{ uri: order.appointment.design_image }} style={styles.image} />
+                          </TouchableOpacity>
+                        ) : null}
+                        <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
+                        {order?.appointment?.gcash_proof ? (
+                          <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.gcash_proof })}>
+                            <Image source={{ uri: order.appointment.gcash_proof }} style={styles.image} />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                </View>
               </View>
-            )}
+            );
+          })
+        ) : (
+          <View style={styles.appointmentCard}>
+            <View style={[styles.indicator, {backgroundColor: getStatusColor('Pending')}]} />
+            <View style={styles.cardContent}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardDate}>No recent orders for now</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
 
        {/* History Section */}
       <Text style={styles.sectionTitle}>History</Text>
@@ -285,18 +303,18 @@ export default function AppointmentsPage() {
         <View style={styles.cardHeader}>
           <View style={styles.orderInfo}>
             <Text style={styles.cardDate} numberOfLines={2}>
-              {`${order?.appointment?.service_type || 'N/A'}`}
+              {`Order: ${order?.appointment?.service_type || 'N/A'}`}
             </Text>
           </View>
           <TouchableOpacity 
             onPress={() => toggleHistory(index.toString())} 
             style={styles.statusContainer}
           >
-            <Text style={[styles.statusText, styles.statusFinished]}>Finished</Text>
+            <Text style={[styles.statusText, styles.statusCompleted]}></Text>
             <MaterialIcons
               name={expandedHistory[index.toString()] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
               size={24}
-              color="#2196f3"
+              color="#4caf50"
             />
           </TouchableOpacity>
                 </View>
@@ -411,9 +429,6 @@ const styles = StyleSheet.create({
   statusCompleted: {
     color: '#4caf50', // Green for Completed
   },
-  statusFinished: {
-    color: '#2196f3', // Blue for Finished
-  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -493,18 +508,21 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start', // Changed from 'center' to 'flex-start'
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   orderInfo: {
-    flex: 1, // Takes available space
-    marginRight: 10, // Adds spacing between text and status
-    minWidth: '60%', // Ensures text doesn't get too squeezed
+    flex: 1,
+    marginRight: 10,
+    minWidth: 0, // Allows flex to work properly
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 0, // Prevents shrinking
+    flexShrink: 1,
+    maxWidth: '45%',
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: 16,
@@ -514,15 +532,15 @@ const styles = StyleSheet.create({
   cardDate: {
     fontSize: 14,
     color: '#000',
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    minWidth: 0,
+    flexShrink: 1,
   },
   statusText: {
     fontSize: 14,
     fontWeight: '500',
     marginRight: 5,
+    flexShrink: 1,
+    minWidth: 0,
   },
   statusOngoing: {
     color: '#FFA500',

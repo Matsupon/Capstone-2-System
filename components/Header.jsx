@@ -205,7 +205,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
 
   const getNotificationBody = (notification) => {
     if (notification.type === 'appointment_booked') {
-      return notification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.';
+      return notification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved. In the meantime, you can check your submitted appointment at the "My Profile" page under the "My Appointments" section.';
     } else if (notification.type === 'ready_to_check') {
       return 'Your order is now ready to check. Please visit us to review your order.';
     } else if (notification.type === 'order_completed') {
@@ -334,7 +334,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
             {selectedNotification && selectedNotification.type === 'appointment_booked' && (
               <View>
                 <Text style={styles.modalBody}>
-                  {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.'}
+                  {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved. In the meantime, you can check your submitted appointment at the "My Profile" page under the "My Appointments" section.'}
                 </Text>
               </View>
             )}

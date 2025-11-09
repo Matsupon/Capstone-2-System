@@ -5,7 +5,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Header from '../../components/Header';
 import api from '../../utils/api';
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', password: '' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [refreshing, setRefreshing] = useState(false);
   
   // My Appointments Modal States
   const [showAppointmentsModal, setShowAppointmentsModal] = useState(false);
@@ -502,6 +503,26 @@ export default function ProfilePage() {
       setAppointments([]);
     } finally {
       setAppointmentsLoading(false);
+    }
+  };
+
+  // Pull to refresh function
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchUserData();
+      // Refresh notifications in header if available
+      if (headerRefreshFn.current) {
+        headerRefreshFn.current?.refreshNotifications();
+      }
+      // Refresh appointments if modal is open
+      if (showAppointmentsModal) {
+        await fetchAppointments();
+      }
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -1011,7 +1032,13 @@ export default function ProfilePage() {
       <View style={styles.background} />
       <Header onRef={(fn) => { headerRefreshFn.current = fn; }} userName={user?.name || "User"} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <Text style={styles.pageTitle}>My Profile</Text>
 
         <View style={styles.avatarContainer}>

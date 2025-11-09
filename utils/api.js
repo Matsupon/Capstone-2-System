@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.10.87:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.137.188:8000/api';
 
 // Log the API URL being used (for debugging)
 console.log('API Base URL:', API_URL);
@@ -14,6 +14,33 @@ const api = axios.create({
   headers: {
     'Accept': 'application/json',
   },
+  // CRITICAL: Override axios default transformRequest to handle React Native FormData correctly
+  transformRequest: [(data, headers) => {
+    // Check if data is FormData
+    const isFormData = data instanceof FormData || 
+                       (data && 
+                        typeof data.append === 'function' && 
+                        typeof data === 'object' &&
+                        !Array.isArray(data));
+    
+    if (isFormData) {
+      // For FormData: Delete Content-Type completely - React Native MUST set it automatically
+      // React Native will set it to multipart/form-data with the correct boundary
+      delete headers['Content-Type'];
+      delete headers['content-type'];
+      delete headers['Content-type'];
+      // Return FormData unchanged - do NOT stringify or modify it
+      return data;
+    }
+    
+    // For non-FormData: Use default JSON transformation
+    if (data && typeof data === 'object') {
+      headers['Content-Type'] = 'application/json';
+      return JSON.stringify(data);
+    }
+    
+    return data;
+  }],
 });
 
 // Retry configuration for network errors (useful for weak/intermittent connections)
@@ -31,21 +58,32 @@ api.interceptors.request.use(async (config) => {
     }
     
     // Check if data is FormData (React Native FormData or browser FormData)
+    // React Native FormData: has append method and is an object
+    // Browser FormData: instanceof FormData works
     const isFormData = config.data instanceof FormData || 
-                       (config.data && typeof config.data.append === 'function' && 
-                        typeof config.data._parts !== 'undefined');
+                       (config.data && 
+                        typeof config.data.append === 'function' && 
+                        typeof config.data === 'object' &&
+                        !Array.isArray(config.data));
     
-    // For FormData, don't set Content-Type - let axios set it automatically with boundary
-    // This is crucial for multipart/form-data to work correctly
+    // For FormData: Ensure Content-Type is NOT set - transformRequest already handles this
+    // But we need to also delete it from the config here as a safety measure
     if (isFormData) {
-      // Remove Content-Type if it was set in headers to let axios handle it
-      if (config.headers) {
-        delete config.headers['Content-Type'];
-        delete config.headers['content-type'];
+      // Delete Content-Type from all possible locations
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+      delete config.headers['Content-type'];
+      // Also delete from common headers if they exist
+      if (config.headers.common) {
+        delete config.headers.common['Content-Type'];
+        delete config.headers.common['content-type'];
       }
-    } else if (!config.headers['Content-Type'] && !config.headers['content-type']) {
-      // For non-FormData requests, set Content-Type to application/json if not already set
-      config.headers['Content-Type'] = 'application/json';
+      // Delete from post headers (axios sometimes sets defaults here)
+      if (config.headers.post) {
+        delete config.headers.post['Content-Type'];
+        delete config.headers.post['content-type'];
+      }
+      // IMPORTANT: Do NOT override transformRequest here - it's already set at instance level
     }
     
     const fullUrl = `${config.baseURL}${config.url}`;
@@ -89,17 +127,27 @@ api.interceptors.response.use(
     // Check if retries are disabled (useful for FormData uploads where retries can cause issues)
     const retriesDisabled = config?.__disableRetry === true;
     
-    // Check if data is FormData (React Native FormData)
+    // Check if data is FormData (React Native FormData or browser FormData)
+    // React Native FormData: has append method and is an object (but not array)
+    // Browser FormData: instanceof FormData works
     const isFormData = config?.data instanceof FormData || 
-                       (config?.data && typeof config?.data.append === 'function' && 
-                        typeof config?.data._parts !== 'undefined');
+                       (config?.data && 
+                        typeof config?.data.append === 'function' && 
+                        typeof config?.data === 'object' &&
+                        !Array.isArray(config?.data));
     
     // Don't retry FormData uploads by default (they can cause issues with FormData preservation)
-    // unless explicitly enabled, or if retries are explicitly disabled
+    // FormData cannot be easily recreated, so retries usually fail
+    // Only retry if explicitly enabled via __enableFormDataRetry flag
     const shouldRetry = isNetworkError && 
                        retryCount < MAX_RETRIES && 
                        !retriesDisabled &&
                        !(isFormData && !config?.__enableFormDataRetry);
+    
+    // Log FormData detection for debugging
+    if (isFormData) {
+      console.log('📦 FormData detected - retries disabled by default');
+    }
     
     // Check if we should retry this request
     if (shouldRetry) {
