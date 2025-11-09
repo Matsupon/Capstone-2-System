@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../styles/Orders.css';
-import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch } from 'react-icons/fa';
+import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch, FaCheck } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
 
@@ -45,6 +46,7 @@ const formatTimeToAMPM = (timeString) => {
 };
 
 const Orders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -77,13 +79,16 @@ const Orders = () => {
   const [filterOption, setFilterOption] = useState('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [handledSuccess, setHandledSuccess] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const today = new Date();
   const todayDate = today.getDate();
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
   const isCurrentMonth = calendarMonth === currentMonth && calendarYear === currentYear;
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
   const currentMonthName = monthNames[calendarMonth];
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay();
@@ -93,9 +98,25 @@ const Orders = () => {
     ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
   ];
 
-  const fetchOrders = async () => {
+  useEffect(() => {
+    const adminToken = localStorage.getItem('adminToken');
+    if (!adminToken) {
+      navigate('/login');
+      return;
+    }
+  }, [navigate]);
+
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        setError('No admin token found');
+        setLoading(false);
+        navigate('/login');
+        return;
+      }
+
       const response = await api.get('/orders');
       if (response.data.success) {
         console.log('Orders data received:', response.data.data.map(order => ({
@@ -109,7 +130,8 @@ const Orders = () => {
           pickup_appointment_time: order.pickup_appointment_time,
           appointment_date: order.appointment?.appointment_date,
           appointment_time: order.appointment?.appointment_time,
-          preferred_due_date: order.appointment?.preferred_due_date
+          preferred_due_date: order.appointment?.preferred_due_date,
+          handled: order.handled
         })));
         
         setOrders(response.data.data);
@@ -117,16 +139,25 @@ const Orders = () => {
         setError('Failed to fetch orders');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Error fetching orders');
-      console.error('Error fetching orders:', err);
+      if (err.response?.status === 401) {
+        setError('Unauthorized. Please login again.');
+        localStorage.removeItem('adminToken');
+        navigate('/login');
+      } else {
+        setError(err.response?.data?.error || 'Error fetching orders');
+        console.error('Error fetching orders:', err);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    const adminToken = localStorage.getItem('adminToken');
+    if (adminToken) {
+      fetchOrders();
+    }
+  }, [fetchOrders]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -176,6 +207,7 @@ const Orders = () => {
                   scheduled_at: scheduledAt,
                   check_appointment_date: formattedDate,
                   check_appointment_time: selectedTime,
+                  handled: false,
                 }
               : order
           ));
@@ -300,6 +332,40 @@ const Orders = () => {
     setShowDetails(true);
   };
 
+  const handleToggleHandled = async (orderId, handled) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        setError('No admin token found');
+        navigate('/login');
+        return;
+      }
+
+      const response = await api.patch(`/orders/${orderId}/handled`, {
+        handled: handled
+      });
+
+      if (response.data.success) {
+        setOrders(orders.map(order =>
+          order.id === orderId
+            ? { ...order, handled: response.data.data.handled }
+            : order
+        ));
+        setHandledSuccess(true);
+        setTimeout(() => setHandledSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Error toggling handled status:', err);
+      if (err.response?.status === 401) {
+        setError('Unauthorized. Please login again.');
+        localStorage.removeItem('adminToken');
+        navigate('/login');
+      } else {
+        setError('Failed to update handled status');
+      }
+    }
+  };
+
   const handleUpdateStatus = async (orderId, newStatus) => {
     if (newStatus === 'Ready to Check') {
       openCalendarModal(orderId);
@@ -327,7 +393,7 @@ const Orders = () => {
       if (response.data.success) {
         setOrders(orders.map(order =>
           order.id === orderId
-            ? { ...order, status: newStatus, scheduled_at: undefined }
+            ? { ...order, status: newStatus, scheduled_at: undefined, handled: false }
             : order
         ));
         setShowUpdateDropdown(null);
@@ -361,6 +427,12 @@ const Orders = () => {
     }
   };
 
+  const handleBackToCalendar = () => {
+    setShowPaymentModal(false);
+    setShowCompletionCalendar(true);
+    setPaymentFee('');
+  };
+
   const handlePaymentSubmit = async () => {
     try {
       const order = orders.find(o => o.id === paymentOrderId);
@@ -377,7 +449,7 @@ const Orders = () => {
   
       if (response.data.success) {
         const updated = response.data.data;
-        setOrders(orders.map(o => (o.id === paymentOrderId ? { ...o, ...updated } : o)));
+        setOrders(orders.map(o => (o.id === paymentOrderId ? { ...o, ...updated, handled: false } : o)));
         setShowPaymentModal(false);
         setCalendarSuccess(true);
         setTimeout(() => setCalendarSuccess(false), 3000);
@@ -430,60 +502,51 @@ const Orders = () => {
   };
 
   const formatDateAndTime = (dateString, timeString) => {
-    if (!dateString) return '';
+    if (!dateString || !timeString) return '';
     
     try {
+      // Backend now sends appointment_date as "Y-m-d" (e.g., "2024-11-03") 
+      // and appointment_time as "H:i:s" (e.g., "20:30:00")
+      // Combine them to create a proper date string
       let dateTime;
-      let time;
       
-      // Check if timeString is a simple time format (HH:MM) or a full datetime
-      if (timeString && timeString.match(/^\d{2}:\d{2}$/)) {
-        // timeString is a simple time format (e.g., "08:00")
-        const date = new Date(dateString);
-        const [hours, minutes] = timeString.split(':').map(Number);
-        
-        // Create a new date with the correct time
-        dateTime = new Date(date);
-        dateTime.setHours(hours, minutes, 0, 0);
-        
-        // Format time manually to avoid timezone issues
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-        time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-      } else if (dateString.includes('T') && timeString.includes('T')) {
-        // Both are full datetime strings, use the timeString as it likely has the correct time
-        const localTimeString = timeString.replace('Z', '').replace(/\.\d+/, '');
-        dateTime = new Date(localTimeString);
-        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-      } else if (dateString.includes('T')) {
-        // dateString is already a full datetime, use it
-        const localDateString = dateString.replace('Z', '').replace(/\.\d+/, '');
-        dateTime = new Date(localDateString);
-        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-      } else if (timeString.includes('T')) {
-        // timeString is a full datetime, use it
-        const localTimeString = timeString.replace('Z', '').replace(/\.\d+/, '');
-        dateTime = new Date(localTimeString);
-        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-      } else {
-        // Both are separate date and time strings, combine them
-        const isoString = `${dateString}T${timeString}`;
-        dateTime = new Date(isoString);
-        time = dateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      // Handle time formats: could be "HH:MM", "HH:MM:SS", or "HH:MM:SS.mmm"
+      const timeMatch = timeString.match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (!timeMatch) {
+        console.warn('Invalid time format:', timeString);
+        return '';
       }
+      
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      
+      // Parse the date string (format: YYYY-MM-DD)
+      const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!dateMatch) {
+        console.warn('Invalid date format:', dateString);
+        return '';
+      }
+      
+      const year = parseInt(dateMatch[1], 10);
+      const month = parseInt(dateMatch[2], 10) - 1; // JavaScript months are 0-indexed
+      const day = parseInt(dateMatch[3], 10);
+      
+      // Create date in local timezone to avoid timezone conversion issues
+      dateTime = new Date(year, month, day, hours, minutes, 0);
       
       if (isNaN(dateTime.getTime())) {
         console.warn('Invalid datetime:', { dateString, timeString });
         return '';
       }
       
-      const month = monthNames[dateTime.getMonth()];
-      const day = dateTime.getDate();
+      // Format the date and time
+      const monthName = monthNames[dateTime.getMonth()];
+      const dayNum = dateTime.getDate();
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+      const time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
       
-      console.log('formatDateAndTime result:', `${month} ${day} - ${time}`);
-      console.log('Original strings:', { dateString, timeString });
-      console.log('Parsed date object:', dateTime);
-      return `${month} ${day} - ${time}`;
+      return `${monthName} ${dayNum} - ${time}`;
     } catch (error) {
       console.warn('Error formatting date and time:', dateString, timeString, error);
       return '';
@@ -516,7 +579,13 @@ const Orders = () => {
         }
         
         try {
-          const res = await api.get('/orders/booked-times', { params: { date, kind: 'check' } });
+          const res = await api.get('/orders/booked-times', { 
+            params: { 
+              date, 
+              kind: 'check',
+              order_id: calendarOrderId // Exclude current order's times
+            } 
+          });
           setBookedCheckTimes(res.data?.booked_times || []);
         } catch (_) {
           setBookedCheckTimes([]);
@@ -524,7 +593,7 @@ const Orders = () => {
       }
     };
     fetch();
-  }, [showCalendarModal, selectedDay, calendarMonth, calendarYear]);
+  }, [showCalendarModal, selectedDay, calendarMonth, calendarYear, calendarOrderId]);
 
   useEffect(() => {
     const fetch = async () => {
@@ -543,7 +612,13 @@ const Orders = () => {
         }
         
         try {
-          const res = await api.get('/orders/booked-times', { params: { date, kind: 'pickup' } });
+          const res = await api.get('/orders/booked-times', { 
+            params: { 
+              date, 
+              kind: 'pickup',
+              order_id: calendarOrderId // Exclude current order's times
+            } 
+          });
           setBookedPickupTimes(res.data?.booked_times || []);
         } catch (_) {
           setBookedPickupTimes([]);
@@ -551,7 +626,7 @@ const Orders = () => {
       }
     };
     fetch();
-  }, [showCompletionCalendar, completionSelectedDay, completionCalendarMonth, completionCalendarYear]);
+  }, [showCompletionCalendar, completionSelectedDay, completionCalendarMonth, completionCalendarYear, calendarOrderId]);
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 8; hour <= 20; hour++) {
@@ -664,13 +739,25 @@ const Orders = () => {
     return filteredOrders;
   };
 
+  // Pagination calculations
+  const filteredOrders = getFilteredOrders();
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="page-wrap">
       <div className="page-title">
         <h1>ORDERS</h1>
       </div>
       <div className="orders-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 16px' }}>
+          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 8px' }}>
             {/* Search and Filter Section */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
               {/* Search Bar */}
@@ -858,20 +945,21 @@ const Orders = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
-                 <th style={{ width: '5%' }}>Queue #</th>
+                 <th style={{ width: '5%' }}>Order #</th>
                  <th style={{ width: '15%' }}>Name</th>
                  <th style={{ width: '18%' }}>Services</th>
                  <th style={{ width: '15%' }}>Deadline</th>
                  <th style={{ width: '15%' }}>Status</th>
+                 <th style={{ width: '5%' }}>Attended</th>
                  <th style={{ width: '17%' }}>Next Appoint.</th>
                  <th style={{ width: '10%' }}>Layout/Notes</th>
                  <th style={{ width: '10%' }}>Actions</th>
                </tr>
               </thead>
               <tbody>
-                {getFilteredOrders().map((order) => (
+                {currentOrders.map((order) => (
                   <tr key={order.id}>
-                    <td>{order.queue_number}</td>
+                    <td>{order.id}</td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>
                     <td>{order.appointment?.service_type || 'N/A'}</td>
                     <td>
@@ -893,29 +981,79 @@ const Orders = () => {
                         )}
                       </div>
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleToggleHandled(order.id, !order.handled)}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          border: `2px solid ${order.handled ? '#4caf50' : '#ccc'}`,
+                          borderRadius: '4px',
+                          background: order.handled ? '#4caf50' : 'white',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          margin: '0 auto'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                          if (!order.handled) {
+                            e.currentTarget.style.borderColor = '#4caf50';
+                            e.currentTarget.style.background = '#e8f5e9';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          if (!order.handled) {
+                            e.currentTarget.style.borderColor = '#ccc';
+                            e.currentTarget.style.background = 'white';
+                          }
+                        }}
+                        title={order.handled ? 'Mark as unhandled' : 'Mark as handled'}
+                      >
+                        {order.handled && (
+                          <FaCheck 
+                            style={{ 
+                              color: 'white',
+                              fontSize: '14px'
+                            }} 
+                          />
+                        )}
+                      </button>
+                    </td>
                     <td>
                       {/* NEXT APPOINT COLUMN */}
-                      {order.status === 'Ready to Check' && order.check_appointment_date && order.check_appointment_time && (
-                        <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>
-                      )}
-                      {order.status === 'Ready to Check' && (!order.check_appointment_date || !order.check_appointment_time) && (
-                        <span style={{ color: '#999' }}>No appointment set</span>
-                      )}
+                      {/* For Ready to Check: Show admin-set check appointment, otherwise fall back to original user appointment */}
+                      {order.status === 'Ready to Check' && (() => {
+                        if (order.check_appointment_date && order.check_appointment_time) {
+                          return <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>;
+                        } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                          return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                        } else {
+                          return <span style={{ color: '#999' }}>No appointment set</span>;
+                        }
+                      })()}
+                      {/* For Pending: Show original user-set appointment date and time */}
                       {order.status === 'Pending' && (
                         order.appointment?.appointment_date && order.appointment?.appointment_time ? (
                           <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>
-                        ) : order.appointment?.preferred_due_date ? (
-                          <span>{formatDateForDisplay(order.appointment.preferred_due_date)}</span>
                         ) : (
                           <span style={{ color: '#999' }}>No appointment set</span>
                         )
                       )}
-                      {order.status === 'Completed' && order.pickup_appointment_date && order.pickup_appointment_time && (
-                        <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>
-                      )}
-                      {order.status === 'Completed' && (!order.pickup_appointment_date || !order.pickup_appointment_time) && (
-                        <span style={{ color: '#999' }}>No pickup set</span>
-                      )}
+                      {/* For Completed: Show admin-set pickup appointment, otherwise fall back to original user appointment */}
+                      {order.status === 'Completed' && (() => {
+                        if (order.pickup_appointment_date && order.pickup_appointment_time) {
+                          return <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>;
+                        } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                          return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                        } else {
+                          return <span style={{ color: '#999' }}>No appointment set</span>;
+                        }
+                      })()}
+                      {/* For Finished: N/A */}
                       {order.status === 'Finished' && (
                         <span>N/A</span>
                       )}
@@ -989,6 +1127,39 @@ const Orders = () => {
             )}
           </div>
 
+          {/* Pagination Panel - Fixed at bottom */}
+          {!loading && !error && filteredOrders.length > 0 && totalPages > 1 && (
+            <div className="pagination-panel">
+              <div className="pagination-controls">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="pagination-btn"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="pagination-btn"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* View File Modal (Dashboard design) */}
           {showDetails && selectedOrder && (
             <div
@@ -1025,14 +1196,6 @@ const Orders = () => {
                     <div className="detail-group" style={{ marginBottom: 8 }}>
                       <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
-                    </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Queue Number</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.queue_number}</div>
-                    </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
                     <div className="detail-group" style={{ marginBottom: 8 }}>
                       <div className="detail-label" style={{ fontWeight: 600 }}>Service Type</div>
@@ -1112,6 +1275,10 @@ const Orders = () => {
                       </p>
                     )}
                     
+                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
+                    </div>
                     
                   
                   </div>
@@ -1124,6 +1291,13 @@ const Orders = () => {
           {updateSuccess && (
             <div className="popup-success">
               <h3 style={{ color: '#4caf50' }}>Update changed successfully!</h3>
+            </div>
+          )}
+
+          {/* Handled Status Success Popup */}
+          {handledSuccess && (
+            <div className="popup-success">
+              <h3 style={{ color: '#4caf50' }}>Customer attended successfully!</h3>
             </div>
           )}
 
@@ -1284,24 +1458,47 @@ const Orders = () => {
           {/* Payment Fee Modal */}
           {showPaymentModal && (
             <div className="dashboard-modal-bg animate-fade" onClick={() => setShowPaymentModal(false)}>
-              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Please provide the total payment fee for this order:</h3>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 450, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <h3 style={{ marginBottom: 16, textAlign: 'center' }}>Please provide the total payment fee for this order:</h3>
+                {paymentOrderId && (() => {
+                  const order = orders.find(o => o.id === paymentOrderId);
+                  if (order?.pickup_appointment_date && order?.pickup_appointment_time) {
+                    return (
+                      <div style={{ width: '100%', padding: '12px', background: '#f0f9ff', border: '1px solid #3b82f6', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
+                        <div style={{ fontSize: 14, color: '#1e40af', fontWeight: 600, marginBottom: 4 }}>Selected Pickup Date & Time:</div>
+                        <div style={{ fontSize: 16, color: '#1e3a8a', fontWeight: 700 }}>
+                          {new Date(order.pickup_appointment_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeToAMPM(order.pickup_appointment_time)}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <input
                   type="number"
                   min="0"
                   value={paymentFee}
                   onChange={e => setPaymentFee(e.target.value)}
-                  style={{ width: '100%', padding: 10, fontSize: 18, marginBottom: 24, borderRadius: 6, border: '1px solid #ccc' }}
+                  style={{ width: '100%', padding: 10, fontSize: 18, marginBottom: 20, borderRadius: 6, border: '1px solid #ccc' }}
                   placeholder="Enter fee (₱)"
                 />
-                <button
-                  className="modal-button"
-                  style={{ width: '100%', fontSize: 18, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
-                  onClick={handlePaymentSubmit}
-                  disabled={!paymentFee || isNaN(paymentFee) || Number(paymentFee) <= 0}
-                >
-                  Submit Payment
-                </button>
+                <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={handleBackToCalendar}
+                  >
+                    Back
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={handlePaymentSubmit}
+                    disabled={!paymentFee || isNaN(paymentFee) || Number(paymentFee) <= 0}
+                  >
+                    Submit
+                  </button>
+                </div>
               </div>
             </div>
           )}

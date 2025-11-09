@@ -122,6 +122,7 @@ const Dashboard = () => {
         if (response.data?.success) {
           setQueueData(response.data.data);
           const all = response.data.data?.all_orders || [];
+          // Count all orders (Pending, Ready to Check, Completed)
           setTodaysAppointmentsCount(all.length);
         }
       } catch (err) {
@@ -345,7 +346,7 @@ const Dashboard = () => {
   };
 
   const quickStats = [
-    { title: "Today's Appointments", value: todaysAppointmentsCount, color: "blue" },
+    { title: "Today's Queued Appointments", value: todaysAppointmentsCount, color: "blue" },
     { title: "Pending Orders", value: orderStats.pending_orders, color: "yellow" },
     { title: "Completed Orders", value: orderStats.finished_orders, color: "green" }
   ];
@@ -454,7 +455,7 @@ const Dashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {appointments.slice(0, 5).map((appointment, index) => (
+                      {appointments.slice(0, 3).map((appointment, index) => (
                         <tr
                           key={index}
                           style={unviewedAppointmentIds.has(appointment.id) ? { background: '#e6f0ff' } : {}}
@@ -522,6 +523,11 @@ const Dashboard = () => {
                         <span className="queue-time">
                           ({formatTime(queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time)})
                         </span>
+                        {queueData.current_customer?.status && (
+                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.current_customer.status) }}>
+                            [{queueData.current_customer.status}]
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -539,6 +545,11 @@ const Dashboard = () => {
                         <span className="queue-time">
                           ({formatTime(queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time)})
                         </span>
+                        {queueData.next_customer?.status && (
+                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.next_customer.status) }}>
+                            [{queueData.next_customer.status}]
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -775,10 +786,11 @@ const Dashboard = () => {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ background: '#e8f4fd' }}>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Queue #</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Queue #</th>
                             <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Name</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Time</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '40%' }}>Service</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Time</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '30%' }}>Service</th>
+                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -791,10 +803,13 @@ const Dashboard = () => {
                             .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))
                             .map((o, i) => (
                               <tr key={o.id || i}>
-                                <td style={{ padding: '8px' }}>{o.queue_number ?? 'N/A'}</td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
                                 <td style={{ padding: '8px' }}>{o.name || o.appointment?.user?.name || 'N/A'}</td>
-                                <td style={{ padding: '8px' }}>{formatTime(o.appointment_time || o.appointment?.appointment_time)}</td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time || o.appointment?.appointment_time)}</td>
                                 <td style={{ padding: '8px' }}>{o.service_type || o.appointment?.service_type || 'N/A'}</td>
+                                <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
+                                  {o.status || 'N/A'}
+                                </td>
                               </tr>
                             ))}
                         </tbody>

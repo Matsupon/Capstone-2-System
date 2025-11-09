@@ -12,6 +12,8 @@ const OrdersHistory = () => {
   const [error, setError] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Fetch orders from API
   const fetchOrders = async () => {
@@ -83,6 +85,17 @@ const OrdersHistory = () => {
     setShowImageModal(true);
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(orders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = orders.slice(startIndex, endIndex);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -139,7 +152,7 @@ const OrdersHistory = () => {
             </thead>
             <tbody>
               {orders.length > 0 ? (
-                orders.map((order) => (
+                currentOrders.map((order) => (
                   <tr key={order.id}>
                     <td>{order.id}</td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>
@@ -183,6 +196,40 @@ const OrdersHistory = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagination Panel - Fixed at bottom */}
+      {orders.length > 0 && totalPages > 1 && (
+        <div className="pagination-panel">
+          <div className="pagination-controls">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="pagination-btn"
+            >
+              Previous
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+              >
+                {page}
+              </button>
+            ))}
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="pagination-btn"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
         {/* Details Modal (Dashboard design) */}
         {showDetails && selectedOrder && (
@@ -216,10 +263,6 @@ const OrdersHistory = () => {
                   <div className="detail-group" style={{ marginBottom: 8 }}>
                     <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
                     <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
-                  </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Queue Number</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.queue_number}</div>
                   </div>
                   <div className="detail-group" style={{ marginBottom: 8 }}>
                     <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
@@ -295,7 +338,7 @@ const OrdersHistory = () => {
                       }}
                     />
                   ) : (
-                    <p>No design image available</p>
+                    <p>No design image was uploaded.</p>
                   )}
                   {selectedOrder.appointment?.design_image && (
                     <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px' }}>
@@ -325,7 +368,7 @@ const OrdersHistory = () => {
           </div>
         )}
       </div>
-    </div>
+    
   );
 };
 

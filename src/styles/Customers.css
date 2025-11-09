@@ -34,11 +34,12 @@
 }
 
 .customers-table-content {
-  padding: 6px 8px;
+  padding: 8px 8px;
   max-width: 100%;
   margin: 0;
   height: calc(100vh - 120px);
   overflow-y: auto;
+  padding-bottom: 80px; /* Space for pagination panel */
 }
 
 /* Match OrdersHistory table styling */
@@ -396,4 +397,75 @@
 /* Ensure Customers zoom modal appears above the profile modal */
 .customers-zoom {
   z-index: 11050 !important; /* higher than .customers-modal-bg (10000) and Orders dashboard modal (2000) */
+}
+
+/* Pagination Panel Styles */
+.pagination-panel {
+  position: fixed;
+  bottom: 0;
+  left: clamp(200px, 20vw, 250px);
+  right: 0;
+  background: white;
+  border-top: 2px solid #e5e7eb;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  padding: 16px 24px;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - clamp(200px, 20vw, 250px) - 16px); /* Match content area width */
+  margin: 0 auto;
+  width: 100%;
+}
+
+.pagination-btn {
+  padding: 8px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: #374151;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+}
+
+.pagination-btn:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pagination-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  font-weight: 600;
+}
+
+.pagination-btn.active:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+@media (max-width: 768px) {
+  .pagination-panel {
+    left: 0;
+    padding: 12px 16px;
+  }
+  
+  .pagination-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }

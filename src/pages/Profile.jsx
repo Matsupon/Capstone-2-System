@@ -24,6 +24,7 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [originalForm, setOriginalForm] = useState(null);
 
   useEffect(() => {
     if (stored) {
@@ -81,6 +82,7 @@ const Profile = () => {
         setSuccess(true);
         setTimeout(() => setSuccess(false), 2000);
         setEditing(false);
+        setOriginalForm(null);
       } catch (err) {
         const msg = err?.response?.data?.message || 'Failed to update profile';
         setError(msg);
@@ -88,8 +90,20 @@ const Profile = () => {
         setSaving(false);
       }
     } else {
+      // Save current form state before editing
+      setOriginalForm({ ...form });
       setEditing(true);
+      setError('');
     }
+  };
+
+  const handleCancel = () => {
+    if (originalForm) {
+      setForm(originalForm);
+    }
+    setEditing(false);
+    setError('');
+    setOriginalForm(null);
   };
 
   return (
@@ -166,7 +180,23 @@ const Profile = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+          {editing && (
+            <button onClick={handleCancel} disabled={saving}
+              style={{
+                background: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '10px 16px',
+                fontWeight: 700,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                opacity: saving ? 0.6 : 1
+              }}>
+              Cancel
+            </button>
+          )}
           <button onClick={onEditToggle} disabled={saving}
             style={{
               background: editing ? '#10b981' : '#3b82f6',
@@ -175,8 +205,9 @@ const Profile = () => {
               borderRadius: 8,
               padding: '10px 16px',
               fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 6px 16px rgba(0,0,0,0.12)'
+              cursor: saving ? 'not-allowed' : 'pointer',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+              opacity: saving ? 0.6 : 1
             }}>
             {editing ? (saving ? 'Saving...' : 'Save') : 'Edit'}
           </button>

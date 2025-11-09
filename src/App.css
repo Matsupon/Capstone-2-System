@@ -347,8 +347,9 @@ input, textarea, select {
 /* App Specific Styles */
 .App {
   min-height: 100vh;
+  max-height: 100vh;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden; /* Prevent any scrollbars from appearing */
 }
 
 .App::before {

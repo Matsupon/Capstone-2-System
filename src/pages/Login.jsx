@@ -50,7 +50,15 @@ const Login = () => {
         <div className="login-page__gradient-layer" />
       </div>
       <div className="login-page__content">
-        <div className="login-card page-enter">
+        <div className="login-brand page-enter">
+          <img 
+            src="/logo.png" 
+            alt="Jun Tailoring Logo" 
+            className="login-brand__logo"
+          />
+          <h2 className="login-brand__title">Jun Tailoring</h2>
+        </div>
+        <div className="login-card">
           <h1>Login</h1>
           <p className="subtitle">Login to continue to your account</p>
 

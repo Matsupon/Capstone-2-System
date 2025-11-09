@@ -58,6 +58,8 @@ export default function FeedbackPage() {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [displayAvg, setDisplayAvg] = useState(0);
   const storageBase = useStorageBase();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const load = async () => {
     try {
@@ -164,6 +166,17 @@ export default function FeedbackPage() {
     }
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentItems = items.slice(startIndex, endIndex);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (loading) {
     return (
       <div className="page-wrap">
@@ -223,7 +236,7 @@ export default function FeedbackPage() {
               <p className="feedback-empty">No feedback yet.</p>
             ) : (
               <div className="feedback-list">
-                {items.slice(0, 5).map((fb) => {
+                {currentItems.map((fb) => {
                   const user = fb?.order?.appointment?.user;
                   const appt = fb?.order?.appointment;
                   const pending = responding[fb.id] || {};
@@ -330,6 +343,39 @@ export default function FeedbackPage() {
               </div>
             )}
           </div>
+
+          {/* Pagination Panel - Fixed at bottom */}
+          {items.length > 0 && totalPages > 1 && (
+            <div className="pagination-panel">
+              <div className="pagination-controls">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="pagination-btn"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="pagination-btn"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Delete Confirmation Modal */}
           {deleteConfirmId !== null && (

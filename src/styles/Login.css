@@ -184,7 +184,7 @@ body {
 }
 
 .form-group {
-  margin-bottom: clamp(24px, 5vw, 32px);
+  margin-bottom: clamp(16px, 2.5vh, 32px);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -193,19 +193,19 @@ body {
 
 .form-group label {
   display: block;
-  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  font-size: clamp(0.85rem, 1.5vw + 0.2vh, 1.1rem);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: clamp(8px, 1.5vh, 12px);
   color: var(--text-primary);
   letter-spacing: 0.02em;
 }
 
 .form-group input {
   width: 100%;
-  padding: clamp(16px, 3.5vw, 20px) clamp(18px, 4.5vw, 24px);
-  font-size: clamp(1rem, 2.5vw, 1.2rem);
+  padding: clamp(12px, 1.8vh, 20px) clamp(14px, 2.5vw, 24px);
+  font-size: clamp(0.9rem, 1.8vw + 0.3vh, 1.2rem);
   border: 2px solid var(--glass-border);
-  border-radius: 16px;
+  border-radius: clamp(12px, 1.5vw, 16px);
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   color: var(--text-primary);
@@ -246,23 +246,23 @@ body {
 
 .password-input-container input {
   width: 100%;
-  padding-right: clamp(60px, 8vw, 70px);
+  padding-right: clamp(50px, 6vw, 70px);
 }
 
 .toggle-password {
   position: absolute;
-  right: clamp(18px, 3.5vw, 24px);
+  right: clamp(14px, 2vw, 24px);
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+  font-size: clamp(1rem, 2vw, 1.4rem);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(8px, 2vw, 10px);
+  padding: clamp(6px, 1.5vw, 10px);
   transition: all 0.3s ease;
   border-radius: 8px;
 }
@@ -282,17 +282,17 @@ body {
 
 .login-button {
   width: 100%;
-  padding: clamp(16px, 3.5vw, 20px);
+  padding: clamp(12px, 2vh, 20px);
   background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 16px;
-  font-size: clamp(1.1rem, 2.5vw, 1.3rem);
+  border-radius: clamp(12px, 1.5vw, 16px);
+  font-size: clamp(0.95rem, 1.8vw + 0.3vh, 1.3rem);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: var(--shadow-glow);
-  margin-top: 16px;
+  margin-top: clamp(12px, 2vh, 16px);
   position: relative;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
@@ -375,7 +375,7 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding: 40px 20px;
+  padding: clamp(20px, 4vh, 40px) clamp(16px, 3vw, 20px);
   background: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 50%, #81d4fa 100%);
 }
 
@@ -406,19 +406,40 @@ body {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 520px;
+  max-width: clamp(400px, 90vw, 520px);
 }
 
 .login-card {
   width: 100%;
-  padding: clamp(28px, 5vw, 40px);
+  padding: clamp(20px, 4vh, 40px) clamp(20px, 4vw, 40px);
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 20px;
+  border-radius: clamp(16px, 2vw, 20px);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
   color: #0f172a; /* ensure black text */
-  animation: loginFadeSlideIn 500ms ease-out both;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: clamp(20px, 3vh, 32px);
+}
+
+.login-brand__logo {
+  width: clamp(70px, 10vw, 100px);
+  height: auto;
+  margin-bottom: clamp(12px, 2vh, 16px);
+}
+
+.login-brand__title {
+  font-size: clamp(1.5rem, 3.5vw, 2.8rem);
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  text-align: center;
 }
 
 .login-card h1 {
@@ -426,13 +447,16 @@ body {
   text-align: center;
   margin-left: auto;
   margin-right: auto;
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  margin-bottom: clamp(8px, 1.5vh, 16px);
+  font-size: clamp(1.3rem, 2.5vw + 0.5vh, 1.8rem);
   line-height: 1.2;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .login-card .subtitle {
   color: #111827;
+  font-size: clamp(0.9rem, 1.8vw + 0.3vh, 1.2rem);
+  margin-bottom: clamp(20px, 3vh, 50px);
 }
 
 .login-card .login-button {
@@ -463,26 +487,32 @@ body {
 }
 
 /* Handle short viewports to avoid cutoff by scaling spacing and fonts */
-@media (max-height: 800px) {
-  .login-page { padding: 28px 16px; }
-  .login-card { padding: 24px; border-radius: 16px; }
-  .login-card h1 { font-size: clamp(1.4rem, 2.6vw, 2rem); }
-  .subtitle { margin-bottom: 20px; font-size: clamp(0.95rem, 2.1vw, 1.1rem); }
-  .form-group { margin-bottom: 18px; }
-  .form-group label { font-size: clamp(0.85rem, 1.8vw, 1rem); margin-bottom: 8px; }
-  .form-group input { padding: 12px 16px; font-size: clamp(0.95rem, 2vw, 1.05rem); border-radius: 12px; }
-  .toggle-password { right: 16px; }
-  .login-button { padding: 12px 16px; font-size: clamp(1rem, 2.2vw, 1.1rem); border-radius: 12px; }
+@media (max-height: 750px) {
+  .login-brand__logo { width: clamp(60px, 8vw, 80px); }
+  .login-brand__title { font-size: clamp(1.3rem, 3vw, 2rem); }
+  .login-brand { margin-bottom: clamp(16px, 2vh, 24px); }
+  .login-card { padding: clamp(16px, 3vh, 28px) clamp(16px, 3vw, 32px); }
+  .login-card h1 { font-size: clamp(1.2rem, 2.2vw, 1.6rem); }
+  .subtitle { margin-bottom: clamp(16px, 2.5vh, 24px); }
+  .form-group { margin-bottom: clamp(12px, 2vh, 20px); }
+  .form-group label { margin-bottom: clamp(6px, 1vh, 10px); }
+  .form-group input { padding: clamp(10px, 1.5vh, 16px) clamp(12px, 2vw, 18px); }
+  .login-button { padding: clamp(10px, 1.5vh, 16px); }
 }
 
-@media (max-height: 660px) {
-  .login-page { padding: 20px 12px; }
-  .login-card { padding: 18px; border-radius: 14px; }
-  .login-card h1 { font-size: clamp(1.25rem, 2.2vw, 1.6rem); }
-  .subtitle { margin-bottom: 16px; }
-  .form-group { margin-bottom: 14px; }
-  .form-group input { padding: 10px 14px; }
-  .login-button { padding: 10px 14px; }
+@media (max-height: 600px) {
+  .login-brand__logo { width: clamp(50px, 7vw, 70px); }
+  .login-brand__title { font-size: clamp(1.1rem, 2.5vw, 1.6rem); }
+  .login-brand { margin-bottom: clamp(12px, 1.5vh, 16px); }
+  .login-card { padding: clamp(12px, 2vh, 20px) clamp(14px, 2.5vw, 24px); }
+  .login-card h1 { font-size: clamp(1.1rem, 2vw, 1.4rem); }
+  .subtitle { margin-bottom: clamp(12px, 2vh, 18px); font-size: clamp(0.85rem, 1.6vw, 1rem); }
+  .form-group { margin-bottom: clamp(10px, 1.5vh, 16px); }
+  .form-group label { font-size: clamp(0.8rem, 1.4vw, 0.95rem); margin-bottom: clamp(4px, 0.8vh, 8px); }
+  .form-group input { padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.8vw, 14px); font-size: clamp(0.85rem, 1.6vw, 1rem); }
+  .toggle-password { right: clamp(10px, 1.5vw, 14px); font-size: clamp(0.9rem, 1.8vw, 1.1rem); }
+  .login-button { padding: clamp(8px, 1.2vh, 14px); font-size: clamp(0.9rem, 1.6vw, 1.05rem); }
+  .error-message { padding: clamp(10px, 1.5vh, 14px) !important; font-size: clamp(0.85rem, 1.6vw, 0.95rem) !important; }
 }
 
 /* Width-based scaling for small desktop screens */

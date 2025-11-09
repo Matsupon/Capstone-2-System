@@ -39,6 +39,11 @@ const Welcome = () => {
 
       {/* Centered content */}
       <main className={`welcome-hero__content page-enter ${exiting ? 'page-exit' : ''}`} role="main">
+        <img 
+          src="/logo.png" 
+          alt="Logo" 
+          className="welcome-hero__logo"
+        />
         <h1 className="welcome-hero__title">WELCOME</h1>
         <p className="welcome-hero__subtitle">Smart, seamless tailoring management crafted for speed and precision.</p>
         <button

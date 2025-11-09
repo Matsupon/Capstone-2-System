@@ -31,6 +31,8 @@ const Customers = () => {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -38,7 +40,9 @@ const Customers = () => {
         const response = await api.get('/customers');
 
         if (response.data.success) {
-          setCustomersData(response.data.data);
+          // Sort customers from newest to oldest (by ID, assuming higher ID = newer)
+          const sortedCustomers = [...response.data.data].sort((a, b) => b.id - a.id);
+          setCustomersData(sortedCustomers);
         } else {
           throw new Error(response.data.message || 'Failed to fetch customers');
         }
@@ -83,6 +87,17 @@ const Customers = () => {
     setShowImageModal(true);
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(customersData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCustomers = customersData.slice(startIndex, endIndex);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (loading) {
     return (
       <div className="page-wrap">
@@ -125,7 +140,7 @@ const Customers = () => {
             borderRadius: 8,
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             padding: '24px 24px 8px 24px',
-            margin: '0 16px',
+            margin: '0 8px',
           }}
         >
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -142,7 +157,7 @@ const Customers = () => {
             </thead>
             <tbody>
               {customersData.length > 0 ? (
-                customersData.map((customer) => (
+                currentCustomers.map((customer) => (
                   <tr key={customer.id}>
                     <td>{customer.id}</td>
                     <td>{customer.name}</td>
@@ -181,6 +196,39 @@ const Customers = () => {
           </table>
         </div>
       </div>
+
+      {/* Pagination Panel - Fixed at bottom */}
+      {customersData.length > 0 && totalPages > 1 && (
+        <div className="pagination-panel">
+          <div className="pagination-controls">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="pagination-btn"
+            >
+              Previous
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+              >
+                {page}
+              </button>
+            ))}
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="pagination-btn"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Profile Modal */}
       {profileModal.open && profileModal.customer && (
@@ -243,10 +291,6 @@ const Customers = () => {
                           <div className="customers-modal-detail-value">
                             {order.sizes ? Object.values(order.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
                           </div>
-
-                          <div className="customers-modal-detail-label">Phone Number</div>
-                          <div className="customers-modal-detail-value">{order.phone}</div>
-
                           <div className="customers-modal-detail-label">Notes</div>
                           <div className="customers-modal-detail-value">{order.notes || 'N/A'}</div>
                         </div>

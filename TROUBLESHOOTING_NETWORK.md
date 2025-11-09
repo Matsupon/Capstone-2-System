@@ -1,146 +1,154 @@
-# Network Connectivity Troubleshooting Guide
+# Network Error Troubleshooting Guide
 
-## Problem: "Network Error" when booking appointments
+## What the Error Means
 
-The error `Network Error: {"message": "Network Error", "status": undefined, "url": "/appointments"}` indicates that your mobile app cannot connect to the Laravel backend server.
+The error `ERR_NETWORK` or `Network Error` means your mobile app **cannot connect** to your backend server at `http://192.168.137.223:8000/api`. This is **NOT** a slow network issue - it's a connectivity problem.
 
-## Root Causes & Solutions
+## Quick Checklist
 
-### 1. **Backend Server Not Running** ⚠️ MOST LIKELY CAUSE
-**Problem**: Laravel backend is not started or not accessible
-**Solution**: Start the Laravel backend server
+### 1. ✅ Is Your Backend Server Running?
 
+**Check on your computer (where the backend is hosted):**
+- Open a terminal/command prompt
+- Check if Laravel server is running
+- If not, start it with: `php artisan serve --host=0.0.0.0 --port=8000`
+
+### 2. ✅ Verify the IP Address is Correct
+
+**On your computer (Windows):**
 ```bash
-cd BACKEND
-php artisan serve --host=192.168.137.170 --port=8000
-```
-
-**Verify it's running**: Open `http://192.168.137.170:8000/api/test` in your browser
-
-### 2. **Wrong IP Address** 🔍
-**Problem**: IP address `192.168.137.170` is incorrect
-**Solution**: Find the correct IP address
-
-**On Windows (Backend machine)**:
-```cmd
 ipconfig
 ```
-Look for your network adapter's IPv4 address
+Look for your local IP address (usually starts with `192.168.x.x`)
 
-**On Mobile**: Make sure both devices are on the same WiFi network
-
-### 3. **Firewall Blocking Connection** 🚫
-**Problem**: Windows Firewall blocks port 8000
-**Solution**: Allow Laravel through firewall
-
-**Windows Firewall**:
-1. Open "Windows Defender Firewall"
-2. Click "Allow an app or feature through Windows Defender Firewall"
-3. Click "Change settings"
-4. Find "PHP" or add new rule for port 8000
-
-**Alternative**: Temporarily disable firewall for testing
-
-### 4. **Network Configuration Issues** 🌐
-**Problem**: Network settings prevent local connections
-**Solution**: Check network configuration
-
-**Verify both devices are on same network**:
-- Same WiFi network name
-- Same subnet (e.g., both 192.168.1.x)
-
-### 5. **Port Already in Use** ⚡
-**Problem**: Port 8000 is occupied by another service
-**Solution**: Use different port
-
+**On your computer (Mac/Linux):**
 ```bash
-php artisan serve --host=192.168.137.170 --port=8001
+ifconfig
+# or
+ip addr
 ```
 
-Then update `mobile files/utils/api.js`:
-```javascript
-const baseURL = "http://192.168.137.170:8001/api";
+**Update the IP in your mobile app:**
+- The IP in the error: `192.168.137.223`
+- Make sure this matches your computer's current IP address
+- IP addresses can change when you reconnect to WiFi
+
+### 3. ✅ Test Server Accessibility
+
+**From your computer's browser, try:**
+```
+http://192.168.137.223:8000/api
+# or
+http://localhost:8000/api
 ```
 
-## Testing Steps
-
-### Step 1: Test Backend Server
-```bash
-cd BACKEND
-php artisan serve --host=0.0.0.0 --port=8000
+**From your mobile device's browser:**
+```
+http://192.168.137.223:8000/api
 ```
 
-### Step 2: Test Network Connectivity
-1. Open mobile app
-2. Go to "Book an Appointment"
-3. Click "Test Network" button
-4. Check console logs for detailed error messages
+If this doesn't work on your phone, the server is not accessible from your network.
 
-### Step 3: Test API Endpoints
-1. Click "Test API" button
-2. Check console logs for response status
-3. Verify authentication is working
+### 4. ✅ Check Network Connection
 
-### Step 4: Browser Test
-Open in browser: `http://192.168.137.170:8000/api/test`
-Should show: `{"message": "API is working!", "timestamp": "..."}`
+**Both devices must be on the same network:**
+- Your computer (server) and mobile device must be on the **same WiFi network**
+- They cannot be on different networks
+- Mobile data won't work - must be WiFi
 
-## Common Error Messages & Solutions
+### 5. ✅ Firewall Issues
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `Network Error` | Server unreachable | Start backend server |
-| `ECONNABORTED` | Connection timeout | Check firewall/network |
-| `401 Unauthorized` | Token missing/invalid | Check authentication |
-| `404 Not Found` | Route doesn't exist | Check API routes |
+**Windows Firewall:**
+- Go to Windows Defender Firewall
+- Allow PHP/Laravel through the firewall
+- Or temporarily disable firewall to test
 
-## Alternative Solutions
+**Antivirus Software:**
+- Some antivirus programs block incoming connections
+- Add an exception for port 8000
 
-### Option 1: Use localhost (if on same machine)
-```javascript
-const baseURL = "http://localhost:8000/api";
-```
+### 6. ✅ Laravel Server Configuration
 
-### Option 2: Use machine's hostname
-```javascript
-const baseURL = "http://YOUR-MACHINE-NAME:8000/api";
-```
-
-### Option 3: Use 0.0.0.0 binding
+**Make sure Laravel is listening on all interfaces:**
 ```bash
 php artisan serve --host=0.0.0.0 --port=8000
 ```
 
-## Debug Commands
-
-**Check if port is listening**:
+**NOT:**
 ```bash
-netstat -an | findstr :8000
+php artisan serve  # This only listens on localhost
 ```
 
-**Check network interfaces**:
-```bash
-ipconfig /all
+### 7. ✅ Update API URL in Mobile App
+
+**Option 1: Create `.env` file in `mobile uploads` folder:**
+```
+EXPO_PUBLIC_API_URL=http://YOUR_COMPUTER_IP:8000/api
 ```
 
-**Test local connection**:
-```bash
-curl http://localhost:8000/api/test
+**Option 2: Update `mobile uploads/utils/api.js`:**
+```javascript
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://YOUR_COMPUTER_IP:8000/api';
 ```
+
+## Step-by-Step Solution
+
+1. **Find your computer's IP address:**
+   - Windows: `ipconfig` → Look for "IPv4 Address"
+   - Mac/Linux: `ifconfig` → Look for "inet"
+
+2. **Start Laravel server with correct host:**
+   ```bash
+   php artisan serve --host=0.0.0.0 --port=8000
+   ```
+
+3. **Test from browser:**
+   - On your computer: `http://localhost:8000/api`
+   - On your phone (same WiFi): `http://YOUR_IP:8000/api`
+
+4. **Update mobile app:**
+   - Update the IP address in `mobile uploads/utils/api.js`
+   - Or create `.env` file with `EXPO_PUBLIC_API_URL`
+
+5. **Restart your mobile app:**
+   - Close and reopen the app
+   - Or restart Expo: `npx expo start --clear`
+
+## Common Issues
+
+### Issue: IP Address Changed
+**Solution:** Update the IP in your mobile app configuration
+
+### Issue: Server Not Accessible from Phone
+**Solution:** 
+- Check firewall settings
+- Ensure both devices on same WiFi
+- Verify server is running with `--host=0.0.0.0`
+
+### Issue: Port 8000 Blocked
+**Solution:**
+- Check firewall rules
+- Try a different port: `php artisan serve --host=0.0.0.0 --port=8080`
+- Update mobile app to use new port
+
+### Issue: Server Works on Computer but Not Phone
+**Solution:**
+- Server is probably only listening on `localhost`
+- Use `--host=0.0.0.0` to listen on all interfaces
+
+## Testing Connectivity
+
+**From mobile device, open browser and try:**
+```
+http://192.168.137.223:8000/api
+```
+
+If you see a response (even an error), the server is reachable. If you see "Cannot connect" or timeout, the server is not accessible.
 
 ## Still Having Issues?
 
-1. **Check Laravel logs**: `BACKEND/storage/logs/laravel.log`
-2. **Enable debug mode**: Set `APP_DEBUG=true` in `.env`
-3. **Check CORS settings**: Verify `BACKEND/config/cors.php`
-4. **Test with Postman**: Try API endpoints manually
+1. Check Laravel logs: `storage/logs/laravel.log`
+2. Check if port 8000 is in use: `netstat -an | grep 8000`
+3. Try using `localhost` with an emulator (Android Studio/iOS Simulator)
+4. Check your router's settings for client isolation
 
-## Quick Fix Checklist
-
-- [ ] Backend server is running
-- [ ] Correct IP address is used
-- [ ] Port 8000 is not blocked
-- [ ] Both devices on same network
-- [ ] Firewall allows the connection
-- [ ] Laravel is accessible via browser
-- [ ] API endpoints return expected responses

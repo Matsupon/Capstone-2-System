@@ -4,9 +4,12 @@ import { format } from 'date-fns';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Alert, Animated, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import api from '../utils/api';
+import testServerConnection from '../utils/testConnection';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SERVICE_TYPES = [
   'Jersey Production',
@@ -16,8 +19,6 @@ const SERVICE_TYPES = [
 
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
-// Generate time slots with 30-minute intervals (8:00 AM to 8:00 PM)
-// Excluding lunch time (12:00 PM and 12:30 PM)
 const generateTimeSlots = () => {
   const slots = [];
   for (let hour = 8; hour <= 20; hour++) {
@@ -25,7 +26,6 @@ const generateTimeSlots = () => {
       const hourStr = hour < 10 ? `0${hour}` : `${hour}`;
       const minuteStr = minute < 10 ? `0${minute}` : `${minute}`;
       const time = `${hourStr}:${minuteStr}`;
-      // Exclude lunch time (12:00 and 12:30)
       if (time !== '12:00' && time !== '12:30') {
         slots.push(time);
       }
@@ -59,8 +59,7 @@ export default function BookAppointment({ visible, onClose }) {
   const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
-  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789'); // Default fallback
-      
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789'); 
 
   useEffect(() => {
     if (!visible) {
@@ -91,7 +90,6 @@ export default function BookAppointment({ visible, onClose }) {
     };
     checkToken();
     
-    // Fetch admin phone number (using customer-accessible endpoint)
     const fetchAdminPhone = async () => {
       try {
         const response = await api.get('/admin/contact');
@@ -102,7 +100,6 @@ export default function BookAppointment({ visible, onClose }) {
         }
       } catch (error) {
         console.log('Could not fetch admin phone, using default:', error);
-        // Fallback to default if API fails
       }
     };
     fetchAdminPhone();
@@ -125,7 +122,6 @@ export default function BookAppointment({ visible, onClose }) {
     try {
       console.log("Fetching slots for date:", appointmentDateRaw);
       
-      // Check if the selected date is in the past
       const selectedDate = new Date(appointmentDateRaw);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -153,20 +149,23 @@ export default function BookAppointment({ visible, onClose }) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: crop, // crop when requested by caller
       // aspect removed to avoid forced cropping; user can free-crop when allowsEditing is true
-      quality: 1,
+      quality: 0.8, // Reduced from 1.0 to reduce initial file size for weak networks
       exif: true,
     });
 
     if (!result.canceled && result.assets?.[0]?.uri) {
       try {
         const asset = result.assets[0];
+        // More aggressive compression to reduce file size for weak networks
         const manip = await ImageManipulator.manipulateAsync(
           asset.uri,
-          [{ resize: { width: 1280 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+          [{ resize: { width: 1024 } }], // Reduced from 1280 to 1024 for smaller files
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression (0.6 instead of 0.7)
         );
         setImage(manip.uri);
+        console.log('✅ Image selected and compressed:', manip.uri);
       } catch (e) {
+        console.warn('⚠️ Image compression failed, using original:', e);
         setImage(result.assets[0].uri);
       }
     }
@@ -217,19 +216,19 @@ export default function BookAppointment({ visible, onClose }) {
     setSuccessVisible(true);
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 300,
+      duration: 200,
       useNativeDriver: true,
     }).start();
     setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
       }).start(() => {
         setSuccessVisible(false);
         onClose();
       });
-    }, 3000);
+    }, 2000);
   };
 
   const showDatePicker = () => setDatePickerVisibility(true);
@@ -257,6 +256,28 @@ export default function BookAppointment({ visible, onClose }) {
     setTimeDropdown(false);
   };
 
+  // Test server connection before booking
+  const testConnection = async () => {
+    try {
+      Alert.alert('Testing Connection', 'Please wait while we test the server connection...');
+      const results = await testServerConnection();
+      
+      let message = `Server: ${results.serverUrl}\n\n`;
+      results.tests.forEach((test, index) => {
+        message += `${index + 1}. ${test.name}: ${test.passed ? '✅ PASS' : '❌ FAIL'}\n`;
+        message += `   ${test.message}\n\n`;
+      });
+      
+      if (results.allPassed) {
+        Alert.alert('Connection Test - All Passed ✅', message);
+      } else {
+        Alert.alert('Connection Test - Issues Found ⚠️', message);
+      }
+    } catch (error) {
+      Alert.alert('Connection Test Failed', `Error: ${error.message}`);
+    }
+  };
+
   const handleBookAppointment = async () => {
     try {
       // Step 3 validations with specific messages
@@ -274,6 +295,27 @@ export default function BookAppointment({ visible, onClose }) {
       }
 
       setIsLoading(true);
+      
+      // Log connection info before attempting upload
+      const serverURL = api.defaults.baseURL;
+      const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'unknown';
+      console.log('📤 Starting appointment booking...', {
+        server: serverHost,
+        hasDesignImage: !!designImage,
+        hasGcashImage: !!gcashImage,
+        appointmentDate: appointmentDateRaw,
+        appointmentTime: appointmentTimeRaw,
+      });
+      
+      // Quick connectivity check before attempting large upload
+      try {
+        console.log('🔍 Performing quick connectivity check...');
+        await api.get('/appointments/test', { timeout: 5000 });
+        console.log('✅ Connectivity check passed');
+      } catch (connectError) {
+        console.warn('⚠️ Connectivity check failed, but proceeding anyway:', connectError.message);
+        // Don't block the upload, but log the warning
+      }
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -295,21 +337,69 @@ export default function BookAppointment({ visible, onClose }) {
         }
       };
 
+      // Compress and optimize images before upload to reduce payload size
+      let finalDesignImage = designImage;
+      let finalGcashImage = gcashImage;
+      
       if (designImage) {
-        const meta = inferFileMeta(designImage);
+        try {
+          console.log('📦 Compressing design image...');
+          const compressed = await ImageManipulator.manipulateAsync(
+            designImage,
+            [{ resize: { width: 1024 } }], // Reduce to max 1024px width
+            { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression
+          );
+          finalDesignImage = compressed.uri;
+          console.log('✅ Design image compressed');
+        } catch (error) {
+          console.warn('⚠️ Failed to compress design image, using original:', error);
+          finalDesignImage = designImage;
+        }
+      }
+      
+      if (gcashImage) {
+        try {
+          console.log('📦 Compressing GCash proof image...');
+          const compressed = await ImageManipulator.manipulateAsync(
+            gcashImage,
+            [{ resize: { width: 1024 } }], // Reduce to max 1024px width
+            { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression
+          );
+          finalGcashImage = compressed.uri;
+          console.log('✅ GCash proof compressed');
+        } catch (error) {
+          console.warn('⚠️ Failed to compress GCash image, using original:', error);
+          finalGcashImage = gcashImage;
+        }
+      }
+      
+      if (finalDesignImage) {
+        const meta = inferFileMeta(finalDesignImage);
+        // For React Native, FormData expects file objects with uri, name, and type
         formData.append('design_image', {
-          uri: designImage,
+          uri: finalDesignImage,
           name: meta.name,
           type: meta.type,
         });
-      }
-    
-      if (gcashImage) {
-        const meta = inferFileMeta(gcashImage);
-        formData.append('gcash_proof', {
-          uri: gcashImage,
+        console.log('📎 Added design image to FormData:', {
           name: meta.name,
           type: meta.type,
+          uriLength: finalDesignImage.length,
+        });
+      }
+    
+      if (finalGcashImage) {
+        const meta = inferFileMeta(finalGcashImage);
+        // For React Native, FormData expects file objects with uri, name, and type
+        formData.append('gcash_proof', {
+          uri: finalGcashImage,
+          name: meta.name,
+          type: meta.type,
+        });
+        console.log('📎 Added GCash proof to FormData:', {
+          name: meta.name,
+          type: meta.type,
+          uriLength: finalGcashImage.length,
         });
       }
     
@@ -324,18 +414,53 @@ export default function BookAppointment({ visible, onClose }) {
         notes: notes || 'None',
         preferred_due_date: preferredDueDateRaw,
         appointment_date: appointmentDateRaw,
-        appointment_time: appointmentTimeRaw
+        appointment_time: appointmentTimeRaw,
+        hasDesignImage: !!finalDesignImage,
+        hasGcashImage: !!finalGcashImage,
       });
       
-      for (let [key, value] of formData.entries()) {
-        console.log(`FormData ${key}:`, value);
+      // Log FormData contents (be careful with file objects)
+      console.log('📋 FormData contents:');
+      try {
+        // Note: formData.entries() might not work in React Native, so we'll just log what we added
+        console.log('  - service_type:', serviceType);
+        console.log('  - sizes:', JSON.stringify(sizes));
+        console.log('  - total_quantity:', quantity);
+        console.log('  - notes:', notes || 'None');
+        console.log('  - preferred_due_date:', preferredDueDateRaw);
+        console.log('  - appointment_date:', appointmentDateRaw);
+        console.log('  - appointment_time:', appointmentTimeRaw);
+        console.log('  - design_image:', finalDesignImage ? 'Present' : 'Not present');
+        console.log('  - gcash_proof:', finalGcashImage ? 'Present' : 'Not present');
+      } catch (e) {
+        console.warn('Could not log FormData entries:', e);
       }
       
+      // Log FormData size estimate (approximate)
+      const estimatedSize = (finalDesignImage ? 500 : 0) + (finalGcashImage ? 500 : 0); // Rough estimate in KB
+      console.log('📊 FormData size estimate:', `${estimatedSize}KB (compressed)`);
+      console.log('🚀 Sending POST request to /appointments');
+      console.log('   - FormData type:', formData instanceof FormData ? 'FormData' : typeof formData);
+      console.log('   - Timeout: 120s');
+      console.log('   - Retries: DISABLED (__disableRetry: true)');
+      
+      // Don't set Content-Type header - let axios automatically set it with boundary for FormData
+      // Use longer timeout for weak connections with file uploads
+      // IMPORTANT: Disable retries for FormData uploads - they can't be retried reliably
       const response = await api.post('/appointments', formData, {
+        timeout: 120000, // 120 seconds (2 minutes) for weak network connections with file uploads
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
         },
-        timeout: 30000,
+        // Disable retries for FormData uploads to prevent FormData corruption
+        __disableRetry: true,
+        // Add upload progress tracking for debugging
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`📤 Upload progress: ${percentCompleted}% (${Math.round(progressEvent.loaded / 1024)}KB / ${Math.round(progressEvent.total / 1024)}KB)`);
+          }
+        },
       });
       
       console.log("Booking response:", response.data);
@@ -343,29 +468,92 @@ export default function BookAppointment({ visible, onClose }) {
       
     } catch (error) {
       console.error('Booking failed:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        request: error.request,
+      });
       
       let errorMessage = 'Failed to book appointment.';
       let errorTitle = 'Booking Failed';
       
-      if (error.message === 'Network Error') {
+      // Check if we got a server response with validation errors
+      if (error.response?.data) {
+        const responseData = error.response.data;
+        if (responseData.errors) {
+          // Validation errors from Laravel
+          errorTitle = 'Validation Error';
+          const errorMessages = Object.entries(responseData.errors)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
+            .join('\n');
+          errorMessage = responseData.message || 'Please check your input:\n\n' + errorMessages;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+          if (error.response.status === 422) {
+            errorTitle = 'Validation Error';
+          } else if (error.response.status === 401) {
+            errorTitle = 'Authentication Error';
+            errorMessage = 'Please log in again.';
+          } else if (error.response.status === 413) {
+            errorTitle = 'File Too Large';
+            errorMessage = 'The uploaded images are too large. Please use smaller images (max 5MB each).';
+          } else if (error.response.status === 500) {
+            errorTitle = 'Server Error';
+            errorMessage = 'Server encountered an error. Please try again later.';
+          }
+        }
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        // Get the server URL from the API instance (from utils/api.js)
+        const serverURL = api.defaults.baseURL;
+        // Extract host and port (remove /api suffix)
+        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        
         errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot connect to the server. Please check:\n\n' +
-                      '1. Backend server is running on 192.168.137.170:8000\n' +
-                      '2. Both devices are on the same network\n' +
-                      '3. No firewall blocking the connection\n' +
-                      '4. Try using the "Test Network" button first';
-      } else if (error.code === 'ECONNABORTED') {
-        errorTitle = 'Connection Timeout';
-        errorMessage = 'Server is not responding. Please check if the backend is running.';
+        errorMessage = 'Cannot upload appointment data. This might be due to:\n\n' +
+                      '📤 File upload issues\n' +
+                      '🌐 Network connectivity problems\n\n' +
+                      'Please try:\n' +
+                      '1. Check your internet connection\n' +
+                      '2. Verify server is running on ' + serverHost + '\n' +
+                      '3. Try using smaller image files\n' +
+                      '4. Wait a moment and try again';
+      } else if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
+        errorTitle = 'Upload Timeout';
+        errorMessage = 'The file upload is taking too long. This might be due to:\n\n' +
+                      '1. Weak network connection (strong winds affecting signal)\n' +
+                      '2. Large image files taking time to upload\n' +
+                      '3. Server processing delay\n\n' +
+                      'Please try:\n' +
+                      '- Moving closer to the WiFi router\n' +
+                      '- Using smaller image files\n' +
+                      '- Trying again when network is stable';
       } else if (error.response) {
         console.error('Error response:', error.response.data);
-        errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+        const responseMessage = error.response.data?.message || error.response.data?.error;
+        errorMessage = responseMessage || `Server error: ${error.response.status}`;
+        if (error.response.status === 422) {
+          errorTitle = 'Validation Error';
+          errorMessage = responseMessage || 'Please check your input and try again.';
+        } else if (error.response.status === 401) {
+          errorTitle = 'Authentication Error';
+          errorMessage = 'Please log in again.';
+        }
       } else if (error.request) {
         console.error('No response received:', error.request);
-        errorMessage = 'No response from server. Please check your internet connection.';
+        // Get the server URL from the API instance (from utils/api.js)
+        const serverURL = api.defaults.baseURL;
+        // Extract host and port (remove /api suffix)
+        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        
+        errorMessage = 'No response from server. Please check:\n\n' +
+                      `1. Server is running on ${serverHost}\n` +
+                      '2. Your device is connected to the network\n' +
+                      '3. Server is accessible from your device';
       } else {
         console.error('Request setup error:', error.message);
-        errorMessage = `Request error: ${error.message}`;
+        errorMessage = `Request error: ${error.message || 'Unknown error occurred'}`;
       }
       
       Alert.alert(errorTitle, errorMessage);
@@ -381,14 +569,14 @@ export default function BookAppointment({ visible, onClose }) {
         <View style={[styles.progressCircle, step >= 1 && styles.progressCircleActive]}>
           <Text style={[styles.progressNumber, step >= 1 && styles.progressNumberActive]}>1</Text>
         </View>
-        <Text style={[styles.progressLabel, step >= 1 && styles.progressLabelActive]}>Details</Text>
+        <Text style={[styles.progressLabel, step >= 1 && styles.progressLabelActive]}>Order Details</Text>
       </View>
       <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
       <View style={styles.progressStep}>
         <View style={[styles.progressCircle, step >= 2 && styles.progressCircleActive]}>
           <Text style={[styles.progressNumber, step >= 2 && styles.progressNumberActive]}>2</Text>
         </View>
-        <Text style={[styles.progressLabel, step >= 2 && styles.progressLabelActive]}>Upload</Text>
+        <Text style={[styles.progressLabel, step >= 2 && styles.progressLabelActive]}>Upload Images</Text>
       </View>
       <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
       <View style={styles.progressStep}>
@@ -414,6 +602,11 @@ export default function BookAppointment({ visible, onClose }) {
             <Ionicons name="arrow-back" size={28} color="#222" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Book an Appointment</Text>
+          {step === 3 && (
+            <TouchableOpacity onPress={testConnection} style={styles.testBtn}>
+              <MaterialIcons name="network-check" size={20} color="#4682B4" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Progress Indicator */}
@@ -508,6 +701,17 @@ export default function BookAppointment({ visible, onClose }) {
               </TouchableOpacity>
               {designImage && <Image source={{ uri: designImage }} style={styles.uploadedPreview} />}
 
+              <Text style={[styles.label, { marginTop: 18 }]}>📝 Notes (Optional)</Text>
+              <TextInput
+                style={[styles.inputField, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+                placeholder="Enter any additional notes or special instructions..."
+                placeholderTextColor="#aaa"
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                numberOfLines={4}
+              />
+
               <View style={styles.gcashBox}>
                 <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
                 <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
@@ -538,22 +742,7 @@ export default function BookAppointment({ visible, onClose }) {
     {/* Section Title */}
     <Text style={styles.sectionTitle}>🗓️ Appointment Schedule</Text>
 
-    <Text style={[styles.label, { fontSize: 18 }]}>📅 Preferred Due Date</Text>
-    <Text style={[styles.helperText, { fontSize: 15 }]}>When do you want it finished?</Text>
-    <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
-      <Text style={{ color: preferredDueDate ? '#000' : '#aaa', fontSize: 17 }}>
-        {preferredDueDate || 'Pick a date'}
-      </Text>
-    </TouchableOpacity>
-    <DateTimePickerModal
-      isVisible={isDatePickerVisible}
-      mode="date"
-      onConfirm={handleConfirm}
-      onCancel={hideDatePicker}
-      minimumDate={new Date()}
-    />
-
-    <Text style={[styles.label, { fontSize: 18 }]}>📅 Select Date and Time</Text>
+    <Text style={[styles.label, { fontSize: 18 }]}>📅 Select Available Date and Time</Text>
     <TouchableOpacity onPress={showAppointmentDatePicker} style={styles.inputField}>
       <Text style={{ color: appointmentDate ? '#000' : '#aaa', fontSize: 17 }}>
         {appointmentDate || 'Pick appointment date'}
@@ -613,6 +802,21 @@ export default function BookAppointment({ visible, onClose }) {
         )}
       </>
     )}
+
+    <Text style={[styles.label, { fontSize: 18 }]}>📅 Preferred Due Date</Text>
+    <Text style={[styles.helperText, { fontSize: 15 }]}>When do you want it finished?</Text>
+    <TouchableOpacity onPress={showDatePicker} style={styles.inputField}>
+      <Text style={{ color: preferredDueDate ? '#000' : '#aaa', fontSize: 17 }}>
+        {preferredDueDate || 'Pick a date'}
+      </Text>
+    </TouchableOpacity>
+    <DateTimePickerModal
+      isVisible={isDatePickerVisible}
+      mode="date"
+      onConfirm={handleConfirm}
+      onCancel={hideDatePicker}
+      minimumDate={new Date()}
+    />
   </ScrollView>
 
   <TouchableOpacity
@@ -628,11 +832,13 @@ export default function BookAppointment({ visible, onClose }) {
         )}
 
         {successVisible && (
-          <Animated.View style={[styles.successPopup, { opacity: fadeAnim }]}>
-            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
-            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center' }}>
-              You have successfully booked an appointment!
-            </Text>
+          <Animated.View style={[styles.successOverlay, { opacity: fadeAnim }]}>
+            <View style={styles.successPopup}>
+              <MaterialIcons name="check-circle" size={48} color="#22C55E" />
+              <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center' }}>
+                You have successfully booked an appointment!
+              </Text>
+            </View>
           </Animated.View>
         )}
       </View>
@@ -780,21 +986,28 @@ const styles = StyleSheet.create({
   bookBtnDisabled: {
     backgroundColor: '#ccc',
   },
-  successPopup: {
+  successOverlay: {
     position: 'absolute',
-    top: '40%',
-    left: '10%',
-    right: '10%',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  successPopup: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    marginHorizontal: 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 8,
     elevation: 10,
-    zIndex: 100,
   },
   unavailableSlot: {
     backgroundColor: '#f8f8f8',
@@ -805,15 +1018,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: SCREEN_WIDTH < 350 ? 8 : 12,
   },
   progressStep: {
     alignItems: 'center',
+    maxWidth: SCREEN_WIDTH < 350 ? 65 : SCREEN_WIDTH < 380 ? 85 : 110,
   },
   progressCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: SCREEN_WIDTH < 350 ? 32 : 40,
+    height: SCREEN_WIDTH < 350 ? 32 : 40,
+    borderRadius: SCREEN_WIDTH < 350 ? 16 : 20,
     backgroundColor: '#e0e0e0',
     alignItems: 'center',
     justifyContent: 'center',
@@ -823,7 +1037,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3B82F6',
   },
   progressNumber: {
-    fontSize: 18,
+    fontSize: SCREEN_WIDTH < 350 ? 14 : 18,
     fontWeight: 'bold',
     color: '#999',
   },
@@ -831,19 +1045,21 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   progressLabel: {
-    fontSize: 13,
+    fontSize: SCREEN_WIDTH < 350 ? 9 : SCREEN_WIDTH < 380 ? 10 : 11,
     color: '#999',
     fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: SCREEN_WIDTH < 350 ? 12 : 14,
   },
   progressLabelActive: {
     color: '#3B82F6',
     fontWeight: 'bold',
   },
   progressLine: {
-    width: 50,
+    width: SCREEN_WIDTH < 350 ? 20 : SCREEN_WIDTH < 380 ? 30 : 40,
     height: 2,
     backgroundColor: '#e0e0e0',
-    marginHorizontal: 8,
+    marginHorizontal: SCREEN_WIDTH < 350 ? 4 : 6,
   },
   progressLineActive: {
     backgroundColor: '#3B82F6',
@@ -883,5 +1099,9 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  testBtn: {
+    padding: 8,
+    marginLeft: 8,
   },
 });

@@ -28,7 +28,7 @@
   gap: 12px;
   width: 100%;
   box-sizing: border-box;
-  height: calc(100vh - 120px);
+  height: calc(100vh - 110px);
   overflow: hidden; /* keep the page fixed without outer scroll */
 }
 
@@ -79,7 +79,7 @@
   padding: 4px 20px;
   border-radius: 0 0 12px 12px;
   box-shadow: var(--shadow-glow);
-  margin: 0 0 28px 0;
+  margin: 0 0 16px 0;
   text-align: center;
 }
 
@@ -95,11 +95,12 @@
 .left-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
   height: 100%;
   overflow: hidden;
+  margin-top: 10px;
 }
 
 .right-panel {
@@ -109,6 +110,7 @@
   min-width: 0;
   height: 100%;
   overflow: hidden;
+  margin-top: 10px;
 }
 
 .panel {
@@ -127,7 +129,26 @@
   flex-direction: column;
 }
 
-.panel.quick-stats { flex: 0 0 auto; }
+.panel.quick-stats { 
+  flex: 0 0 auto; 
+  padding: 5px 10px;
+}
+
+.panel.quick-stats h3 {
+  margin: 0 0 6px 0;
+}
+
+.panel.recent-appointments {
+  flex: 200;
+  min-height: 0;
+}
+
+.panel.live-queue {
+  flex: 180;
+  min-height: 0;
+  max-height: 180px;
+  overflow: hidden;
+}
 
 .panel::before {
   content: '';
@@ -150,7 +171,7 @@
 .panel h3 {
   margin: 0 0 12px 0;
   color: var(--text-primary);
-  font-size: clamp(15px, 1.8vw, 18px);
+  font-size: clamp(13px, 1.5vw, 15px);
   font-weight: 600;
   letter-spacing: -0.01em;
   font-family: 'Poppins', sans-serif;
@@ -161,17 +182,17 @@
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .stat-card {
-  padding: 10px 8px;
-  border-radius: 8px;
+  padding: 7px 9px;
+  border-radius: 6px;
   text-align: center;
   color: var(--text-primary);
   font-weight: 700;
-  min-height: 52px;
+  min-height: auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -235,8 +256,8 @@
 
 .stat-value {
   display: block;
-  font-size: clamp(18px, 2.2vw, 22px);
-  margin-bottom: 4px;
+  font-size: clamp(12px, 1.5vw, 15px);
+  margin-bottom: 2px;
   line-height: 1.2;
   font-weight: 700;
   color: var(--text-primary);
@@ -245,15 +266,17 @@
 }
 
 .stat-title {
-  font-size: clamp(10px, 1.3vw, 12px);
+  font-size: clamp(7px, 0.9vw, 8px);
   color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-family: 'Lato', sans-serif;
+  line-height: 1.1;
+  padding-bottom: 5px;
 }
 
-/* Recent Appointments Table */
+/* New Appointments Table */
 .table-container {
   overflow-x: auto;
   flex: 1;
@@ -262,7 +285,7 @@
   border: 1px solid var(--card-border);
   background: rgba(255, 255, 255, 0.02);
   min-height: 0;
-  max-height: 200px;
+  max-height: 190px;
 }
 
 /* Style the scrollbar for table-container to make it visible */
@@ -297,7 +320,7 @@
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: clamp(12px, 1.4vw, 14px);
+  font-size: clamp(11px, 1.3vw, 13px);
   background: transparent;
   font-family: 'Lato', sans-serif;
 }
@@ -314,7 +337,7 @@ th, td {
 th {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: clamp(11px, 1.5vw, 15px);
+  font-size: clamp(10px, 1.3vw, 12px);
   position: sticky;
   top: 0;
   background: var(--glass-bg);
@@ -328,17 +351,17 @@ th {
 
 td {
   color: var(--text-secondary);
-  font-size: clamp(11px, 1.4vw, 14px);
+  font-size: clamp(10px, 1.2vw, 12px);
   font-weight: 400;
   font-family: 'Lato', sans-serif;
 }
 
 /* Recent Appointments: smaller table like Orders */
-.recent-appointments .table-container { max-height: 140px; }
+.recent-appointments .table-container { max-height: 175px; }
 .recent-appointments thead tr { background: #e8f4fd; }
-.recent-appointments table { font-size: clamp(11px, 1.3vw, 13px); }
-.recent-appointments th { font-size: clamp(9px, 1.2vw, 11px); padding: 4px; }
-.recent-appointments td { font-size: clamp(10px, 1.3vw, 13px); padding: 6px; }
+.recent-appointments table { font-size: clamp(10px, 1.2vw, 12px); }
+.recent-appointments th { font-size: clamp(9px, 1.1vw, 11px); padding: 4px; }
+.recent-appointments td { font-size: clamp(10px, 1.2vw, 12px); padding: 6px; }
 
 .action-link {
   color: var(--accent-color);
@@ -346,7 +369,7 @@ td {
   font-weight: 500;
   font-family: 'Lato', sans-serif;
   letter-spacing: 0.01em;
-  font-size: clamp(10px, 1.4vw, 13px);
+  font-size: clamp(9px, 1.2vw, 11px);
   padding: 6px 12px;
   border-radius: 8px;
   background: rgba(99, 102, 241, 0.1);
@@ -374,7 +397,7 @@ td {
 .current-customer, .next-customer {
   padding: 10px;
   border-radius: 8px;
-  font-size: clamp(11px, 1.4vw, 13px);
+  font-size: clamp(10px, 1.2vw, 12px);
   border: 1px solid var(--card-border);
   position: relative;
   overflow: hidden;
@@ -415,7 +438,7 @@ td {
 .queue-label {
   font-weight: 600;
   margin-bottom: 4px;
-  font-size: clamp(10px, 1.3vw, 12px);
+  font-size: clamp(9px, 1.2vw, 11px);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -431,7 +454,7 @@ td {
   padding: 4px 8px;
   border-radius: 4px;
   font-weight: 700;
-  font-size: clamp(12px, 1.6vw, 16px);
+  font-size: clamp(11px, 1.4vw, 14px);
   min-width: 30px;
   text-align: center;
 }
@@ -447,7 +470,7 @@ td {
   gap: 6px;
   padding: 8px 12px;
   border-radius: 6px;
-  font-size: clamp(10px, 1.3vw, 12px);
+  font-size: clamp(9px, 1.2vw, 11px);
   font-weight: 500;
   margin-top: 8px;
 }
@@ -476,11 +499,11 @@ td {
   background: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
-  font-size: clamp(11px, 1.5vw, 14px);
+  font-size: clamp(10px, 1.2vw, 12px);
 }
 
 .appointment-time {
-  font-size: clamp(10px, 1.2vw, 12px);
+  font-size: clamp(9px, 1.1vw, 11px);
   color: #666;
   font-weight: 500;
 }
@@ -554,12 +577,12 @@ td {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
 
 .calendar-header h3 {
-  font-size: clamp(16px, 2vw, 20px); 
+  font-size: clamp(13px, 1.5vw, 15px); 
   margin: 0;
   color: var(--text-primary);
   font-weight: 600;
@@ -605,6 +628,7 @@ td {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 200px;
 }
 
 .calendar-days {
@@ -617,7 +641,7 @@ td {
 }
 
 .calendar-days span {
-  padding: 6px 4px;
+  padding: 4px 3px;
   text-align: center;
   font-weight: 600;
   font-size: clamp(8px, 1vw, 10px);
@@ -635,16 +659,16 @@ td {
 }
 
 .calendar-date {
-  padding: 4px 2px;
+  padding: 3px 2px;
   text-align: center;
   border-right: 1px solid var(--card-border);
   border-bottom: 1px solid var(--card-border);
   position: relative;
-  min-height: 24px;
+  min-height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(8px, 1vw, 10px);
+  font-size: clamp(9px, 1vw, 10px);
   color: var(--text-primary);
   transition: all 0.3s ease;
   cursor: pointer;
@@ -757,21 +781,21 @@ td {
 }
 
 .date-number {
-  font-size: clamp(10px, 1.3vw, 13px);
+  font-size: clamp(9px, 1vw, 10px);
   color: inherit;
   font-weight: 600;
 }
 
 .red-dot {
   position: absolute;
-  bottom: 4px;
+  bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background: var(--error-color);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.5);
   animation: pulse 2s infinite;
   z-index: 4;
 }
@@ -793,13 +817,14 @@ td {
 .panel-header h3 {
   margin: 0;
   color: #000;
-  font-weight: 700;
+  font-size: clamp(13px, 1.5vw, 15px);
+  font-weight: 600;
 }
 
 .view-all-link {
   color: var(--accent-color);
   text-decoration: none;
-  font-size: clamp(11px, 1.5vw, 14px);
+  font-size: clamp(10px, 1.2vw, 12px);
   font-weight: 600;
   padding: 6px 12px;
   border-radius: 8px;
@@ -887,7 +912,7 @@ td {
   font-weight: 700;
   color: #000;
   margin-bottom: 4px;
-  font-size: clamp(11px, 1.4vw, 14px);
+  font-size: clamp(10px, 1.2vw, 12px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -895,7 +920,7 @@ td {
 
 .service {
   color: #000;
-  font-size: clamp(9px, 1.2vw, 12px);
+  font-size: clamp(9px, 1.1vw, 11px);
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -905,7 +930,7 @@ td {
 
 .date-time {
   color: #000;
-  font-size: clamp(8px, 1.1vw, 11px);
+  font-size: clamp(9px, 1.1vw, 11px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1205,14 +1230,15 @@ td {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow-glow);
   position: relative;
   overflow: hidden;
   z-index: 2;
   margin-bottom: 8px;
-  flex: 1;
+  flex: 0 0 auto;
+  max-height: 280px;
   display: flex;
   flex-direction: column;
 }
@@ -1241,6 +1267,7 @@ td {
   z-index: 5;
   flex: 1;
   display: flex;
+  max-height: 235px;
   flex-direction: column;
 }
 

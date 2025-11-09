@@ -14,12 +14,18 @@ const Appointments = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [detailsClosing, setDetailsClosing] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
-  const [removeId, setRemoveId] = useState(null);
-  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [queueConfirmId, setQueueConfirmId] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [unviewedAppointmentIds, setUnviewedAppointmentIds] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectAppointmentId, setRejectAppointmentId] = useState(null);
+  const [refundImage, setRefundImage] = useState(null);
+  const [refundImagePreview, setRefundImagePreview] = useState(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectSuccess, setRejectSuccess] = useState(false);
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -105,6 +111,13 @@ const Appointments = () => {
 
     fetchAppointments();
     fetchViewStates();
+    
+    // Refresh appointments every 5 seconds to reflect cancellations
+    const refreshInterval = setInterval(() => {
+      fetchAppointments();
+    }, 5000);
+    
+    return () => clearInterval(refreshInterval);
   }, [navigate]);
 
   const formatTime = (timeString) => {
@@ -179,25 +192,63 @@ const Appointments = () => {
 
 
   const handleRemove = (id) => {
-    setRemoveId(id);
+    setRejectAppointmentId(id);
+    setShowRejectModal(true);
   };
 
-  const confirmRemove = () => {
-    const deleteAppointment = async () => {
-      try {
-        await api.delete(`/appointments/${removeId}`);
-        setAppointments(appointments.filter(a => a.id !== removeId));
-        setRemoveId(null);
-        setDeleteSuccess(true);
-        setTimeout(() => setDeleteSuccess(false), 3000);
-      } catch (err) {
-        console.error('Failed to delete appointment:', err);
-        setError('Failed to delete appointment. Please try again.');
-        setRemoveId(null);
-      }
-    };
+  const handleRefundImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setRefundImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRefundImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-    deleteAppointment();
+  const handleRejectAppointment = async () => {
+    if (!refundImage) {
+      alert('Please upload a GCash refund image before rejecting this appointment.');
+      return;
+    }
+
+    try {
+      setRejecting(true);
+      const formData = new FormData();
+      formData.append('refund_image', refundImage);
+
+      await api.post(`/admin/appointments/${rejectAppointmentId}/reject`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setAppointments(appointments.filter(a => a.id !== rejectAppointmentId));
+      setShowRejectModal(false);
+      setRejectAppointmentId(null);
+      setRefundImage(null);
+      setRefundImagePreview(null);
+      setRejectSuccess(true);
+      setTimeout(() => setRejectSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to reject appointment:', err);
+      setError(err.response?.data?.message || 'Failed to reject appointment. Please try again.');
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(appointments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentAppointments = appointments.slice(startIndex, endIndex);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -223,11 +274,11 @@ const Appointments = () => {
       <th>Service</th>
       <th>Action</th>
       <th>Add to Queue</th>
-      <th>Remove</th>
+      <th>Reject</th>
     </tr>
   </thead>
   <tbody>
-    {appointments.map((appt) => (
+    {currentAppointments.map((appt) => (
       <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
         <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
         <td>{appt.user?.name || 'N/A'}</td>
@@ -249,7 +300,7 @@ const Appointments = () => {
                         />
                       </td>
                       <td>
-                        <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} />
+                        <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} style={{ color: '#ef4444', cursor: 'pointer' }} />
                       </td>
                     </tr>
                   ))}
@@ -257,6 +308,39 @@ const Appointments = () => {
               </table>
             )}
           </div>
+
+          {/* Pagination Panel - Fixed at bottom */}
+          {!isLoading && !error && appointments.length > 0 && totalPages > 1 && (
+            <div className="pagination-panel">
+              <div className="pagination-controls">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="pagination-btn"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="pagination-btn"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* View Details Modal (match Orders dashboard modal design) */}
           {showDetails && selectedAppointment && (
@@ -430,35 +514,80 @@ const Appointments = () => {
             </div>
           )}
 
-          {/* Remove Confirmation Modal */}
-          {removeId !== null && (
-            <div className="dashboard-modal-bg animate-fade" onClick={() => setRemoveId(null)}>
-              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Are you sure you want to delete this appointment?</h3>
+          {/* Reject Appointment Modal with Refund Image Upload */}
+          {showRejectModal && (
+            <div className="dashboard-modal-bg animate-fade" onClick={() => {
+              setShowRejectModal(false);
+              setRefundImage(null);
+              setRefundImagePreview(null);
+            }}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+                <AiOutlineClose
+                  className="dashboard-modal-exit-icon"
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRefundImage(null);
+                    setRefundImagePreview(null);
+                  }}
+                  style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
+                />
+                <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Reject Appointment</h3>
+                <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
+                  Please upload a GCash refund image before rejecting this appointment.
+                </p>
+                
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
+                    GCash Refund Image *
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleRefundImageChange}
+                    style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                  />
+                  {refundImagePreview && (
+                    <div style={{ marginTop: 12 }}>
+                      <img
+                        src={refundImagePreview}
+                        alt="Refund preview"
+                        style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                        onClick={() => handleImageClick(refundImagePreview, 'Refund Preview')}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'flex', gap: 16, width: '100%' }}>
                   <button
                     className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
-                    onClick={confirmRemove}
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => {
+                      setShowRejectModal(false);
+                      setRefundImage(null);
+                      setRefundImagePreview(null);
+                    }}
+                    disabled={rejecting}
                   >
-                    Yes
+                    Cancel
                   </button>
                   <button
                     className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
-                    onClick={() => setRemoveId(null)}
+                    style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: rejecting || !refundImage ? 'not-allowed' : 'pointer', opacity: rejecting || !refundImage ? 0.6 : 1 }}
+                    onClick={handleRejectAppointment}
+                    disabled={rejecting || !refundImage}
                   >
-                    No
+                    {rejecting ? 'Rejecting...' : 'Reject Order'}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Delete Success Popup */}
-          {deleteSuccess && (
+          {/* Reject Success Popup */}
+          {rejectSuccess && (
             <div className="popup-delete-success">
-              <h3>Appointment Successfully Deleted!</h3>
+              <h3>Appointment Successfully Rejected!</h3>
             </div>
           )}
 
