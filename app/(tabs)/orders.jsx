@@ -99,7 +99,17 @@ export default function AppointmentsPage() {
         setNextAppointment(null);
       }
     } catch (err) {
-      setNextAppointment(null);
+      // Handle network errors gracefully - don't update state if server is unreachable
+      if (err?.response?.status === 404) {
+        // 404 is expected if no appointment exists
+        setNextAppointment(null);
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        // Network errors are expected if server is down - keep previous appointment if available
+        return;
+      } else {
+        // Other errors
+        setNextAppointment(null);
+      }
     }
   }, []);
 
@@ -206,7 +216,7 @@ export default function AppointmentsPage() {
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardDate}>
-                {latestOrder ? `Order: ${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent orders for now'}
+                {latestOrder ? `${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent orders for now'}
               </Text>
               {latestOrder && (
                 <TouchableOpacity onPress={toggleRecent} style={styles.statusContainer}>
@@ -275,18 +285,18 @@ export default function AppointmentsPage() {
         <View style={styles.cardHeader}>
           <View style={styles.orderInfo}>
             <Text style={styles.cardDate} numberOfLines={2}>
-              {`Order: ${order?.appointment?.service_type || 'N/A'}`}
+              {`${order?.appointment?.service_type || 'N/A'}`}
             </Text>
           </View>
           <TouchableOpacity 
             onPress={() => toggleHistory(index.toString())} 
             style={styles.statusContainer}
           >
-            <Text style={[styles.statusText, styles.statusCompleted]}></Text>
+            <Text style={[styles.statusText, styles.statusFinished]}>Finished</Text>
             <MaterialIcons
               name={expandedHistory[index.toString()] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
               size={24}
-              color="#4caf50"
+              color="#2196f3"
             />
           </TouchableOpacity>
                 </View>
@@ -400,6 +410,9 @@ const styles = StyleSheet.create({
   },
   statusCompleted: {
     color: '#4caf50', // Green for Completed
+  },
+  statusFinished: {
+    color: '#2196f3', // Blue for Finished
   },
   container: {
     flex: 1,

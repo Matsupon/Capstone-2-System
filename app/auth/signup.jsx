@@ -45,7 +45,27 @@ export default function SignUp() {
       }
     } catch (error) {
       console.error('Registration failed:', error.response?.data || error.message);
-      alert('Could not register. Check your inputs.');
+      
+      // Handle specific error cases
+      if (error.response?.status === 422) {
+        // Check if it's a duplicate email error
+        const errorMessage = error.response?.data?.message || '';
+        const errors = error.response?.data?.errors || {};
+        
+        if (errorMessage.toLowerCase().includes('email') || errors.email) {
+          alert('This email is already registered. Please use a different email or login instead.');
+        } else {
+          alert(errorMessage || 'Registration failed. Please check your inputs and try again.');
+        }
+      } else if (error.response?.status === 401) {
+        alert('Invalid credentials. Please check your information and try again.');
+      } else if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      } else if (error.message === 'Network Error' || error.code === 'ECONNABORTED') {
+        alert('Network error. Please check your internet connection and try again.');
+      } else {
+        alert('Could not register. Please check your inputs and try again.');
+      }
     } finally {
       setIsLoading(false);
     }

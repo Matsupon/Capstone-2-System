@@ -6,11 +6,14 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import api from '../../utils/api';
 
@@ -24,6 +27,13 @@ export default function Login() {
   const handleLogin = async () => {
     if (!email || !password) {
       alert('Please enter both email and password');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      alert('Please enter a valid email address');
       return;
     }
 
@@ -48,7 +58,25 @@ export default function Login() {
   
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
-      alert(error.response?.data?.message || 'Login failed. Please try again.');
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        alert('Invalid email or password. Please check your credentials and try again.');
+      } else if (error.response?.status === 404) {
+        alert('Account not found. Please check your email address.');
+      } else if (error.response?.status === 422) {
+        alert(error.response?.data?.message || 'Invalid email or password. Please try again.');
+      } else if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.code === 'ECONNABORTED') {
+        // Get the server URL from the API instance
+        const serverURL = api.defaults.baseURL;
+        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        
+        alert(`Cannot connect to the server at ${serverHost}.\n\nPlease check:\n1. Backend server is running\n2. Both devices are on the same network\n3. No firewall blocking the connection`);
+      } else {
+        alert('Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -59,69 +87,83 @@ export default function Login() {
       colors={['#e0f4ff', '#b3e5fc']}
       style={styles.container}
     >
-      <Image 
-        source={require('../../assets/images/logo.png')}
-        style={styles.logo}
-      />
-      
-      <Text style={styles.title}>Jun Tailoring{'\n'}Appointment System</Text>
-      
-      <Text style={styles.subtitle}>Welcome Back!</Text>
-      <Text style={styles.description}>Login into your account below.</Text>
-
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="email" size={20} color="#687076" style={styles.icon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter email"
-            placeholderTextColor="#687076"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="lock" size={20} color="#687076" style={styles.icon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#687076"
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity 
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons 
-              name={showPassword ? "eye-off" : "eye"} 
-              size={20} 
-              color="#687076" 
-            />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.loginButton} 
-          onPress={handleLogin}
-          disabled={loading} 
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" /> 
-          ) : (
-            <Text style={styles.loginButtonText}>LOGIN</Text>
-          )}
-        </TouchableOpacity>
+          <Image 
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+          />
+          
+          <Text style={styles.title}>Jun Tailoring{'\n'}Appointment System</Text>
+          
+          <Text style={styles.subtitle}>Welcome Back!</Text>
+          <Text style={styles.description}>Login into your account below.</Text>
 
-        <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>Don't have an account yet? </Text>
-          <Link href="/auth/signup" style={styles.signupLink}>SIGNUP</Link>
-        </View>
-      </View>
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="email" size={20} color="#687076" style={styles.icon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter email"
+                placeholderTextColor="#687076"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                returnKeyType="next"
+                blurOnSubmit={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="lock" size={20} color="#687076" style={styles.icon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#687076"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                returnKeyType="done"
+              />
+              <TouchableOpacity 
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={20} 
+                  color="#687076" 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.loginButton} 
+              onPress={handleLogin}
+              disabled={loading} 
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" /> 
+              ) : (
+                <Text style={styles.loginButtonText}>LOGIN</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.signupContainer}>
+              <Text style={styles.signupText}>Don't have an account yet? </Text>
+              <Link href="/auth/signup" style={styles.signupLink}>SIGNUP</Link>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
@@ -129,6 +171,13 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  keyboardAvoiding: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContainer: {
+    flexGrow: 1,
     alignItems: 'center',
     paddingTop: 50,
     paddingHorizontal: 20,

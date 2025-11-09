@@ -1,16 +1,21 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useSegments } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';
 
-export default function Header({ userName = 'User', onNotificationsViewed }) {
+export default function Header({ userName = 'User', onNotificationsViewed, onRef }) {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastSeenAt, setLastSeenAt] = useState(null);
-  const [appointmentBookModal, setAppointmentBookModal] = useState(false);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const appState = useRef(AppState.currentState);
+  const segments = useSegments(); // Track route changes for Expo Router
+  const prevSegmentRef = useRef(null); // Initialize to null to detect first route
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -22,9 +27,37 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
         setNotifications(list);
       }
     } catch (e) {
+      // 401 errors are handled by the API interceptor
+      // Network errors are expected if server is not running - handle gracefully
+      if (e?.response?.status === 401) {
+        // Unauthorized - user not logged in, this is handled by API interceptor
+        return;
+      }
+      
+      // Network errors - server might not be running or not accessible
+      if (e?.code === 'ERR_NETWORK' || e?.message === 'Network Error') {
+        // Silently fail - server is not accessible
+        // This is expected if backend is not running
+        console.log('⚠️ Notifications: Server not accessible. Backend may not be running.');
+        return;
+      }
+      
+      // Other errors
       console.log('Failed to load notifications', e?.message || e);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // Function to refresh lastSeenAt from AsyncStorage
+  const refreshLastSeenAt = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem('notifications_last_seen_at');
+      if (saved) {
+        setLastSeenAt(saved);
+      }
+    } catch (error) {
+      console.log('Error refreshing lastSeenAt:', error);
     }
   }, []);
 
@@ -33,6 +66,8 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
       const now = new Date().toISOString();
       await AsyncStorage.setItem('notifications_last_seen_at', now);
       setLastSeenAt(now);
+      // Trigger a refresh on other pages by updating AsyncStorage
+      // Other Header instances will pick this up through their polling
     } catch (_) {}
     if (typeof onNotificationsViewed === 'function') {
       onNotificationsViewed();
@@ -41,33 +76,99 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
 
   const unreadCount = notifications.filter(n => !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime()).length;
 
+  // Expose refresh method to parent components via callback ref
+  useEffect(() => {
+    if (onRef && typeof onRef === 'function') {
+      onRef({
+        refreshNotifications: () => {
+          loadNotifications();
+          refreshLastSeenAt();
+        },
+      });
+    }
+  }, [onRef, loadNotifications, refreshLastSeenAt]);
+
+  // Initial load
   useEffect(() => {
     loadNotifications();
-    // Load last seen timestamp
-    (async () => {
+    refreshLastSeenAt();
+  }, [loadNotifications, refreshLastSeenAt]);
+
+  // Refresh when route changes (page navigation) - Expo Router
+  // This ensures notifications sync when navigating between pages
+  useEffect(() => {
+    // Skip first render (prevSegmentRef is null)
+    if (prevSegmentRef.current === null) {
+      prevSegmentRef.current = segments;
+      return;
+    }
+    
+    // Check if route changed
+    const routeChanged = JSON.stringify(segments) !== JSON.stringify(prevSegmentRef.current);
+    if (routeChanged) {
+      // Route changed, refresh notifications to sync badge count
+      loadNotifications();
+      refreshLastSeenAt();
+      prevSegmentRef.current = segments;
+    }
+  }, [segments, loadNotifications, refreshLastSeenAt]);
+
+  // Listen to AppState changes to refresh when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App has come to the foreground, refresh notifications
+        loadNotifications();
+        refreshLastSeenAt();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [loadNotifications, refreshLastSeenAt]);
+
+  // More frequent check for AsyncStorage changes to sync across pages
+  // This checks every 2 seconds for lastSeenAt changes (lightweight operation)
+  useEffect(() => {
+    const syncInterval = setInterval(async () => {
       try {
         const saved = await AsyncStorage.getItem('notifications_last_seen_at');
-        if (saved) setLastSeenAt(saved);
-      } catch (_) {}
-    })();
-  }, [loadNotifications]);
+        if (saved !== lastSeenAt) {
+          // lastSeenAt changed, update state to sync badge count
+          setLastSeenAt(saved);
+          // Also refresh notifications to ensure we have latest data
+          await loadNotifications();
+        }
+      } catch (error) {
+        // Silently fail - AsyncStorage errors are rare
+      }
+    }, 2000); // Check every 2 seconds for sync
 
-  // Periodically refresh notifications and re-read lastSeenAt to keep badge in sync across pages
+    return () => clearInterval(syncInterval);
+  }, [lastSeenAt, loadNotifications]);
+
+  // Less frequent full refresh of notifications from server (every 30 seconds)
+  // This is separate from the sync check above
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const refreshInterval = setInterval(async () => {
       try {
         await loadNotifications();
-      } finally {
-        try {
-          const saved = await AsyncStorage.getItem('notifications_last_seen_at');
-          if (saved && saved !== lastSeenAt) {
-            setLastSeenAt(saved);
-          }
-        } catch (_) {}
+        await refreshLastSeenAt();
+      } catch (error) {
+        // Errors are already handled in loadNotifications, just log here if needed
+        if (error?.code !== 'ERR_NETWORK' && error?.message !== 'Network Error') {
+          console.log('Notification refresh error:', error?.message);
+        }
       }
-    }, 10000); // 10 seconds
-    return () => clearInterval(interval);
-  }, [loadNotifications, lastSeenAt]);
+    }, 30000); // 30 seconds - full refresh from server
+
+    return () => clearInterval(refreshInterval);
+  }, [loadNotifications, refreshLastSeenAt]);
 
   const formatMonthDay = (iso) => {
     const d = new Date(iso);
@@ -82,7 +183,7 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
   };
 
   const getNotificationTitle = (notification) => {
-    if (notification.type === 'appointment_book') {
+    if (notification.type === 'appointment_booked') {
       return 'You have successfully booked an appointment!';
     } else if (notification.type === 'ready_to_check') {
       return 'Your order is now ready to check';
@@ -94,40 +195,44 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
       return notification.title || 'Admin responded to your feedback';
     } else if (notification.type === 'order_finished') {
       return 'Congratulations! Your order is now finished!';
+    } else if (notification.type === 'order_details_updated') {
+      return 'You have successfully updated your Order Details!';
+    } else if (notification.type === 'order_cancelled') {
+      return 'You have successfully cancelled an order!';
     }
     return notification.title || 'Notification';
   };
 
   const getNotificationBody = (notification) => {
-  if (notification.type === 'appointment_book') {
-    return (
-      <Text style={{ color: '#306b9bff' }}>
-        View More
-      </Text>
-    );
-  } else if (notification.type === 'ready_to_check') {
-    return 'Your order is now ready to check. Please visit us to review your order.';
-  } else if (notification.type === 'order_completed') {
-    const amount = notification.data?.total_amount
-      ? `Please prepare ₱${Number(notification.data.total_amount).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} to get your order.`
-      : '';
-    return `Your order is now completed. ${amount}`.trim();
-  } else if (notification.type === 'appointment_rejected') {
-    return 'Please ensure you uploaded the correct GCash payment proof and try again next time.';
-  } else if (notification.type === 'feedback_responded') {
-    const checked = notification.data?.admin_checked;
-    const resp = notification.data?.admin_response;
-    if (resp) return resp;
-    if (checked) return 'The admin has reviewed your feedback.';
+    if (notification.type === 'appointment_booked') {
+      return notification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.';
+    } else if (notification.type === 'ready_to_check') {
+      return 'Your order is now ready to check. Please visit us to review your order.';
+    } else if (notification.type === 'order_completed') {
+      const amount = notification.data?.total_amount 
+        ? `Please prepare ₱${Number(notification.data.total_amount).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} to get your order.`
+        : '';
+      return `Your order is now completed. ${amount}`.trim();
+    } else if (notification.type === 'appointment_rejected') {
+      return 'Please ensure you uploaded the correct gcash payment proof and try again next time';
+    } else if (notification.type === 'feedback_responded') {
+      const checked = notification.data?.admin_checked;
+      const resp = notification.data?.admin_response;
+      if (resp) return resp;
+      if (checked) return 'The admin has reviewed your feedback.';
+      return notification.body || '';
+    } else if (notification.type === 'order_finished') {
+      return 'Please go to the \'My Orders\' page and under the \'Order History\' section to check your finished order!';
+    } else if (notification.type === 'order_details_updated') {
+      return 'Your order details have been successfully updated.';
+    } else if (notification.type === 'order_cancelled') {
+      return notification.body || '';
+    }
     return notification.body || '';
-  } else if (notification.type === 'order_finished') {
-    return 'Please check through the "My Orders" page under the History section to view your completed order.';
-  }
-  return notification.body || '';
-};
+  };
 
   return (
     <View style={styles.container}>
@@ -177,47 +282,62 @@ export default function Header({ userName = 'User', onNotificationsViewed }) {
               <Text style={styles.noNotificationsText}>No notifications yet</Text>
             ) : (
               notifications.map((notification) => (
-                <TouchableOpacity
-                  key={notification.id}
-                  style={styles.notificationItem}
-                  onPress={() => {
-                    if (notification.type === 'appointment_book') {
-                      setAppointmentBookModal(true);
-                    }
-                  }}
-                  activeOpacity={notification.type === 'appointment_book' ? 0.7 : 1}
-                >
+                <View key={notification.id} style={styles.notificationItem}>
                   <Text style={styles.notificationDate}>{formatMonthDay(notification.created_at)}</Text>
                   <View style={styles.notificationContent}>
                     <Text style={styles.notificationTitle}>{getNotificationTitle(notification)}</Text>
-                    <Text style={styles.notificationBody}>{getNotificationBody(notification)}</Text>
-                    <Text style={styles.notificationTime}>{formatTime12(notification.created_at)}</Text>
+                    {notification.type === 'appointment_booked' ? (
+                      <View>
+                        <Text style={styles.notificationBody}>{getNotificationBody(notification)}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                          <Text style={styles.notificationTime}>{formatTime12(notification.created_at)}</Text>
+                          <TouchableOpacity 
+                            onPress={() => {
+                              setSelectedNotification(notification);
+                              setDetailsModalVisible(true);
+                            }} 
+                            style={{ marginLeft: 12 }}
+                          >
+                            <Text style={styles.viewMoreLink}>View More</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <View>
+                        <Text style={styles.notificationBody}>{getNotificationBody(notification)}</Text>
+                        <Text style={styles.notificationTime}>{formatTime12(notification.created_at)}</Text>
+                      </View>
+                    )}
                   </View>
-                </TouchableOpacity>
+                </View>
               ))
             )}
           </ScrollView>
         </View>
       )}
 
-      {/* Appointment Book Info Modal */}
+      {/* Details Modal */}
       <Modal
-        visible={appointmentBookModal}
+        visible={detailsModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setAppointmentBookModal(false)}
+        onRequestClose={() => setDetailsModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>You have successfully booked an appointment!</Text>
-              <TouchableOpacity onPress={() => setAppointmentBookModal(false)}>
+              <Text style={styles.modalTitle}>Appointment Details</Text>
+              <TouchableOpacity onPress={() => setDetailsModalVisible(false)}>
                 <MaterialIcons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalBody}>
-              Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.
-            </Text>
+            {selectedNotification && selectedNotification.type === 'appointment_booked' && (
+              <View>
+                <Text style={styles.modalBody}>
+                  {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -364,35 +484,46 @@ const styles = StyleSheet.create({
     color: '#687076',
     fontSize: 14,
   },
+  viewMoreLink: {
+    color: '#4682B4',
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalCard: {
-    width: '88%',
     backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 22,
-    elevation: 8,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
-    flex: 1,
-    marginRight: 10,
   },
   modalBody: {
     fontSize: 16,
-    color: '#687076',
-    lineHeight: 24,
+    color: '#16A34A',
+    fontWeight: '600',
+    lineHeight: 22,
   },
 }); 

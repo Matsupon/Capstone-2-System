@@ -38,7 +38,6 @@ export default function HomePage() {
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
   const [restrictionWarningVisible, setRestrictionWarningVisible] = useState(false);
-  const [appointmentBookModal, setAppointmentBookModal] = useState(false);
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -60,9 +59,25 @@ export default function HomePage() {
         setNotifications(list);
       }
     } catch (e) {
-      console.log('Failed to load notifications', e?.message || e);
+      if (e?.response?.status === 401) {
+        // Token expired or invalid - redirect to login
+        try {
+          await AsyncStorage.removeItem('authToken');
+          router.replace('/auth/login');
+        } catch (storageError) {
+          console.log('Error during logout:', storageError);
+        }
+      } else if (e?.code === 'ERR_NETWORK' || e?.message === 'Network Error') {
+        // Network errors are expected if server is down - handle gracefully
+        // Don't log or update state, keep previous notifications if available
+        return;
+      } else if (e.response) {
+        // Server responded with an error (but not 401 or network error)
+        console.log('Failed to load notifications', e?.response?.status, e?.message);
+      }
+      // Don't clear notifications on error, keep previous value
     }
-  }, []);
+  }, [router]);
 
   const loadLatestOrder = useCallback(async () => {
     try {
@@ -72,7 +87,13 @@ export default function HomePage() {
         setLatestOrder(res.data.data || null);
       }
     } catch (e) {
-      console.log('Failed to load latest order', e?.message || e);
+      // Only log if it's not a network error (network errors are expected if server is down)
+      if (e.response) {
+        console.log('Failed to load latest order', e?.response?.status, e?.message);
+      } else if (e.code !== 'NETWORK_ERROR' && e.message !== 'Network Error') {
+        console.log('Failed to load latest order', e?.message || e);
+      }
+      // Don't set latestOrder to null on error, keep previous value
     } finally {
       setOrderLoading(false);
     }
@@ -117,10 +138,24 @@ export default function HomePage() {
         setNextAppointment(null);
       }
     } catch (err) {
-      if (err?.response?.status !== 404) {
+      // Only log if it's not a 404 or network error
+      if (err?.response?.status === 404) {
+        // 404 is expected if no appointment exists
+        setNextAppointment(null);
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        // Network errors are expected if server is down - handle gracefully
+        // Don't log or update state, keep previous appointment if available
+        return;
+      } else if (err.response) {
+        // Server responded with an error
+        console.log('Error fetching appointment', err?.response?.status, err?.message);
+        setNextAppointment(null);
+      } else {
+        // Other errors
         console.log('Error fetching appointment', err);
+        setNextAppointment(null);
       }
-      setNextAppointment(null);
+      // Don't set to null on network errors, keep previous value if available
     }
   }, []);
 
@@ -166,7 +201,31 @@ export default function HomePage() {
     const yyyy = d.getFullYear();
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
     return `${mm}/${dd}/${yyyy} ${time}`;
-  };  
+  };
+
+  const formatTo12Hour = (time24) => {
+    const [hour, minute] = time24.split(':');
+    const hourNum = parseInt(hour);
+    const period = hourNum >= 12 ? 'PM' : 'AM';
+    const hour12 = hourNum % 12 || 12;
+    return `${hour12}:${minute} ${period}`;
+  };
+
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const hourStr = hour < 10 ? `0${hour}` : `${hour}`;
+        const minuteStr = minute < 10 ? `0${minute}` : `${minute}`;
+        const time = `${hourStr}:${minuteStr}`;
+        if (time !== '12:00' && time !== '12:30') {
+          slots.push(time);
+        }
+      }
+    }
+    return slots;
+  };
+
 
   const parseSizesToText = (sizes) => {
     try {
@@ -191,8 +250,13 @@ export default function HomePage() {
   };
 
   const openDetails = (n) => {
-    if (n.type === 'appointment_book') {
-      setAppointmentBookModal(true);
+    if (n.type === 'appointment_booked') {
+      setDetails({
+        type: 'appointment_booked',
+        title: 'You have successfully booked an appointment!',
+        message: n.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.',
+      });
+      setDetailsVisible(true);
       return;
     }
 
@@ -210,7 +274,7 @@ export default function HomePage() {
       setDetails({
         type: 'order_finished',
         title: 'Congratulations! Your order is now finished!',
-        message: 'Please check through the "My Orders" page under the History section to view your completed order',
+        message: 'Please go to the \'My Orders\' page and under the \'Order History\' section to check your finished order!',
       });
       setDetailsVisible(true);
       return;
@@ -235,6 +299,16 @@ export default function HomePage() {
       return;
     }
 
+    if (n.type === 'order_details_updated') {
+      setDetails({
+        type: 'order_details_updated',
+        title: 'You have successfully updated your Order Details!',
+        message: 'Your order details have been successfully updated.',
+      });
+      setDetailsVisible(true);
+      return;
+    }
+
     setDetails({
       type: 'generic',
       title: n.title,
@@ -244,16 +318,15 @@ export default function HomePage() {
   };
 
   const renderActivityItem = (n) => {
-    const isAppointmentBook = n.type === 'appointment_book';
     const isReadyToCheck = n.type === 'ready_to_check';
     const isOrderCompleted = n.type === 'order_completed';
     const isOrderFinished = n.type === 'order_finished';
     const isFeedbackResponded = n.type === 'feedback_responded';
     const isAppointmentRejected = n.type === 'appointment_rejected';
-    const showViewMore = isAppointmentBook || isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished;
-    const title = isAppointmentBook
-      ? 'You have successfully booked an appointment!'
-      : isReadyToCheck
+    const isAppointmentBooked = n.type === 'appointment_booked';
+    const isOrderDetailsUpdated = n.type === 'order_details_updated';
+    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished || isAppointmentBooked || isOrderDetailsUpdated;
+    const title = isReadyToCheck
       ? 'Your order is now ready to check'
       : isOrderCompleted
       ? 'Your order is now completed'
@@ -261,6 +334,10 @@ export default function HomePage() {
       ? 'Your order is now finished'
       : isFeedbackResponded
       ? 'Admin responded to your feedback'
+      : isAppointmentBooked
+      ? 'You have successfully booked an appointment!'
+      : isOrderDetailsUpdated
+      ? 'You have successfully updated your Order Details!'
       : n.title;
     const isUnread = !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime();
     return (
@@ -273,6 +350,9 @@ export default function HomePage() {
         <Text style={styles.activityDate}>{formatMonthDay(n.created_at)}</Text>
         <View style={styles.activityContent}>
           <Text style={styles.activityText}>{title}</Text>
+          {isAppointmentBooked && n.body && (
+            <Text style={styles.activitySubtext}>{n.body}</Text>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.activityTime}>{formatTime12(n.created_at)}</Text>
             {showViewMore && (
@@ -319,10 +399,12 @@ export default function HomePage() {
 
         {latestOrder && latestOrder.status !== 'Finished' ? (
           <View style={styles.orderCard}>
-            <Text style={styles.orderTitle}>
-              <Text style={styles.boldText}>Current Order</Text>
-              {latestOrder?.queue_number ? ` - Queue #${latestOrder.queue_number}` : ''}
-            </Text>
+            <View style={styles.orderTitleContainer}>
+              <Text style={styles.orderTitle}>
+                <Text style={styles.boldText}>Current Order</Text>
+                {latestOrder?.queue_number ? ` - Queue #${latestOrder.queue_number}` : ''}
+              </Text>
+            </View>
             <View style={styles.orderDetails}>
               <View style={styles.orderInfo}>
                 <Text style={styles.itemText}>
@@ -381,7 +463,9 @@ export default function HomePage() {
                   );
                 })}
               </View>
-              <Text style={styles.progressText}>Pending → Ready to Check → Completed</Text>
+              <Text style={styles.progressText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                Pending → Ready to Check → Completed
+              </Text>
             </View>
           </View>
         ) : (
@@ -390,7 +474,7 @@ export default function HomePage() {
               <Text style={styles.boldText}>You have no orders yet</Text>
             </Text>
             <Text style={{ color: '#687076' }}>
-              Press on the blue button at the bottom left to book an appointment!
+              Press on the blue button at the bottom right to book an appointment!
             </Text>
           </View>
         )}
@@ -511,6 +595,13 @@ export default function HomePage() {
             </View>
             {(() => {
               if (!details) return <Text style={styles.modalBody}>Please check the "My Orders" page under the History section to review your feedback and check for admin response!</Text>;
+              if (details.type === 'appointment_booked') {
+                return (
+                  <View>
+                    <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600' }]}>{details.message}</Text>
+                  </View>
+                );
+              }
               if (details.type === 'order_completed') {
                 return (
                   <View>
@@ -526,7 +617,6 @@ export default function HomePage() {
               if (details.type === 'ready_to_check') {
                 return (
                   <View>
-                    <Text style={[styles.modalBody, { fontSize: 16 }]}>Your order is now ready to check.</Text>
                     {details.scheduled_at && (
                       <Text style={[styles.modalBody, { color: '#1e88e5', fontSize: 16, fontWeight: '600' }]}>Next appointment: {formatDateTime12(details.scheduled_at)}</Text>
                     )}
@@ -536,6 +626,11 @@ export default function HomePage() {
               if (details.type === 'order_finished') {
                 return (
                   <Text style={[styles.modalBody, { fontSize: 16 }]}>{details.message}</Text>
+                );
+              }
+              if (details.type === 'order_details_updated') {
+                return (
+                  <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600' }]}>{details.message}</Text>
                 );
               }
               if (details.type === 'feedback_responded' || details.type === 'generic') {
@@ -678,27 +773,6 @@ export default function HomePage() {
         </View>
       )}
 
-      {/* Appointment Book Info Modal */}
-      <Modal
-        visible={appointmentBookModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAppointmentBookModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>You have successfully booked an appointment!</Text>
-              <TouchableOpacity onPress={() => setAppointmentBookModal(false)}>
-                <MaterialIcons name="close" size={22} color="#000" />
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.modalBody, { fontSize: 16, lineHeight: 24 }]}>
-              Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.
-            </Text>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -780,10 +854,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
   },
+  orderTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 13,
+  },
   orderTitle: {
     fontSize: 16,
     color: '#000',
-    marginBottom: 13,
+    flex: 1,
   },
   itemText: {
     fontWeight: 'bold',
@@ -842,6 +922,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#687076',
     textAlign: 'right',
+    flexShrink: 1,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -932,6 +1014,12 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 2,
   },
+  activitySubtext: {
+    fontSize: 12,
+    color: '#687076',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
   activityTime: {
     fontSize: 12,
     color: '#687076',
@@ -975,8 +1063,155 @@ const styles = StyleSheet.create({
   },
   // Modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  modalCard: { width: '88%', backgroundColor: '#fff', borderRadius: 14, padding: 22, elevation: 8 },
+  modalCard: { width: '88%', backgroundColor: '#fff', borderRadius: 14, paddingTop: 22, paddingHorizontal: 22, paddingBottom: 12, elevation: 8 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
   modalBody: { fontSize: 17, color: '#000', lineHeight: 24, marginTop: 6 },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#687076',
+    flex: 1,
+    textAlign: 'right',
+  },
+  editButton: {
+    backgroundColor: '#4682B4',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  dateInputText: {
+    fontSize: 14,
+    color: '#000',
+    flex: 1,
+  },
+  timeDropdownMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginTop: 4,
+    marginBottom: 8,
+    maxHeight: 200,
+  },
+  timeDropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  unavailableSlot: {
+    backgroundColor: '#f8f8f8',
+    opacity: 0.7,
+  },
+  editSectionLabel: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  editInputField: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    paddingHorizontal: 12,
+    height: 52,
+    marginBottom: 8,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  editInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    paddingHorizontal: 12,
+    height: 52,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  editDropdownMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginBottom: 6,
+    marginTop: -2,
+    overflow: 'hidden',
+    maxHeight: 200,
+  },
+  editDropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  editUnavailableSlot: {
+    backgroundColor: '#f8f8f8',
+    opacity: 0.7,
+  },
+  successOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  successMessage: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    minWidth: 250,
+  },
+  successText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#16A34A',
+    textAlign: 'center',
+  },
 });
