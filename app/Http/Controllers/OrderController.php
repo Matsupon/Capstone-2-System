@@ -105,7 +105,7 @@ class OrderController extends Controller
                     'appointment' => [
                         'id' => $order->appointment->id,
                         'service_type' => $order->appointment->service_type,
-                        'sizes' => $order->appointment->sizes,
+                        'sizes' => json_decode($order->appointment->sizes, true),
                         'total_quantity' => $order->appointment->total_quantity,
                         'notes' => $order->appointment->notes,
                         'design_image' => $order->appointment->design_image 
@@ -168,7 +168,7 @@ class OrderController extends Controller
                     'appointment' => [
                         'id' => $order->appointment->id,
                         'service_type' => $order->appointment->service_type,
-                        'sizes' => $order->appointment->sizes,
+                        'sizes' => json_decode($order->appointment->sizes, true),
                         'total_quantity' => $order->appointment->total_quantity,
                         'notes' => $order->appointment->notes,
                         'design_image' => $order->appointment->design_image 
@@ -480,7 +480,7 @@ class OrderController extends Controller
                     'appointment'  => [
                         'id'               => $order->appointment->id,
                         'service_type'     => $order->appointment->service_type,
-                        'sizes'            => $order->appointment->sizes,
+                        'sizes'            => json_decode($order->appointment->sizes, true),
                         'total_quantity'   => $order->appointment->total_quantity,
                         'preferred_due_date' => $order->appointment->preferred_due_date,
                         'notes'            => $order->appointment->notes,
@@ -519,6 +519,82 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch latest order',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function myOrders(Request $request)
+    {
+        try {
+            $userId = $request->user()->id;
+            \Log::info('Fetching all non-finished orders for user', ['user_id' => $userId]);
+    
+            $orders = Order::with('appointment.user')
+                ->whereHas('appointment', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->where('status', '!=', 'Finished')
+                ->orderBy('created_at', 'desc')
+                ->get();
+    
+            \Log::info('Orders fetched successfully', [
+                'user_id' => $userId,
+                'count' => $orders->count()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $orders->map(function ($order) {
+                    return [
+                        'id'           => $order->id,
+                        'status'       => $order->status,
+                        'queue_number' => $order->queue_number,
+                        'scheduled_at' => $order->scheduled_at,
+                        'completed_at' => $order->completed_at,
+                        'appointment'  => [
+                            'id'               => $order->appointment->id,
+                            'service_type'     => $order->appointment->service_type,
+                            'sizes'            => json_decode($order->appointment->sizes, true),
+                            'total_quantity'   => $order->appointment->total_quantity,
+                            'preferred_due_date' => $order->appointment->preferred_due_date,
+                            'notes'            => $order->appointment->notes,
+                            'design_image'     => $order->appointment->design_image
+                                ? asset('storage/' . $order->appointment->design_image)
+                                : null,
+                            'gcash_proof'      => $order->appointment->gcash_proof
+                                ? asset('storage/' . $order->appointment->gcash_proof)
+                                : null,
+                            'appointment_date' => $order->appointment->appointment_date 
+                                ? \Carbon\Carbon::parse($order->appointment->appointment_date)->format('Y-m-d')
+                                : null,
+                            'appointment_time' => $order->appointment->appointment_time 
+                                ? \Carbon\Carbon::parse($order->appointment->appointment_time)->format('H:i:s')
+                                : null,
+                            'user' => $order->appointment->relationLoaded('user') && $order->appointment->user ? [
+                                'id' => $order->appointment->user->id,
+                                'name' => $order->appointment->user->name,
+                                'phone' => $order->appointment->user->phone,
+                                'email' => $order->appointment->user->email,
+                            ] : null,
+                        ],
+                        'check_appointment_date' => $order->check_appointment_date,
+                        'check_appointment_time' => $order->check_appointment_time,
+                        'pickup_appointment_date' => $order->pickup_appointment_date,
+                        'pickup_appointment_time' => $order->pickup_appointment_time,
+                    ];
+                }),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch orders', [
+                'error' => $e->getMessage(),
+                'user_id' => $request->user()->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch orders',
                 'error'   => $e->getMessage(),
             ], 500);
         }
@@ -563,7 +639,7 @@ class OrderController extends Controller
                         'appointment'  => [
                             'id'               => $order->appointment->id,
                             'service_type'     => $order->appointment->service_type,
-                            'sizes'            => $order->appointment->sizes,
+                            'sizes'            => json_decode($order->appointment->sizes, true),
                             'total_quantity'   => $order->appointment->total_quantity,
                             'preferred_due_date' => $order->appointment->preferred_due_date,
                             'notes'            => $order->appointment->notes,
@@ -995,6 +1071,79 @@ class OrderController extends Controller
                 'recentAppointments' => $recentAppointments,
             ]
         ]);
+    }
+
+    public function updateSizesQuantity(Request $request, Order $order)
+    {
+        try {
+            $validated = $request->validate([
+                'sizes' => 'required|string',
+                'total_quantity' => 'required|integer|min:1',
+            ]);
+
+            $appointment = $order->appointment;
+            if (!$appointment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Appointment not found for this order'
+                ], 404);
+            }
+
+            // Validate sizes JSON
+            $sizes = json_decode($validated['sizes'], true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid sizes format'
+                ], 422);
+            }
+
+            // Calculate total from sizes to ensure consistency
+            $calculatedTotal = 0;
+            if (is_array($sizes)) {
+                $calculatedTotal = array_sum(array_map('intval', $sizes));
+            }
+
+            if ($calculatedTotal !== (int)$validated['total_quantity']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Total quantity does not match the sum of sizes'
+                ], 422);
+            }
+
+            // Update appointment
+            $appointment->sizes = $validated['sizes'];
+            $appointment->total_quantity = $validated['total_quantity'];
+            $appointment->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sizes and quantity updated successfully',
+                'data' => [
+                    'order_id' => $order->id,
+                    'sizes' => json_decode($validated['sizes'], true),
+                    'total_quantity' => $validated['total_quantity']
+                ]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error updating sizes and quantity', [
+                'error' => $e->getMessage(),
+                'order_id' => $order->id ?? 'unknown',
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update sizes and quantity',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
 

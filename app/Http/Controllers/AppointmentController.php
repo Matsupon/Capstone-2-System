@@ -25,6 +25,18 @@ class AppointmentController extends Controller
 
     public function store(Request $request)
     {
+        // Log immediately when method is called
+        \Log::info('=== AppointmentController::store() CALLED ===', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'has_auth_token' => $request->bearerToken() ? 'yes' : 'no',
+            'auth_user_id' => auth()->check() ? auth()->id() : 'not authenticated',
+            'content_type' => $request->header('Content-Type'),
+            'content_length' => $request->header('Content-Length'),
+        ]);
+        
         try {
             // Log the incoming request data for debugging
             \Log::info('Appointment booking request received', [
@@ -61,29 +73,44 @@ class AppointmentController extends Controller
     
         // Check conflicts across both appointments and admin-set order schedules
         // EXCLUDE appointments that are linked to finished orders (those slots are now available)
-        $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
-            ->where('appointment_time', $validated['appointment_time'])
-            ->where(function ($q) {
-                $q->whereDoesntHave('order') // Appointments without orders (still pending)
-                  ->orWhereHas('order', function ($q2) {
-                      $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
-                  });
-            })
-            ->exists();
+        try {
+            $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
+                ->where('appointment_time', $validated['appointment_time'])
+                ->where(function ($q) {
+                    $q->whereDoesntHave('order') // Appointments without orders (still pending)
+                      ->orWhereHas('order', function ($q2) {
+                          $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
+                      });
+                })
+                ->exists();
 
-        // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
-        $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished') // Exclude finished orders
-            ->where(function ($q) use ($validated) {
-                $q->whereDate('check_appointment_date', $validated['appointment_date'])
-                  ->where('check_appointment_time', $validated['appointment_time']);
-            })
-            ->orWhere(function ($q) use ($validated) {
-                $q->whereDate('pickup_appointment_date', $validated['appointment_date'])
-                  ->where('pickup_appointment_time', $validated['appointment_time']);
-            })
-            ->exists();
+            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
+            $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished') // Exclude finished orders
+                ->where(function ($q) use ($validated) {
+                    $q->where(function ($q1) use ($validated) {
+                        $q1->whereDate('check_appointment_date', $validated['appointment_date'])
+                           ->where('check_appointment_time', $validated['appointment_time']);
+                    })
+                    ->orWhere(function ($q2) use ($validated) {
+                        $q2->whereDate('pickup_appointment_date', $validated['appointment_date'])
+                           ->where('pickup_appointment_time', $validated['appointment_time']);
+                    });
+                })
+                ->exists();
 
-        $conflict = $conflictInAppointments || $conflictInOrders;
+            $conflict = $conflictInAppointments || $conflictInOrders;
+        } catch (\Exception $conflictError) {
+            \Log::error('Error checking appointment conflicts', [
+                'error' => $conflictError->getMessage(),
+                'trace' => $conflictError->getTraceAsString(),
+                'date' => $validated['appointment_date'],
+                'time' => $validated['appointment_time']
+            ]);
+            
+            // If conflict check fails, allow the appointment but log the error
+            // This prevents blocking appointments due to database query issues
+            $conflict = false;
+        }
     
         if ($conflict) {
             \Log::warning('Double booking attempt', [
@@ -118,6 +145,7 @@ class AppointmentController extends Controller
                 'preferred_due_date' => $validated['preferred_due_date'],
                 'appointment_date' => $validated['appointment_date'],
                 'appointment_time' => $validated['appointment_time'],
+                'status' => 'pending', // Explicitly set status to pending for new appointments
             ]);
 
             \Log::info('Appointment created successfully', [
@@ -881,12 +909,14 @@ public function dashboard()
             // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
             $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished')
                 ->where(function ($q) use ($validated) {
-                    $q->whereDate('check_appointment_date', $validated['appointment_date'])
-                      ->where('check_appointment_time', $validated['appointment_time']);
-                })
-                ->orWhere(function ($q) use ($validated) {
-                    $q->whereDate('pickup_appointment_date', $validated['appointment_date'])
-                      ->where('pickup_appointment_time', $validated['appointment_time']);
+                    $q->where(function ($q1) use ($validated) {
+                        $q1->whereDate('check_appointment_date', $validated['appointment_date'])
+                           ->where('check_appointment_time', $validated['appointment_time']);
+                    })
+                    ->orWhere(function ($q2) use ($validated) {
+                        $q2->whereDate('pickup_appointment_date', $validated['appointment_date'])
+                           ->where('pickup_appointment_time', $validated['appointment_time']);
+                    });
                 })
                 ->exists();
 

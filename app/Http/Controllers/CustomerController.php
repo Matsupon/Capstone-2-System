@@ -94,19 +94,12 @@ class CustomerController extends Controller
             }
 
             $formattedOrders = $orders->map(function ($order) {
-                $sizes = [];
-                if (!empty($order->appointment->sizes)) {
-                    $decodedSizes = json_decode($order->appointment->sizes, true);
-                    if (is_array($decodedSizes)) {
-                        $sizes = $decodedSizes;
-                    }
-                }
-
                 return [
                     'id' => $order->id,
                     'appointmentDate' => Carbon::parse($order->appointment->appointment_date)->format('F j, Y'),
                     'service' => $order->appointment->service_type,
-                    'sizes' => $sizes,
+                    'sizes' => json_decode($order->appointment->sizes, true),
+                    'total_quantity' => $order->appointment->total_quantity,
                     'phone' => $order->appointment->user->phone,
                     'status' => $order->status,
                     'designImg' => $order->appointment->design_image 
@@ -130,19 +123,12 @@ class CustomerController extends Controller
             if ($formattedOrders->isEmpty()) {
                 $latestAppointment = $user->appointments()->orderBy('appointment_date', 'desc')->first();
                 if ($latestAppointment) {
-                    $sizes = [];
-                    if (!empty($latestAppointment->sizes)) {
-                        $decodedSizes = json_decode($latestAppointment->sizes, true);
-                        if (is_array($decodedSizes)) {
-                            $sizes = $decodedSizes;
-                        }
-                    }
-
                     $formattedOrders = collect([[
                         'id' => 'appointment_' . $latestAppointment->id,
                         'appointmentDate' => Carbon::parse($latestAppointment->appointment_date)->format('F j, Y'),
                         'service' => $latestAppointment->service_type,
-                        'sizes' => $sizes,
+                        'sizes' => json_decode($latestAppointment->sizes, true),
+                        'total_quantity' => $latestAppointment->total_quantity,
                         'phone' => $user->phone,
                         'status' => 'No Orders',
                         'designImg' => $latestAppointment->design_image 

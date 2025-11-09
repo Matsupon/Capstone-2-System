@@ -1,5 +1,6 @@
     <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use App\Http\Controllers\AuthController;
@@ -15,6 +16,22 @@ use App\Http\Controllers\AdminController;
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
 });
+
+// Test authenticated endpoint (no file upload)
+Route::middleware('auth:sanctum')->post('/test-auth', function (Request $request) {
+    \Log::info('=== TEST AUTH ENDPOINT HIT ===', [
+        'method' => $request->method(),
+        'ip' => $request->ip(),
+        'user_id' => auth()->id(),
+        'has_token' => $request->bearerToken() ? 'yes' : 'no',
+    ]);
+    return response()->json([
+        'message' => 'Authenticated endpoint works!',
+        'user_id' => auth()->id(),
+        'timestamp' => now(),
+    ]);
+});
+
 
 Route::get('/test-appointments', function () {
     return response()->json([
@@ -48,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/appointments', [AppointmentController::class, 'store']); 
     Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
     Route::get('/me/orders/latest', [OrderController::class, 'myLatest']);
+    Route::get('/me/orders', [OrderController::class, 'myOrders']);
     Route::get('/me/orders/history', [OrderController::class, 'myHistory']);
     Route::get('/appointments/next-appointment', [AppointmentController::class, 'getNextAppointmentByOrderStatus']);
     Route::get('/appointments/next', [AppointmentController::class, 'getNextAppointment']);
@@ -75,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{appointmentId}', [OrderController::class, 'store']);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{orderId}/handled', [OrderController::class, 'toggleHandled']);
+    Route::patch('/orders/{order}/sizes-quantity', [OrderController::class, 'updateSizesQuantity']);
     Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
     Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
     Route::get('/orders/today-queue', [OrderController::class, 'getTodayQueue']);
