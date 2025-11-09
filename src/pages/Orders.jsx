@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Orders.css';
-import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch, FaCheck } from 'react-icons/fa';
+import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch, FaCheck, FaEdit } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
 
@@ -82,6 +82,11 @@ const Orders = () => {
   const [handledSuccess, setHandledSuccess] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [editingSizes, setEditingSizes] = useState(false);
+  const [editSizes, setEditSizes] = useState({});
+  const [editQuantity, setEditQuantity] = useState('');
+  const [savingSizes, setSavingSizes] = useState(false);
+  const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
   const today = new Date();
   const todayDate = today.getDate();
@@ -330,6 +335,28 @@ const Orders = () => {
   const handleViewFile = (order) => {
     setSelectedOrder(order);
     setShowDetails(true);
+    setEditingSizes(false);
+    // Initialize edit state with current sizes
+    const rawSizes = order.appointment?.sizes;
+    if (rawSizes) {
+      try {
+        const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+        if (parsed && typeof parsed === 'object') {
+          setEditSizes(parsed);
+          const total = Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+          setEditQuantity(String(total));
+        } else {
+          setEditSizes({});
+          setEditQuantity('0');
+        }
+      } catch (_) {
+        setEditSizes({});
+        setEditQuantity('0');
+      }
+    } else {
+      setEditSizes({});
+      setEditQuantity('0');
+    }
   };
 
   const handleToggleHandled = async (orderId, handled) => {
@@ -468,6 +495,90 @@ const Orders = () => {
     setSelectedImage({ src: imageSrc, alt: imageAlt });
     setShowImageModal(true);
   };
+
+  const handleSaveSizes = async () => {
+    if (!selectedOrder) return;
+    
+    // Filter out sizes with 0 quantity
+    const filteredSizes = Object.fromEntries(
+      Object.entries(editSizes).filter(([_, qty]) => Number(qty) > 0)
+    );
+    const total = Object.values(filteredSizes).reduce((a, b) => Number(a) + Number(b), 0);
+    
+    if (total <= 0) {
+      alert('Please select at least one size with quantity greater than 0');
+      return;
+    }
+    
+    try {
+      setSavingSizes(true);
+
+      const response = await api.patch(`/orders/${selectedOrder.id}/sizes-quantity`, {
+        sizes: JSON.stringify(filteredSizes),
+        total_quantity: total
+      });
+
+      if (response.data.success) {
+        // Update the order in the orders list
+        setOrders(orders.map(order =>
+          order.id === selectedOrder.id
+            ? {
+                ...order,
+                appointment: {
+                  ...order.appointment,
+                  sizes: filteredSizes,
+                  total_quantity: total
+                }
+              }
+            : order
+        ));
+        // Update selectedOrder
+        setSelectedOrder({
+          ...selectedOrder,
+          appointment: {
+            ...selectedOrder.appointment,
+            sizes: filteredSizes,
+            total_quantity: total
+          }
+        });
+        setEditingSizes(false);
+        setUpdateSuccess(true);
+        setTimeout(() => setUpdateSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Error updating sizes:', err);
+      setError('Failed to update sizes and quantity');
+    } finally {
+      setSavingSizes(false);
+    }
+  };
+
+  const handleCancelEditSizes = () => {
+    setEditingSizes(false);
+    // Reset to original values
+    const rawSizes = selectedOrder?.appointment?.sizes;
+    if (rawSizes) {
+      try {
+        const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+        if (parsed && typeof parsed === 'object') {
+          setEditSizes(parsed);
+          const total = Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+          setEditQuantity(String(total));
+        }
+      } catch (_) {
+        setEditSizes({});
+        setEditQuantity('0');
+      }
+    }
+  };
+
+  // Auto-calculate quantity when sizes change
+  useEffect(() => {
+    if (editingSizes) {
+      const total = Object.values(editSizes).reduce((a, b) => Number(a) + Number(b), 0);
+      setEditQuantity(String(total));
+    }
+  }, [editSizes, editingSizes]);
 
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return '';
@@ -627,6 +738,17 @@ const Orders = () => {
     };
     fetch();
   }, [showCompletionCalendar, completionSelectedDay, completionCalendarMonth, completionCalendarYear, calendarOrderId]);
+
+  // Scroll to top whenever page changes
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure scroll happens after DOM update
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+  }, [currentPage]);
+
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 8; hour <= 20; hour++) {
@@ -748,7 +870,6 @@ const Orders = () => {
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -1187,100 +1308,208 @@ const Orders = () => {
                   }}
                 />
                 <h2 className="dashboard-modal-title">Order Details</h2>
-                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
+                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
                   <div className="details-left">
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Order Number</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>#{selectedOrder.id}</div>
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Service Type</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.service_type || 'N/A'}</div>
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Phone Number</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Size</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>
-                        {selectedOrder.appointment?.sizes ? (
-                          <>
-                            {Object.entries(JSON.parse(selectedOrder.appointment.sizes)).map(([size, qty]) => (
-                              <div key={size}>{size} - {qty} pcs.</div>
-                            ))}
-                          </>
-                        ) : 'N/A'}
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Size
+                        {!editingSizes && (
+                          <FaEdit 
+                            style={{ cursor: 'pointer', color: '#3b82f6', fontSize: '14px' }}
+                            onClick={() => setEditingSizes(true)}
+                            title="Edit sizes"
+                          />
+                        )}
                       </div>
+                      {!editingSizes ? (
+                        <div className="detail-value" style={{ fontWeight: 400 }}>
+                          {(() => {
+                            const rawSizes = selectedOrder.appointment?.sizes;
+                            if (!rawSizes) return 'N/A';
+                            try {
+                              const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                              if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                                return (
+                                  <>
+                                    {Object.entries(parsed).map(([size, qty]) => (
+                                      <div key={size}>{size} - {qty}</div>
+                                    ))}
+                                  </>
+                                );
+                              }
+                              return 'N/A';
+                            } catch (_) {
+                              return 'N/A';
+                            }
+                          })()}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                          {SIZES.map((size) => (
+                            <div key={size} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={editSizes[size] !== undefined && editSizes[size] > 0}
+                                onChange={(e) => {
+                                  setEditSizes((prev) => ({
+                                    ...prev,
+                                    [size]: e.target.checked ? 1 : 0
+                                  }));
+                                }}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              <label style={{ flex: 1, cursor: 'pointer' }} onClick={() => {
+                                setEditSizes((prev) => ({
+                                  ...prev,
+                                  [size]: prev[size] > 0 ? 0 : 1
+                                }));
+                              }}>
+                                {size}
+                              </label>
+                              {editSizes[size] !== undefined && editSizes[size] > 0 && (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editSizes[size] || 0}
+                                  onChange={(e) => {
+                                    const num = parseInt(e.target.value) || 0;
+                                    setEditSizes((prev) => ({
+                                      ...prev,
+                                      [size]: num
+                                    }));
+                                  }}
+                                  style={{
+                                    width: '60px',
+                                    padding: '4px 8px',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px'
+                                  }}
+                                />
+                              )}
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                            <button
+                              onClick={handleSaveSizes}
+                              disabled={savingSizes}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#4caf50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: savingSizes ? 'not-allowed' : 'pointer',
+                                opacity: savingSizes ? 0.6 : 1
+                              }}
+                            >
+                              {savingSizes ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={handleCancelEditSizes}
+                              disabled={savingSizes}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#6c757d',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: savingSizes ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Quantity</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>
-                        {selectedOrder.appointment?.total_quantity || 0} pcs.
+                        {editingSizes ? editQuantity : (selectedOrder.appointment?.total_quantity || (() => {
+                          const rawSizes = selectedOrder.appointment?.sizes;
+                          if (!rawSizes) return 0;
+                          try {
+                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                            if (parsed && typeof parsed === 'object') {
+                              return Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+                            }
+                            return 0;
+                          } catch (_) {
+                            return 0;
+                          }
+                        })())}
                       </div>
                     </div>
                     {selectedOrder.status === 'Completed' && selectedOrder.total_amount && (
-                      <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-group">
                         <div className="detail-label" style={{ fontWeight: 600 }}>Total Payment Fee</div>
                         <div className="detail-value" style={{ fontWeight: 400 }}>₱{selectedOrder.total_amount}</div>
                       </div>
                     )}
                   </div>
                   <div className="details-right">
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
                     {selectedOrder.status === 'Completed' && selectedOrder.completed_at && (
-                      <div className="detail-group" style={{ marginBottom: 8 }}>
+                      <div className="detail-group">
                         <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
                         <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
                       </div>
                     )}
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
                       <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
                         {selectedOrder.status}
                       </div>
                     </div>
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Notes</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.notes || 'No notes provided.'}</div>
                     </div>
-                    <div className="image-label" style={{ fontWeight: 600 }}>Design Image</div>
-                    {selectedOrder.appointment?.design_image ? (
-                      <img 
-                        src={selectedOrder.appointment.design_image} 
-                        alt="Design" 
-                        className="dashboard-modal-image"
-                        onClick={() => handleImageClick(
-                          selectedOrder.appointment.design_image,
-                          'Design Image'
-                        )}
-                        onError={(e) => {
-                          console.error('Failed to load image:', e.target.src);
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <p>No design image available</p>
-                    )}
-                    {selectedOrder.appointment?.design_image && (
-                      <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px' }}>
-                        Failed to load design image. The file may have been moved or deleted.
-                      </p>
-                    )}
-                    
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
+                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
-                    
-                  
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '4px' }}>
+                      <div>
+                        <div className="image-label" style={{ fontWeight: 600 }}>Design Image</div>
+                        {selectedOrder.appointment?.design_image ? (
+                          <img 
+                            src={selectedOrder.appointment.design_image} 
+                            alt="Design" 
+                            className="dashboard-modal-image"
+                            onClick={() => handleImageClick(
+                              selectedOrder.appointment.design_image,
+                              'Design Image'
+                            )}
+                            onError={(e) => {
+                              console.error('Failed to load image:', e.target.src);
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <p style={{ marginBottom: '0' }}>No design image available</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

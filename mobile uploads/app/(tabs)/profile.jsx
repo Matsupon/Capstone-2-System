@@ -225,16 +225,47 @@ export default function ProfilePage() {
       } else {
         // Use FormData when image is included
         console.log('📤 Sending as FormData (with image)');
-        // Don't set Content-Type header - let axios automatically set it with boundary for FormData
-        // Increase timeout for profile updates with images and disable retries for FormData
-        response = await api.post('/profile', formData, {
-          timeout: 120000, // 120 seconds for file uploads (increased)
+        
+        // CRITICAL FIX: Use React Native's fetch API directly for FormData uploads
+        // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
+        // Using fetch API directly ensures FormData is handled correctly with multipart/form-data
+        const token = await AsyncStorage.getItem('authToken');
+        const apiBaseUrl = api.defaults.baseURL;
+        const fullUrl = `${apiBaseUrl}/profile`;
+        
+        console.log('🚀 Using fetch API for profile update with image to:', fullUrl);
+        
+        const fetchResponse = await fetch(fullUrl, {
+          method: 'POST',
           headers: {
             'Accept': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+            // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
           },
-          // Disable retries for FormData uploads to avoid issues with FormData preservation
-          __disableRetry: true,
+          body: formData,
         });
+        
+        // Check if response is OK
+        if (!fetchResponse.ok) {
+          const errorData = await fetchResponse.json().catch(() => ({ message: 'Unknown error' }));
+          throw {
+            response: {
+              status: fetchResponse.status,
+              statusText: fetchResponse.statusText,
+              data: errorData,
+            },
+            message: errorData.message || `HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`,
+          };
+        }
+        
+        const responseData = await fetchResponse.json();
+        // Convert fetch response to axios-like response for compatibility
+        response = {
+          data: responseData,
+          status: fetchResponse.status,
+          statusText: fetchResponse.statusText,
+          headers: fetchResponse.headers,
+        };
       }
 
       console.log('✅ Profile update successful:', response.data);
@@ -253,8 +284,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('❌ Profile save failed:', {
         message: error.message,
-        code: error.code,
-        response: error.response?.data,
+        response: error.response,
         status: error.response?.status,
       });
       
@@ -264,16 +294,22 @@ export default function ProfilePage() {
       }
       
       let errorMessage = 'Could not update profile.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors) {
-        const errors = error.response.data.errors;
-        errorMessage = Object.values(errors).flat().join('\n');
-      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      if (error.response) {
+        // Server responded with an error status
+        const responseData = error.response.data;
+        if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.errors) {
+          const errors = responseData.errors;
+          errorMessage = Object.values(errors).flat().join('\n');
+        }
+      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
+        // Network error (fetch API doesn't have error.code like axios)
         const serverURL = api.defaults.baseURL?.replace('/api', '') || 'the server';
         errorMessage = `Network error. Please check:\n\n1. Your internet connection\n2. Server is running at ${serverURL}\n3. Try again in a moment`;
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'Request timed out. Please check your connection and try again.';
+      } else {
+        // Unknown error
+        errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       
       Alert.alert('Update Failed', errorMessage);
@@ -376,21 +412,43 @@ export default function ProfilePage() {
         serverURL: api.defaults.baseURL 
       });
   
-      // Don't set Content-Type header - let axios automatically set it with boundary for FormData
-      // Increase timeout for file uploads and disable retries for FormData (handled in api.js)
-      const response = await api.post('/profile', formData, {
-        timeout: 120000, // 120 seconds for file uploads (increased)
+      // CRITICAL FIX: Use React Native's fetch API directly for FormData uploads
+      // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
+      // Using fetch API directly ensures FormData is handled correctly with multipart/form-data
+      const token = await AsyncStorage.getItem('authToken');
+      const apiBaseUrl = api.defaults.baseURL;
+      const fullUrl = `${apiBaseUrl}/profile`;
+      
+      console.log('🚀 Using fetch API for profile image upload to:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
+        method: 'POST',
         headers: {
           'Accept': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+          // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
         },
-        // Disable retries for FormData uploads to avoid issues with FormData preservation
-        __disableRetry: true,
+        body: formData,
       });
+      
+      // Check if response is OK
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw {
+          response: {
+            status: response.status,
+            statusText: response.statusText,
+            data: errorData,
+          },
+          message: errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+        };
+      }
+      
+      const responseData = await response.json();
+      console.log('✅ Profile image upload successful:', responseData);
   
-      console.log('✅ Profile image upload successful:', response.data);
-  
-      setUser(response.data.user);
-      setProfileImageUrl(response.data.image_url); 
+      setUser(responseData.user);
+      setProfileImageUrl(responseData.image_url); 
       setTempImage(null);
       showSuccessMessage();
       // Refresh notifications in header (in case profile image update triggers a notification)
@@ -402,8 +460,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('❌ Profile image upload failed:', {
         message: error.message,
-        code: error.code,
-        response: error.response?.data,
+        response: error.response,
         status: error.response?.status,
       });
       
@@ -411,16 +468,22 @@ export default function ProfilePage() {
       setTempImage(null);
       
       let errorMessage = 'Could not update profile picture.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors) {
-        const errors = error.response.data.errors;
-        errorMessage = Object.values(errors).flat().join('\n');
-      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      if (error.response) {
+        // Server responded with an error status
+        const responseData = error.response.data;
+        if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.errors) {
+          const errors = responseData.errors;
+          errorMessage = Object.values(errors).flat().join('\n');
+        }
+      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
+        // Network error (fetch API doesn't have error.code like axios)
         const serverURL = api.defaults.baseURL?.replace('/api', '') || 'the server';
         errorMessage = `Network error. Please check:\n\n1. Your internet connection\n2. Server is running at ${serverURL}\n3. Try again in a moment`;
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'Upload timed out. Please check your connection and try again.';
+      } else {
+        // Unknown error
+        errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       
       Alert.alert('Upload Failed', errorMessage);
@@ -910,25 +973,20 @@ export default function ProfilePage() {
       return true; // Always allow editing for pending/requesting appointments
     }
 
-    // Condition 2: When Filter is "Accepted" (appointment.status === 'accepted')
-    // Must have an order to edit accepted appointments
-    if (!appointment.order) {
-      return false;
+    // Condition 2: If appointment has an order, hide edit button only when order status is "Finished"
+    if (appointment.order) {
+      const orderStatus = appointment.order.status;
+      // Hide edit button only when order status is "Finished"
+      if (orderStatus === 'Finished') {
+        return false;
+      }
+      // For all other order statuses (Pending, Ready to Check, Completed), show edit button
+      return true;
     }
 
-    const orderStatus = appointment.order.status;
-    const handled = appointment.order.handled;
-
-    // Check if handled is not 1 (0, false, null, undefined means not triggered)
-    const isNotHandled = handled === 0 || handled === false || handled === null || handled === undefined;
-
-    // For accepted appointments: Order status must be 'Pending' AND Handled column is not 1
-    const isAcceptedWithPendingOrderNotHandled = 
-      (appointmentStatus === 'accepted' || displayStatus === 'Accepted') &&
-      orderStatus === 'Pending' &&
-      isNotHandled;
-
-    return isAcceptedWithPendingOrderNotHandled;
+    // Condition 3: If appointment doesn't have an order and is not "Requesting", don't show edit button
+    // (This handles rejected appointments or other edge cases)
+    return false;
   };
 
   // Check if cancel button should be visible
@@ -955,6 +1013,12 @@ export default function ProfilePage() {
 
     const orderStatus = appointment.order.status;
     const handled = appointment.order.handled;
+
+    // CRITICAL: Hide cancel button if Order status is "Pending" AND handled is 1 (true)
+    // This means admin and client have already had their first meetup
+    if (orderStatus === 'Pending' && (handled === 1 || handled === true || handled === '1')) {
+      return false;
+    }
 
     // Check if handled is not 1 (0, false, null, undefined means not triggered)
     const isNotHandled = handled === 0 || handled === false || handled === null || handled === undefined;

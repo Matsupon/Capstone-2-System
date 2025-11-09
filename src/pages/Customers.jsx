@@ -95,8 +95,17 @@ const Customers = () => {
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Scroll to top whenever page changes
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure scroll happens after DOM update
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+  }, [currentPage]);
 
   if (loading) {
     return (
@@ -278,18 +287,42 @@ const Customers = () => {
 
                           <div className="customers-modal-detail-label">Size</div>
                           <div className="customers-modal-detail-value">
-                            {order.sizes && Object.keys(order.sizes).length > 0 ? (
-                              Object.entries(order.sizes).map(([size, qty]) => (
-                                <div key={size}>{size} - {qty} pcs.</div>
-                              ))
-                            ) : (
-                              'N/A'
-                            )}
+                            {(() => {
+                              const rawSizes = order.sizes;
+                              if (!rawSizes) return 'N/A';
+                              try {
+                                const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                                if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                                  return (
+                                    <>
+                                      {Object.entries(parsed).map(([size, qty]) => (
+                                        <div key={size}>{size} - {qty}</div>
+                                      ))}
+                                    </>
+                                  );
+                                }
+                                return 'N/A';
+                              } catch (_) {
+                                return 'N/A';
+                              }
+                            })()}
                           </div>
 
                           <div className="customers-modal-detail-label">Quantity</div>
                           <div className="customers-modal-detail-value">
-                            {order.sizes ? Object.values(order.sizes).reduce((a, b) => a + b, 0) : 0} pcs.
+                            {order.total_quantity || (() => {
+                              const rawSizes = order.sizes;
+                              if (!rawSizes) return 0;
+                              try {
+                                const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                                if (parsed && typeof parsed === 'object') {
+                                  return Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+                                }
+                                return 0;
+                              } catch (_) {
+                                return 0;
+                              }
+                            })()}
                           </div>
                           <div className="customers-modal-detail-label">Notes</div>
                           <div className="customers-modal-detail-value">{order.notes || 'N/A'}</div>

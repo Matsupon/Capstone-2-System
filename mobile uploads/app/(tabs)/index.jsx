@@ -24,6 +24,7 @@ export default function HomePage() {
   const [nextAppointment, setNextAppointment] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [latestOrder, setLatestOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [detailsVisible, setDetailsVisible] = useState(false);
@@ -38,7 +39,6 @@ export default function HomePage() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
-  const [restrictionWarningVisible, setRestrictionWarningVisible] = useState(false);
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -77,18 +77,21 @@ export default function HomePage() {
   const loadLatestOrder = useCallback(async () => {
     try {
       setOrderLoading(true);
-      const res = await api.get('/me/orders/latest');
+      const res = await api.get('/me/orders');
       if (res.data?.success) {
-        setLatestOrder(res.data.data || null);
+        const ordersData = res.data.data || [];
+        setOrders(ordersData);
+        // Set latestOrder to the first order for backward compatibility (if needed)
+        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
       }
     } catch (e) {
       // Only log if it's not a network error (network errors are expected if server is down)
       if (e.response) {
-        console.log('Failed to load latest order', e?.response?.status, e?.message);
+        console.log('Failed to load orders', e?.response?.status, e?.message);
       } else if (e.code !== 'NETWORK_ERROR' && e.message !== 'Network Error') {
-        console.log('Failed to load latest order', e?.message || e);
+        console.log('Failed to load orders', e?.message || e);
       }
-      // Don't set latestOrder to null on error, keep previous value
+      // Don't set orders to empty on error, keep previous value
     } finally {
       setOrderLoading(false);
     }
@@ -116,6 +119,8 @@ export default function HomePage() {
 
   const loadNextAppointment = useCallback(async () => {
     try {
+      // For multiple orders, we'll get the next appointment from the first order
+      // This can be enhanced later to show next appointment for each order
       const res = await api.get('/appointments/next-appointment');
       const data = res.data;
 
@@ -419,77 +424,84 @@ export default function HomePage() {
           </Text>
         </View>
 
-        {latestOrder && latestOrder.status !== 'Finished' ? (
-          <View style={styles.orderCard}>
-            <View style={styles.orderTitleContainer}>
-              <Text style={styles.orderTitle}>
-                <Text style={styles.boldText}>Current Order</Text>
-                {latestOrder?.queue_number ? ` - Queue #${latestOrder.queue_number}` : ''}
+        {orders.length > 0 ? (
+          orders.map((order) => (
+            <View key={order.id}>
+              <Text style={[styles.sectionTitle, { marginTop: orders.indexOf(order) === 0 ? 0 : 20, marginBottom: 10 }]}>
+                Order #{order.id}
+                {order.queue_number ? ` - Queue #${order.queue_number}` : ''}
               </Text>
-            </View>
-            <View style={styles.orderDetails}>
-              <View style={styles.orderInfo}>
-                <Text style={styles.itemText}>
-                  {latestOrder?.appointment?.service_type || 'N/A'}
-                </Text>
-                <View style={styles.sizeDetails}>
-                  <Text style={styles.sizeLabel}>Size:</Text>
-                  <Text style={styles.sizeText}>
-                    {parseSizesToText(latestOrder?.appointment?.sizes) || 'N/A'}
+              <View style={styles.orderCard}>
+                <View style={styles.orderTitleContainer}>
+                  <Text style={styles.orderTitle}>
+                    <Text style={styles.boldText}>Current Order</Text>
                   </Text>
                 </View>
-                <Text style={styles.itemDetail}>
-                  {`Quantity: ${latestOrder?.appointment?.total_quantity ?? 'N/A'} pcs.`}
-                </Text>
-              </View>
-              <View style={styles.dateSection}>
-                <Text style={styles.dateLabel}>Due Date</Text>
-                <Text style={styles.date}>
-                  {(() => {
-                    const status = latestOrder?.status;
-                    const pref = latestOrder?.appointment?.preferred_due_date;
-                    const sched = latestOrder?.scheduled_at;
-                    const apptDate = latestOrder?.appointment?.appointment_date;
-                    const dateSrc =
-                      status === 'Ready to Check' && sched ? sched : pref || apptDate;
-                    return dateSrc ? new Date(dateSrc).toLocaleDateString() : 'N/A';
-                  })()}
-                </Text>
-              </View>
-            </View>
+                <View style={styles.orderDetails}>
+                  <View style={styles.orderInfo}>
+                    <Text style={styles.itemText}>
+                      {order?.appointment?.service_type || 'N/A'}
+                    </Text>
+                    <View style={styles.sizeDetails}>
+                      <Text style={styles.sizeLabel}>Size:</Text>
+                      <Text style={styles.sizeText}>
+                        {parseSizesToText(order?.appointment?.sizes) || 'N/A'}
+                      </Text>
+                    </View>
+                    <Text style={styles.itemDetail}>
+                      {`Quantity: ${order?.appointment?.total_quantity ?? 'N/A'} pcs.`}
+                    </Text>
+                  </View>
+                  <View style={styles.dateSection}>
+                    <Text style={styles.dateLabel}>Due Date</Text>
+                    <Text style={styles.date}>
+                      {(() => {
+                        const status = order?.status;
+                        const pref = order?.appointment?.preferred_due_date;
+                        const sched = order?.scheduled_at;
+                        const apptDate = order?.appointment?.appointment_date;
+                        const dateSrc =
+                          status === 'Ready to Check' && sched ? sched : pref || apptDate;
+                        return dateSrc ? new Date(dateSrc).toLocaleDateString() : 'N/A';
+                      })()}
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.orderProgressContainer}>
-              <View style={styles.progressBar}>
-                {['Pending', 'Ready to Check', 'Completed'].map((step, idx) => {
-                  const status = latestOrder?.status || 'Pending';
-                  const activeIdx =
-                    status === 'Pending' ? 0 : status === 'Ready to Check' ? 1 : 2;
-                  const isActive = idx === activeIdx;
-                  
-                  // Determine the color based on which step is active
-                  let activeStyle = styles.stepCurrent; // default green
-                  if (isActive) {
-                    if (idx === 0) activeStyle = styles.stepOrange; // Pending
-                    else if (idx === 1) activeStyle = styles.stepRed; // Ready to Check
-                    else activeStyle = styles.stepCurrent; // Completed (green)
-                  }
-                  
-                  return (
-                    <View
-                      key={step}
-                      style={[
-                        styles.progressStep,
-                        isActive ? activeStyle : styles.stepDone,
-                      ]}
-                    />
-                  );
-                })}
+                <View style={styles.orderProgressContainer}>
+                  <View style={styles.progressBar}>
+                    {['Pending', 'Ready to Check', 'Completed'].map((step, idx) => {
+                      const status = order?.status || 'Pending';
+                      const activeIdx =
+                        status === 'Pending' ? 0 : status === 'Ready to Check' ? 1 : 2;
+                      const isActive = idx === activeIdx;
+                      
+                      // Determine the color based on which step is active
+                      let activeStyle = styles.stepCurrent; // default green
+                      if (isActive) {
+                        if (idx === 0) activeStyle = styles.stepOrange; // Pending
+                        else if (idx === 1) activeStyle = styles.stepRed; // Ready to Check
+                        else activeStyle = styles.stepCurrent; // Completed (green)
+                      }
+                      
+                      return (
+                        <View
+                          key={step}
+                          style={[
+                            styles.progressStep,
+                            isActive ? activeStyle : styles.stepDone,
+                          ]}
+                        />
+                      );
+                    })}
+                  </View>
+                  <Text style={styles.progressText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    Pending → Ready to Check → Completed
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.progressText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                Pending → Ready to Check → Completed
-              </Text>
             </View>
-          </View>
+          ))
         ) : (
           <View style={styles.orderCard}>
             <Text style={styles.orderTitle}>
@@ -503,83 +515,115 @@ export default function HomePage() {
 
         <Text style={styles.sectionTitle}>Announcements</Text>
 
-        <View style={styles.announcementCard}>
-          <View style={[styles.indicator, styles.indicatorGreen]} />
-          <MaterialIcons
-            name="access-time"
-            size={24}
-            color="#16A34A"
-            style={styles.announcementIcon}
-          />
-          <View>
-            <Text style={styles.announcementTitle}>Next Appointment</Text>
-            <Text style={styles.announcementDate}>
-              {latestOrder && latestOrder.status !== 'Finished' && nextAppointment 
-                ? nextAppointment 
-                : 'No recent appointment for now'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.announcementCard}>
-          <View style={[styles.indicator, styles.indicatorYellow]} />
-          <MaterialCommunityIcons
-            name="file-document-outline"
-            size={24}
-            color="#FFA500"
-            style={styles.announcementIcon}
-          />
-          <View>
-            <Text style={styles.announcementTitle}>Order Status</Text>
-            {latestOrder && latestOrder.status !== 'Finished' && latestOrder?.status ? (
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      latestOrder?.status === 'Completed'
-                        ? '#E8F5E9'
-                        : latestOrder?.status === 'Ready to Check'
-                        ? '#FFEBEE'
-                        : '#FFF3E0',
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color:
-                      latestOrder?.status === 'Completed'
-                        ? '#4caf50'
-                        : latestOrder?.status === 'Ready to Check'
-                        ? '#e91e63'
-                        : '#FFA500',
-                    fontSize: 12,
-                    fontWeight: '500',
-                  }}
-                >
-                  {latestOrder?.status}
-                </Text>
+        {orders.length > 0 ? (
+          orders.map((order) => (
+            <View key={order.id}>
+              <Text style={[styles.sectionTitle, { fontSize: 16, marginTop: orders.indexOf(order) === 0 ? 0 : 20, marginBottom: 10 }]}>
+                Order #{order.id}
+              </Text>
+              <View style={styles.announcementCard}>
+                <View style={[styles.indicator, styles.indicatorGreen]} />
+                <MaterialIcons
+                  name="access-time"
+                  size={24}
+                  color="#16A34A"
+                  style={styles.announcementIcon}
+                />
+                <View>
+                  <Text style={styles.announcementTitle}>Next Appointment</Text>
+                  <Text style={styles.announcementDate}>
+                    {order.status !== 'Finished' && nextAppointment 
+                      ? nextAppointment 
+                      : 'No recent appointment for now'}
+                  </Text>
+                </View>
               </View>
-            ) : (
-              <Text style={styles.announcementDate}>No recent status for now</Text>
-            )}
-          </View>
-        </View>
+
+              <View style={styles.announcementCard}>
+                <View style={[styles.indicator, styles.indicatorYellow]} />
+                <MaterialCommunityIcons
+                  name="file-document-outline"
+                  size={24}
+                  color="#FFA500"
+                  style={styles.announcementIcon}
+                />
+                <View>
+                  <Text style={styles.announcementTitle}>Order Status</Text>
+                  {order.status !== 'Finished' && order?.status ? (
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor:
+                            order?.status === 'Completed'
+                              ? '#E8F5E9'
+                              : order?.status === 'Ready to Check'
+                              ? '#FFEBEE'
+                              : '#FFF3E0',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            order?.status === 'Completed'
+                              ? '#4caf50'
+                              : order?.status === 'Ready to Check'
+                              ? '#e91e63'
+                              : '#FFA500',
+                          fontSize: 12,
+                          fontWeight: '500',
+                        }}
+                      >
+                        {order?.status}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.announcementDate}>No recent status for now</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))
+        ) : (
+          <>
+            <View style={styles.announcementCard}>
+              <View style={[styles.indicator, styles.indicatorGreen]} />
+              <MaterialIcons
+                name="access-time"
+                size={24}
+                color="#16A34A"
+                style={styles.announcementIcon}
+              />
+              <View>
+                <Text style={styles.announcementTitle}>Next Appointment</Text>
+                <Text style={styles.announcementDate}>No recent appointment for now</Text>
+              </View>
+            </View>
+
+            <View style={styles.announcementCard}>
+              <View style={[styles.indicator, styles.indicatorYellow]} />
+              <MaterialCommunityIcons
+                name="file-document-outline"
+                size={24}
+                color="#FFA500"
+                style={styles.announcementIcon}
+              />
+              <View>
+                <Text style={styles.announcementTitle}>Order Status</Text>
+                <Text style={styles.announcementDate}>No recent status for now</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Recent Activity</Text>
 
         <View style={styles.activityList}>
-          {notifications.length === 0 || (latestOrder && latestOrder.status === 'Finished') ? (
+          {notifications.length === 0 ? (
             <Text style={{ color: '#687076', padding: 10 }}>No new notifications for now.</Text>
           ) : (
-            notifications
-              .filter(notification => {
-                if (latestOrder && latestOrder.status === 'Finished') {
-                  return false;
-                }
-                return true;
-              })
-              .map(renderActivityItem)
+            notifications.map(renderActivityItem)
           )}
         </View>
       </ScrollView>
@@ -589,12 +633,7 @@ export default function HomePage() {
       <TouchableOpacity 
         style={styles.fab} 
         onPress={() => {
-          // Check if user has an ongoing order
-          if (latestOrder && latestOrder.status !== 'Finished') {
-            setRestrictionWarningVisible(true);
-          } else {
-            setModalVisible(true);
-          }
+          setModalVisible(true);
         }}
       >
         <MaterialIcons name="add" size={30} color="#fff" />
@@ -772,27 +811,6 @@ export default function HomePage() {
         </View>
       </Modal>
 
-      {/* Restriction Warning Modal */}
-      <Modal
-        visible={restrictionWarningVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRestrictionWarningVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Booking Restricted</Text>
-              <TouchableOpacity onPress={() => setRestrictionWarningVisible(false)}>
-                <MaterialIcons name="close" size={22} color="#000" />
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.modalBody, { fontSize: 16, textAlign: 'center', marginTop: 10 }]}>
-              We're sorry but you cannot book more than one appointment. Please wait until your current order is finished.
-            </Text>
-          </View>
-        </View>
-      </Modal>
 
       {feedbackSuccess && (
         <View style={{ position: 'absolute', left: 20, right: 20, bottom: 90, backgroundColor: '#E8F5E9', borderRadius: 12, padding: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }}>

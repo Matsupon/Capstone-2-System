@@ -291,7 +291,7 @@ input[type="checkbox"]:checked::before {
   background: white;
   border-radius: 10px;
   max-width: 620px;
-  width: 120%;
+  width: 90%;
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 2px 8px rgba(0,0,0,0.13);
@@ -300,13 +300,16 @@ input[type="checkbox"]:checked::before {
   align-items: center;
   position: relative;
   scrollbar-gutter: stable both-edges;
+  padding: 20px 24px;
 }
 .dashboard-modal-title {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+  margin-top: 8px;
   color: #1a3c6c;
   font-size: 22px;
   font-weight: 700;
   text-align: center;
+  width: 100%;
 }
 .dashboard-modal-exit-icon {
   position: absolute;
@@ -608,30 +611,42 @@ input[type="checkbox"]:checked::before {
 /* Details Modal Two-Column Layout */
 .details-modal {
   max-width: 700px !important;
-  padding: 32px;
+  padding: 20px 24px;
 }
 .details-container {
   display: flex;
-  gap: 90px;
+  gap: 40px;
+  width: 100%;
 }
 .details-left {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
+  min-width: 0;
 }
 .details-right {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 8px;
   align-items: flex-start;
+  min-width: 0;
+}
+.detail-group {
+  margin-bottom: 8px;
+}
+.detail-group .detail-label {
+  margin-bottom: 2px;
+}
+.detail-group .detail-value {
+  margin-bottom: 0;
 }
 .detail-label {
   font-weight: 700;
   color: var(--text-secondary);
   font-size: clamp(12px, 1.5vw, 14px);
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -640,18 +655,23 @@ input[type="checkbox"]:checked::before {
   font-size: clamp(14px, 1.8vw, 16px);
   line-height: 1.4;
   font-weight: 400;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 .image-label {
   font-weight: 700;
   color: var(--text-secondary);
   font-size: clamp(12px, 1.5vw, 14px);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  margin-top: 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.image-label:first-child {
+  margin-top: 0;
+}
 .modal-image {
-  width: 140px;
+  width: 100%;
+  max-width: 200px;
   max-height: 140px;
   object-fit: contain;
   border: 1px solid var(--card-border);
@@ -662,6 +682,7 @@ input[type="checkbox"]:checked::before {
   box-sizing: border-box;
   transition: all 0.3s ease;
   cursor: pointer;
+  margin-bottom: 0;
 }
 
 .modal-image:hover {
@@ -724,8 +745,9 @@ input[type="checkbox"]:checked::before {
   .image-modal-bg { left: 0; width: 100%; }
   .modal-bg { left: 0; width: 100%; }
   .dashboard-modal-bg { left: 0; width: 100%; }
+  .dashboard-modal-panel { width: 95%; padding: 16px 20px; }
   .details-container { flex-direction: column; gap: 20px; }
-  .details-modal { max-width: 90vw !important; padding: 20px; }
+  .details-modal { max-width: 90vw !important; padding: 16px 20px; }
 }
 
 /* Modal open/close animations */

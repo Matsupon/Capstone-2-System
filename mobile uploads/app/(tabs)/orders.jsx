@@ -15,7 +15,7 @@ import Header from '../../components/Header';
 import api from '../../utils/api';
 
 export default function AppointmentsPage() {
-  const [expandedRecent, setExpandedRecent] = useState(false);
+  const [expandedRecent, setExpandedRecent] = useState(null); // Changed to store order ID
   const [expandedHistory, setExpandedHistory] = useState({
     first: false,
     second: false,
@@ -25,13 +25,14 @@ export default function AppointmentsPage() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [nextAppointment, setNextAppointment] = useState(null);
   const [latestOrder, setLatestOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [finishedOrders, setFinishedOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const toggleRecent = () => {
-    setExpandedRecent(!expandedRecent);
+  const toggleRecent = (orderId) => {
+    setExpandedRecent(expandedRecent === orderId ? null : orderId);
   };
 
   const toggleHistory = (key) => {
@@ -106,9 +107,12 @@ export default function AppointmentsPage() {
   const loadLatestOrder = useCallback(async () => {
     try {
       setOrderLoading(true);
-      const res = await api.get('/me/orders/latest');
+      const res = await api.get('/me/orders');
       if (res.data?.success) {
-        setLatestOrder(res.data.data || null);
+        const ordersData = res.data.data || [];
+        setOrders(ordersData);
+        // Set latestOrder to the first order for backward compatibility
+        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
       }
     } catch (e) {
     } finally {
@@ -201,68 +205,88 @@ export default function AppointmentsPage() {
 
         {/* Recent Section */}
         <Text style={styles.sectionTitle}>Recent</Text>
-        <View style={styles.appointmentCard}>
-          <View style={[styles.indicator, {backgroundColor: getStatusColor(latestOrder?.status || 'Pending')}]} />
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardDate}>
-                {latestOrder ? `Order: ${latestOrder?.appointment?.service_type || 'N/A'}` : 'No recent orders for now'}
-              </Text>
-              {latestOrder && (
-                <TouchableOpacity onPress={toggleRecent} style={styles.statusContainer}>
-                  {latestOrder?.status ? (
-                    <Text
-                      style={[
-                        styles.statusText,
-                        latestOrder?.status === 'Completed'
-                          ? styles.statusCompleted
-                          : latestOrder?.status === 'Ready to Check'
-                          ? styles.statusReadyToCheck
-                          : styles.statusPending,
-                      ]}
-                    >
-                      {latestOrder?.status}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
-                  )}
-                  <MaterialIcons
-                    name={expandedRecent ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                    size={24}
-                    color={getStatusColor(latestOrder?.status || 'Pending')}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            {expandedRecent && latestOrder && (
-              <View style={styles.dropdownContent}>
-                <Text style={styles.dropdownTitle}>Order Details:</Text>
-                <Text style={styles.dropdownText}>{`• Service: ${latestOrder?.appointment?.service_type || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Phone Number: ${latestOrder?.appointment?.user?.phone || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Size: ${parseSizesToText(latestOrder?.appointment?.sizes) || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>{`• Quantity: ${latestOrder?.appointment?.total_quantity ?? 'N/A'} pcs.`}</Text>
-                <Text style={styles.dropdownText}>{`• Due Date: ${
-  latestOrder?.appointment?.preferred_due_date
-    ? new Date(latestOrder.appointment.preferred_due_date).toLocaleDateString()
-    : 'N/A'
-}`}</Text>
-                <Text style={styles.dropdownText}>{`• Notes: ${latestOrder?.appointment?.notes || 'N/A'}`}</Text>
-                <Text style={styles.dropdownText}>• Design Image:</Text>
-                {latestOrder?.appointment?.design_image ? (
-                  <TouchableOpacity onPress={() => handleImagePress({ uri: latestOrder.appointment.design_image })}>
-                    <Image source={{ uri: latestOrder.appointment.design_image }} style={styles.image} />
-                  </TouchableOpacity>
-                ) : null}
-                <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
-                {latestOrder?.appointment?.gcash_proof ? (
-                  <TouchableOpacity onPress={() => handleImagePress({ uri: latestOrder.appointment.gcash_proof })}>
-                    <Image source={{ uri: latestOrder.appointment.gcash_proof }} style={styles.image} />
-                  </TouchableOpacity>
-                ) : null}
+        {orders.length > 0 ? (
+          orders.map((order, orderIndex) => {
+            const isExpanded = expandedRecent === order.id;
+            return (
+              <View key={order.id} style={{ marginBottom: orderIndex < orders.length - 1 ? 15 : 0 }}>
+                <Text style={[styles.sectionTitle, { fontSize: 16, marginTop: orderIndex === 0 ? 0 : 15, marginBottom: 10 }]}>
+                  Order #{order.id}
+                  {order.queue_number ? ` - Queue #${order.queue_number}` : ''}
+                </Text>
+                <View style={styles.appointmentCard}>
+                  <View style={[styles.indicator, {backgroundColor: getStatusColor(order?.status || 'Pending')}]} />
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.cardDate}>
+                        {`Order: ${order?.appointment?.service_type || 'N/A'}`}
+                      </Text>
+                      <TouchableOpacity onPress={() => toggleRecent(order.id)} style={styles.statusContainer}>
+                        {order?.status ? (
+                          <Text
+                            style={[
+                              styles.statusText,
+                              order?.status === 'Completed'
+                                ? styles.statusCompleted
+                                : order?.status === 'Ready to Check'
+                                ? styles.statusReadyToCheck
+                                : styles.statusPending,
+                            ]}
+                          >
+                            {order?.status}
+                          </Text>
+                        ) : (
+                          <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
+                        )}
+                        <MaterialIcons
+                          name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                          size={24}
+                          color={getStatusColor(order?.status || 'Pending')}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    {isExpanded && (
+                      <View style={styles.dropdownContent}>
+                        <Text style={styles.dropdownTitle}>Order Details:</Text>
+                        <Text style={styles.dropdownText}>{`• Service: ${order?.appointment?.service_type || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Phone Number: ${order?.appointment?.user?.phone || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Size: ${parseSizesToText(order?.appointment?.sizes) || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>{`• Quantity: ${order?.appointment?.total_quantity ?? 'N/A'} pcs.`}</Text>
+                        <Text style={styles.dropdownText}>{`• Due Date: ${
+                          order?.appointment?.preferred_due_date
+                            ? new Date(order.appointment.preferred_due_date).toLocaleDateString()
+                            : 'N/A'
+                        }`}</Text>
+                        <Text style={styles.dropdownText}>{`• Notes: ${order?.appointment?.notes || 'N/A'}`}</Text>
+                        <Text style={styles.dropdownText}>• Design Image:</Text>
+                        {order?.appointment?.design_image ? (
+                          <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.design_image })}>
+                            <Image source={{ uri: order.appointment.design_image }} style={styles.image} />
+                          </TouchableOpacity>
+                        ) : null}
+                        <Text style={styles.dropdownText}>• Gcash Downpayment:</Text>
+                        {order?.appointment?.gcash_proof ? (
+                          <TouchableOpacity onPress={() => handleImagePress({ uri: order.appointment.gcash_proof })}>
+                            <Image source={{ uri: order.appointment.gcash_proof }} style={styles.image} />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                </View>
               </View>
-            )}
+            );
+          })
+        ) : (
+          <View style={styles.appointmentCard}>
+            <View style={[styles.indicator, {backgroundColor: getStatusColor('Pending')}]} />
+            <View style={styles.cardContent}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardDate}>No recent orders for now</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
 
        {/* History Section */}
       <Text style={styles.sectionTitle}>History</Text>

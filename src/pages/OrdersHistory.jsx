@@ -93,8 +93,17 @@ const OrdersHistory = () => {
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Scroll to top whenever page changes
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure scroll happens after DOM update
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+  }, [currentPage]);
 
   // Loading state
   if (loading) {
@@ -258,117 +267,136 @@ const OrdersHistory = () => {
                 }}
               />
               <h2 className="dashboard-modal-title">Order Details</h2>
-              <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
-                <div className="details-left">
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
+                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
+                  <div className="details-left">
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Full Name</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.name || 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Service Type</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.service_type || 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Phone Number</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Size</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>
+                        {(() => {
+                          const rawSizes = selectedOrder.appointment?.sizes;
+                          if (!rawSizes) return 'N/A';
+                          try {
+                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                              return (
+                                <>
+                                  {Object.entries(parsed).map(([size, qty]) => (
+                                    <div key={size}>{size} - {qty}</div>
+                                  ))}
+                                </>
+                              );
+                            }
+                            return 'N/A';
+                          } catch (_) {
+                            return 'N/A';
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Quantity</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>
+                        {selectedOrder.appointment?.total_quantity || (() => {
+                          const rawSizes = selectedOrder.appointment?.sizes;
+                          if (!rawSizes) return 0;
+                          try {
+                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                            if (parsed && typeof parsed === 'object') {
+                              return Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+                            }
+                            return 0;
+                          } catch (_) {
+                            return 0;
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.total_amount && (
+                      <div className="detail-group">
+                        <div className="detail-label" style={{ fontWeight: 600 }}>Total Payment Fee</div>
+                        <div className="detail-value" style={{ fontWeight: 400 }}>₱{selectedOrder.total_amount}</div>
+                      </div>
+                    )}
                   </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
-                  </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Service Type</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.service_type || 'N/A'}</div>
-                  </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Phone Number</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
-                  </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Size</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>
-                      {selectedOrder.appointment?.sizes ? (
-                        <>
-                          {Object.entries(JSON.parse(selectedOrder.appointment.sizes)).map(([size, qty]) => (
-                            <div key={size}>{size} - {qty} pcs.</div>
-                          ))}
-                        </>
-                      ) : 'N/A'}
+                  <div className="details-right">
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
+                    </div>
+                    {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.completed_at && (
+                      <div className="detail-group">
+                        <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
+                        <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
+                      </div>
+                    )}
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
+                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
+                        {selectedOrder.status === 'Completed' ? 'Finished' : selectedOrder.status}
+                      </div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label" style={{ fontWeight: 600 }}>Notes</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.notes || 'No notes provided.'}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '4px' }}>
+                      <div>
+                        <div className="image-label" style={{ fontWeight: 600 }}>Design Image</div>
+                        {selectedOrder.appointment?.design_image ? (
+                          <img 
+                            src={selectedOrder.appointment.design_image} 
+                            alt="Design" 
+                            className="dashboard-modal-image"
+                            onClick={() => handleImageClick(
+                              selectedOrder.appointment.design_image,
+                              'Design Image'
+                            )}
+                            onError={(e) => {
+                              console.error('Failed to load image:', e.target.src);
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <p style={{ marginBottom: '0' }}>No design image was uploaded.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Quantity</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>
-                      {selectedOrder.appointment?.total_quantity || 0} pcs.
-                    </div>
-                  </div>
-                  {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.total_amount && (
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Total Payment Fee</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>₱{selectedOrder.total_amount}</div>
-                    </div>
-                  )}
-                </div>
-                <div className="details-right">
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
-                  </div>
-                  {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.completed_at && (
-                    <div className="detail-group" style={{ marginBottom: 8 }}>
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
-                    </div>
-                  )}
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
-                    <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
-                      {selectedOrder.status === 'Completed' ? 'Finished' : selectedOrder.status}
-                    </div>
-                  </div>
-                  <div className="detail-group" style={{ marginBottom: 8 }}>
-                    <div className="detail-label" style={{ fontWeight: 600 }}>Notes</div>
-                    <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.notes || 'No notes provided.'}</div>
-                  </div>
-                  <div className="image-label" style={{ fontWeight: 600 }}>Design Image</div>
-                  {selectedOrder.appointment?.design_image ? (
-                    <img 
-                      src={selectedOrder.appointment.design_image} 
-                      alt="Design" 
-                      className="dashboard-modal-image"
-                      onClick={() => handleImageClick(
-                        selectedOrder.appointment.design_image,
-                        'Design Image'
-                      )}
-                      onError={(e) => {
-                        console.error('Failed to load image:', e.target.src);
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <p>No design image was uploaded.</p>
-                  )}
-                  {selectedOrder.appointment?.design_image && (
-                    <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px' }}>
-                      Failed to load design image. The file may have been moved or deleted.
-                    </p>
-                  )}
-                  
-                  
-                
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Image Zoom Modal (Dashboard design) */}
-        {showImageModal && selectedImage && (
-          <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
-            <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
-              <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
-              <img
-                src={selectedImage.src}
-                alt={selectedImage.alt}
-                style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
-              />
-            </div>
+      {/* Image Zoom Modal (Dashboard design) */}
+      {showImageModal && selectedImage && (
+        <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
+          <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
+            <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
+            <img
+              src={selectedImage.src}
+              alt={selectedImage.alt}
+              style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
+            />
           </div>
-        )}
-      </div>
-    
+        </div>
+      )}
+    </div>
   );
 };
 

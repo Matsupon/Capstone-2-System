@@ -155,16 +155,40 @@ const Appointments = () => {
     return `${month} ${day} - ${time}`;
   };
 
-  const handleViewDetails = (appointment) => {
+  const handleViewDetails = async (appointment) => {
     setSelectedAppointment(appointment);
     setShowDetails(true);
-    api.patch(`/notifications/appointments/${appointment.id}/viewed`).catch(() => {});
+    
+    // Optimistically update UI immediately for better UX
     setUnviewedAppointmentIds(prev => {
       if (!prev.has(appointment.id)) return prev;
       const next = new Set(prev);
       next.delete(appointment.id);
       return next;
     });
+    
+    // Update database - mark appointment as viewed
+    try {
+      const response = await api.patch(`/notifications/appointments/${appointment.id}/viewed`);
+      console.log('Appointment marked as viewed:', response.data);
+      
+      // Refresh view states to ensure consistency with database
+      try {
+        const res = await api.get('/notifications/appointments/view-states');
+        if (res.data?.success) {
+          const items = res.data.data || [];
+          const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
+          setUnviewedAppointmentIds(unviewed);
+        }
+      } catch (refreshError) {
+        console.error('Failed to refresh view states:', refreshError);
+        // Don't revert the optimistic update - user already viewed it
+      }
+    } catch (err) {
+      console.error('Failed to mark appointment as viewed:', err);
+      // Don't revert the optimistic update - user already viewed it
+      // The error is logged but UI remains updated for better UX
+    }
   };
 
   const handleImageClick = (imageSrc, imageAlt) => {
@@ -248,8 +272,17 @@ const Appointments = () => {
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Scroll to top whenever page changes
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure scroll happens after DOM update
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+  }, [currentPage]);
 
   return (
     <>
@@ -369,31 +402,65 @@ const Appointments = () => {
                   }}
                 />
                 <h2 className="dashboard-modal-title">Appointment Details</h2>
-                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)', paddingRight: 8 }}>
+                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
                   <div className="details-left">
-                    <div className="detail-label">Service Type</div>
-                    <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
-                    <div className="detail-label">Appointment Date</div>
-                    <div className="detail-value">{formatDateTime(selectedAppointment.appointment_date, selectedAppointment.appointment_time)}</div>
-                    <div className="detail-label">Full Name</div>
-                    <div className="detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
-                    <div className="detail-label">Phone Number</div>
-                    <div className="detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
-                    <div className="detail-label">Size</div>
-                    <div className="detail-value">
-                      {selectedAppointment.sizes && typeof selectedAppointment.sizes === 'object' && Object.keys(selectedAppointment.sizes).length > 0 ? (
-                        <>
-                          {Object.entries(selectedAppointment.sizes).map(([size, qty]) => (
-                            <div key={size}>{size} - {qty} pcs.</div>
-                          ))}
-                        </>
-                      ) : selectedAppointment.sizes ? (
-                        selectedAppointment.sizes
-                      ) : 'N/A'}
+                    <div className="detail-group">
+                      <div className="detail-label">Service Type</div>
+                      <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
                     </div>
-                    <div className="detail-label">Quantity</div>
-                    <div className="detail-value">
-                      {selectedAppointment.total_quantity ? `${selectedAppointment.total_quantity} pcs.` : 'N/A'}
+                    <div className="detail-group">
+                      <div className="detail-label">Appointment Date</div>
+                      <div className="detail-value">{formatDateTime(selectedAppointment.appointment_date, selectedAppointment.appointment_time)}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Full Name</div>
+                      <div className="detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Phone Number</div>
+                      <div className="detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Size</div>
+                      <div className="detail-value">
+                        {(() => {
+                          const rawSizes = selectedAppointment.sizes;
+                          if (!rawSizes) return 'N/A';
+                          try {
+                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                              return (
+                                <>
+                                  {Object.entries(parsed).map(([size, qty]) => (
+                                    <div key={size}>{size} - {qty}</div>
+                                  ))}
+                                </>
+                              );
+                            }
+                            return 'N/A';
+                          } catch (_) {
+                            return 'N/A';
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    <div className="detail-group">
+                      <div className="detail-label">Quantity</div>
+                      <div className="detail-value">
+                        {selectedAppointment.total_quantity || (() => {
+                          const rawSizes = selectedAppointment.sizes;
+                          if (!rawSizes) return 0;
+                          try {
+                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                            if (parsed && typeof parsed === 'object') {
+                              return Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
+                            }
+                            return 0;
+                          } catch (_) {
+                            return 0;
+                          }
+                        })()}
+                      </div>
                     </div>
                   </div>
                   <div className="details-right">
@@ -407,74 +474,52 @@ const Appointments = () => {
                       <div className="detail-label">Notes</div>
                       <div className="detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
                     </div>
-                    <div className="image-label">Design Image</div>
-                    {selectedAppointment.design_image ? (
-                      <img 
-                        src={selectedAppointment.design_image} 
-                        alt="Jersey Design"
-                        className="modal-image"
-                        style={{ 
-                          width: '100%', 
-                          height: '120px', 
-                          objectFit: 'cover', 
-                          border: '1px solid #ddd',
-                          cursor: 'pointer',
-                          borderRadius: '4px'
-                        }}
-                        onClick={() => handleImageClick(
-                          selectedAppointment.design_image,
-                          'Design Image'
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '4px' }}>
+                      <div>
+                        <div className="image-label">Design Image</div>
+                        {selectedAppointment.design_image ? (
+                          <img 
+                            src={selectedAppointment.design_image} 
+                            alt="Jersey Design"
+                            className="modal-image"
+                            onClick={() => handleImageClick(
+                              selectedAppointment.design_image,
+                              'Design Image'
+                            )}
+                            onError={(e) => {
+                              console.error('Failed to load design image:', e.target.src);
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', borderRadius: '4px', marginBottom: '8px' }}>
+                            No design image uploaded
+                          </div>
                         )}
-                        onError={(e) => {
-                          console.error('Failed to load design image:', e.target.src);
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'block';
-                        }}
-                      />
-                    ) : (
-                      <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
-                        No design image uploaded
                       </div>
-                    )}
-                    {selectedAppointment.design_image && (
-                      <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px', marginTop: '5px' }}>
-                        Failed to load design image. The file may have been moved or deleted.
-                      </p>
-                    )}
-                    <div className="image-label">GCash Proof</div>
-                    {selectedAppointment.gcash_proof ? (
-                      <img 
-                        src={selectedAppointment.gcash_proof} 
-                        alt="GCash Payment"
-                        className="modal-image"
-                        style={{ 
-                          width: '100%', 
-                          height: '120px', 
-                          objectFit: 'cover', 
-                          border: '1px solid #ddd',
-                          cursor: 'pointer',
-                          borderRadius: '4px'
-                        }}
-                        onClick={() => handleImageClick(
-                          selectedAppointment.gcash_proof,
-                          'GCash Payment Proof'
+                      <div>
+                        <div className="image-label">GCash Proof</div>
+                        {selectedAppointment.gcash_proof ? (
+                          <img 
+                            src={selectedAppointment.gcash_proof} 
+                            alt="GCash Payment"
+                            className="modal-image"
+                            onClick={() => handleImageClick(
+                              selectedAppointment.gcash_proof,
+                              'GCash Payment Proof'
+                            )}
+                            onError={(e) => {
+                              console.error('Failed to load GCash proof image:', e.target.src);
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', borderRadius: '4px', marginBottom: '8px' }}>
+                            No GCash proof uploaded
+                          </div>
                         )}
-                        onError={(e) => {
-                          console.error('Failed to load GCash proof image:', e.target.src);
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'block';
-                        }}
-                      />
-                    ) : (
-                      <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center' }}>
-                        No GCash proof uploaded
                       </div>
-                    )}
-                    {selectedAppointment.gcash_proof && (
-                      <p style={{ display: 'none', color: '#e74c3c', fontSize: '12px', marginTop: '5px' }}>
-                        Failed to load GCash proof image. The file may have been moved or deleted.
-                      </p>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
