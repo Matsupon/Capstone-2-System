@@ -14,7 +14,7 @@ import {
 import Header from '../../components/Header';
 import api from '../../utils/api';
 
-export default function AppointmentsPage() {
+export default function OrdersPage() {
   const [expandedRecent, setExpandedRecent] = useState(null); // Changed to store order ID
   const [expandedHistory, setExpandedHistory] = useState({
     first: false,

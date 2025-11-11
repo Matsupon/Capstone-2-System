@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -15,12 +16,13 @@ import {
 } from 'react-native';
 import BookAppointment from '../../components/BookAppointment';
 import Header from '../../components/Header';
+import { useAppointmentModal } from '../../contexts/AppointmentModalContext';
 import api from '../../utils/api';
 
 export default function HomePage() {
   const [userFirstName, setUserFirstName] = useState('User');
   const router = useRouter();
-  const [modalVisible, setModalVisible] = useState(false);
+  const { isOpen: modalVisible, closeModal } = useAppointmentModal();
   const [nextAppointment, setNextAppointment] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [latestOrder, setLatestOrder] = useState(null);
@@ -39,6 +41,10 @@ export default function HomePage() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+  // Image zoom modal states
+  const [showImageZoomModal, setShowImageZoomModal] = useState(false);
+  const [zoomedImageUri, setZoomedImageUri] = useState(null);
+  const [zoomedImageTitle, setZoomedImageTitle] = useState('');
 
   const loadCurrentUser = useCallback(async () => {
     try {
@@ -224,6 +230,12 @@ export default function HomePage() {
     return `${hour12}:${minute} ${period}`;
   };
 
+  const handleImageClick = (imageUri, title) => {
+    setZoomedImageUri(imageUri);
+    setZoomedImageTitle(title);
+    setShowImageZoomModal(true);
+  };
+
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 8; hour <= 20; hour++) {
@@ -332,6 +344,16 @@ export default function HomePage() {
       return;
     }
 
+    if (n.type === 'refund_processed') {
+      setDetails({
+        type: 'refund_processed',
+        title: n.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.',
+        refund_image: n.data?.refund_image || null,
+      });
+      setDetailsVisible(true);
+      return;
+    }
+
     setDetails({
       type: 'generic',
       title: n.title,
@@ -349,7 +371,8 @@ export default function HomePage() {
     const isAppointmentBooked = n.type === 'appointment_booked';
     const isOrderDetailsUpdated = n.type === 'order_details_updated';
     const isOrderCancelled = n.type === 'order_cancelled';
-    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished || isAppointmentBooked || isOrderDetailsUpdated || isOrderCancelled;
+    const isRefundProcessed = n.type === 'refund_processed';
+    const showViewMore = isReadyToCheck || isOrderCompleted || isAppointmentRejected || isFeedbackResponded || isOrderFinished || isAppointmentBooked || isOrderDetailsUpdated || isOrderCancelled || isRefundProcessed;
     const title = isReadyToCheck
       ? 'Your order is now ready to check'
       : isOrderCompleted
@@ -364,6 +387,8 @@ export default function HomePage() {
       ? 'You have successfully updated your Order Details!'
       : isOrderCancelled
       ? 'You have successfully cancelled an order!'
+      : isRefundProcessed
+      ? 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.'
       : n.title;
     const isUnread = !lastSeenAt || new Date(n.created_at).getTime() > new Date(lastSeenAt).getTime();
     return (
@@ -628,16 +653,7 @@ export default function HomePage() {
         </View>
       </ScrollView>
 
-      <BookAppointment visible={modalVisible} onClose={() => setModalVisible(false)} />
-
-      <TouchableOpacity 
-        style={styles.fab} 
-        onPress={() => {
-          setModalVisible(true);
-        }}
-      >
-        <MaterialIcons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
+      <BookAppointment visible={modalVisible} onClose={closeModal} />
 
       {/* Details Modal */}
       <Modal
@@ -697,6 +713,35 @@ export default function HomePage() {
               if (details.type === 'order_cancelled') {
                 return (
                   <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600' }]}>{details.message || ''}</Text>
+                );
+              }
+              if (details.type === 'refund_processed') {
+                return (
+                  <View>
+                    <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600', marginBottom: 12 }]}>
+                      {details.title}
+                    </Text>
+                    {details.refund_image && (
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={[styles.modalBody, { fontSize: 14, color: '#666', marginBottom: 8 }]}>
+                          GCash Refund Proof:
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleImageClick(details.refund_image, 'GCash Refund Proof')}
+                          style={{ position: 'relative' }}
+                        >
+                          <Image
+                            source={{ uri: details.refund_image }}
+                            style={{ width: '100%', height: 200, borderRadius: 8, resizeMode: 'contain' }}
+                          />
+                          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
+                            <MaterialIcons name="zoom-in" size={24} color="#fff" />
+                            <Text style={{ color: '#fff', marginTop: 4, fontSize: 12 }}>Tap to zoom</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 );
               }
               if (details.type === 'feedback_responded' || details.type === 'generic') {
@@ -817,6 +862,41 @@ export default function HomePage() {
           <Text style={{ color: '#16A34A', fontWeight: '700' }}>Feedback sent successfully!</Text>
         </View>
       )}
+
+      {/* Image Zoom Modal */}
+      <Modal
+        visible={showImageZoomModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageZoomModal(false)}
+      >
+        <View style={styles.imageZoomBackdrop}>
+          <TouchableOpacity
+            style={styles.imageZoomCloseButton}
+            onPress={() => setShowImageZoomModal(false)}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.imageZoomContainer}>
+            <Text style={styles.imageZoomTitle}>{zoomedImageTitle}</Text>
+            <ScrollView
+              contentContainerStyle={styles.imageZoomScrollContent}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+              bounces={true}
+            >
+              {zoomedImageUri && (
+                <Image
+                  source={{ uri: zoomedImageUri }}
+                  style={styles.zoomedImage}
+                  resizeMode="contain"
+                />
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -1085,22 +1165,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4682B4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
-  },
   viewMore: {
     color: '#4682B4',
     fontSize: 12,
@@ -1258,5 +1322,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#16A34A',
     textAlign: 'center',
+  },
+  // Image Zoom Modal Styles
+  imageZoomBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageZoomCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  imageZoomContainer: {
+    flex: 1,
+    width: '100%',
+    paddingTop: 80,
+    paddingBottom: 20,
+  },
+  imageZoomTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 15,
+    paddingHorizontal: 20,
+  },
+  imageZoomScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  zoomedImage: {
+    width: '100%',
+    minHeight: 400,
+    maxWidth: '100%',
   },
 });

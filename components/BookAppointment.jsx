@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -7,15 +7,8 @@ import { useEffect, useState } from 'react';
 import { Alert, Animated, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import api from '../utils/api';
-import testServerConnection from '../utils/testConnection';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const SERVICE_TYPES = [
-  'Jersey Production',
-  'Custom Tailoring (eg. Uniforms)',
-  'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)',
-];
 
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
@@ -59,7 +52,9 @@ export default function BookAppointment({ visible, onClose }) {
   const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
-  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789'); 
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789');
+  const [serviceTypes, setServiceTypes] = useState([]);
+  const [downpaymentAmount, setDownpaymentAmount] = useState(500.00); 
 
   useEffect(() => {
     if (!visible) {
@@ -80,6 +75,7 @@ export default function BookAppointment({ visible, onClose }) {
       setAvailableSlots([]);
       setTimeDropdown(false);
       setIsLoading(false);
+      setDownpaymentAmount(500.00); // Reset to default
     }
     if (appointmentDateRaw) {
       fetchAvailableSlots();
@@ -103,6 +99,26 @@ export default function BookAppointment({ visible, onClose }) {
       }
     };
     fetchAdminPhone();
+
+    const fetchServiceTypes = async () => {
+      try {
+        const response = await api.get('/service-types');
+        console.log('Service types response:', response.data);
+        if (response.data?.success && response.data?.data) {
+          setServiceTypes(response.data.data);
+          console.log('Service types loaded:', response.data.data);
+        }
+      } catch (error) {
+        console.log('Could not fetch service types, using fallback:', error);
+        // Fallback to hardcoded service types if API fails
+        setServiceTypes([
+          { id: 1, name: 'Jersey Production', downpayment_amount: 500.00 },
+          { id: 2, name: 'Custom Tailoring (eg. Uniforms)', downpayment_amount: 500.00 },
+          { id: 3, name: 'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)', downpayment_amount: 100.00 },
+        ]);
+      }
+    };
+    fetchServiceTypes();
   }, [visible]);
 
   useEffect(() => {
@@ -117,6 +133,41 @@ export default function BookAppointment({ visible, onClose }) {
       fetchAvailableSlots();
     }
   }, [appointmentDateRaw]);
+
+  // Update downpayment when service type changes
+  useEffect(() => {
+    if (!serviceType) {
+      // Reset to default when no service type is selected
+      setDownpaymentAmount(500.00);
+      return;
+    }
+    
+    // Try to find in loaded serviceTypes first
+    if (serviceTypes.length > 0) {
+      const selectedService = serviceTypes.find(st => st.name === serviceType);
+      if (selectedService) {
+        const newAmount = parseFloat(selectedService.downpayment_amount);
+        console.log('✅ Updating downpayment amount from API:', {
+          serviceType: serviceType,
+          downpayment_amount: selectedService.downpayment_amount,
+          newAmount: newAmount
+        });
+        setDownpaymentAmount(newAmount);
+        return;
+      } else {
+        console.warn('⚠️ Service type not found in serviceTypes:', serviceType);
+      }
+    }
+    
+    // Fallback logic if serviceTypes haven't loaded yet or match not found
+    if (serviceType === 'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)') {
+      console.log('💰 Using fallback: Repairs/Alterations -> P100.00');
+      setDownpaymentAmount(100.00);
+    } else {
+      console.log('💰 Using fallback: Other services -> P500.00');
+      setDownpaymentAmount(500.00);
+    }
+  }, [serviceType, serviceTypes]);
 
   const fetchAvailableSlots = async () => {
     try {
@@ -255,29 +306,7 @@ export default function BookAppointment({ visible, onClose }) {
     setAppointmentTimeRaw(time);
     setTimeDropdown(false);
   };
-
-  // Test server connection before booking
-  const testConnection = async () => {
-    try {
-      Alert.alert('Testing Connection', 'Please wait while we test the server connection...');
-      const results = await testServerConnection();
-      
-      let message = `Server: ${results.serverUrl}\n\n`;
-      results.tests.forEach((test, index) => {
-        message += `${index + 1}. ${test.name}: ${test.passed ? '✅ PASS' : '❌ FAIL'}\n`;
-        message += `   ${test.message}\n\n`;
-      });
-      
-      if (results.allPassed) {
-        Alert.alert('Connection Test - All Passed ✅', message);
-      } else {
-        Alert.alert('Connection Test - Issues Found ⚠️', message);
-      }
-    } catch (error) {
-      Alert.alert('Connection Test Failed', `Error: ${error.message}`);
-    }
-  };
-
+  
   const handleBookAppointment = async () => {
     try {
       // Step 3 validations with specific messages
@@ -295,27 +324,6 @@ export default function BookAppointment({ visible, onClose }) {
       }
 
       setIsLoading(true);
-      
-      // Log connection info before attempting upload
-      const apiBaseURL = api.defaults.baseURL;
-      const serverHost = apiBaseURL ? apiBaseURL.replace('/api', '').replace(/\/$/, '') : 'unknown';
-      console.log('📤 Starting appointment booking...', {
-        server: serverHost,
-        hasDesignImage: !!designImage,
-        hasGcashImage: !!gcashImage,
-        appointmentDate: appointmentDateRaw,
-        appointmentTime: appointmentTimeRaw,
-      });
-      
-      // Quick connectivity check before attempting large upload
-      try {
-        console.log('🔍 Performing quick connectivity check...');
-        await api.get('/appointments/test', { timeout: 5000 });
-        console.log('✅ Connectivity check passed');
-      } catch (connectError) {
-        console.warn('⚠️ Connectivity check failed, but proceeding anyway:', connectError.message);
-        // Don't block the upload, but log the warning
-      }
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -582,19 +590,6 @@ export default function BookAppointment({ visible, onClose }) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={step === 1 ? onClose : () => setStep(step - 1)} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={28} color="#222" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Book an Appointment</Text>
-          {step === 3 && (
-            <TouchableOpacity onPress={testConnection} style={styles.testBtn}>
-              <MaterialIcons name="network-check" size={20} color="#4682B4" />
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Progress Indicator */}
         <ProgressIndicator />
 
@@ -615,11 +610,24 @@ export default function BookAppointment({ visible, onClose }) {
 
               {serviceDropdown && (
                 <View style={styles.dropdownMenu}>
-                  {SERVICE_TYPES.map((type) => (
-                    <TouchableOpacity key={type} style={styles.dropdownItem} onPress={() => { setServiceType(type); setServiceDropdown(false); }}>
-                      <Text style={{ color: '#222', fontSize: 16 }}>{type}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {serviceTypes.length > 0 ? (
+                    serviceTypes.map((type) => (
+                      <TouchableOpacity key={type.id || type.name} style={styles.dropdownItem} onPress={() => { setServiceType(type.name); setServiceDropdown(false); }}>
+                        <Text style={{ color: '#222', fontSize: 16 }}>{type.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    // Fallback if service types haven't loaded yet
+                    [
+                      'Jersey Production',
+                      'Custom Tailoring (eg. Uniforms)',
+                      'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)',
+                    ].map((type) => (
+                      <TouchableOpacity key={type} style={styles.dropdownItem} onPress={() => { setServiceType(type); setServiceDropdown(false); }}>
+                        <Text style={{ color: '#222', fontSize: 16 }}>{type}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
                 </View>
               )}
 
@@ -700,7 +708,7 @@ export default function BookAppointment({ visible, onClose }) {
 
               <View style={styles.gcashBox}>
                 <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
-                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
+                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>{adminPhoneNumber}</Text></Text>
               </View>
 

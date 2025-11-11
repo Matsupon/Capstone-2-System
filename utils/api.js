@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.137.188:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.33.167.107:8000/api';
 
 // Log the API URL being used (for debugging)
 console.log('API Base URL:', API_URL);
