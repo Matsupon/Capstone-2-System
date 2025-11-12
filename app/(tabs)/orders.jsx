@@ -162,10 +162,10 @@ export default function OrdersPage() {
       case 'Completed':
         return '#4caf50';
       case 'Ready to Check':
-        return '#e91e63';
+        return '#FFAB91';
       case 'Pending':
       default:
-        return '#FFA500';
+        return '#FFE082';
     }
   };
 

@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Header from '../../components/Header';
 import api from '../../utils/api';
@@ -23,7 +23,10 @@ export default function AppointmentsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const [showCancelSuccess, setShowCancelSuccess] = useState(false);
+  const [showEditSuccess, setShowEditSuccess] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+  const [editSuccessFadeAnim] = useState(new Animated.Value(0));
+  const [cancelSuccessFadeAnim] = useState(new Animated.Value(0));
   
   // Edit appointment states
   const [editAppointmentDate, setEditAppointmentDate] = useState(''); // Display format: "MMMM d, yyyy"
@@ -397,6 +400,44 @@ export default function AppointmentsPage() {
     setShowTimeDropdown(false);
   };
 
+  // Show edit success message
+  const showEditSuccessMessage = () => {
+    setShowEditSuccess(true);
+    Animated.timing(editSuccessFadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    setTimeout(() => {
+      Animated.timing(editSuccessFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowEditSuccess(false);
+      });
+    }, 2000);
+  };
+
+  // Show cancel success message
+  const showCancelSuccessMessage = () => {
+    setShowCancelSuccess(true);
+    Animated.timing(cancelSuccessFadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    setTimeout(() => {
+      Animated.timing(cancelSuccessFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowCancelSuccess(false);
+      });
+    }, 2000);
+  };
+
   // Submit edit
   const handleEditSubmit = async () => {
     if (!selectedAppointment) {
@@ -435,7 +476,6 @@ export default function AppointmentsPage() {
       }
 
       if (response.data?.success) {
-        Alert.alert('Success', 'Appointment updated successfully');
         setShowEditModal(false);
         fetchAppointments(); // Refresh appointments
         // Refresh notifications in header to update badge count
@@ -445,6 +485,8 @@ export default function AppointmentsPage() {
             headerRefreshFn.current?.refreshNotifications();
           }, 1000);
         }
+        // Show success message
+        showEditSuccessMessage();
       }
     } catch (error) {
       console.error('Failed to update appointment:', error);
@@ -474,7 +516,7 @@ export default function AppointmentsPage() {
       
       if (response.data?.success) {
         setShowCancelConfirmation(false);
-        setShowCancelSuccess(true);
+        setShowOrderDetailsModal(false);
         // Refresh notifications in header to update badge count (will show the cancellation notification)
         if (headerRefreshFn.current) {
           // Add a small delay to ensure the backend has processed any notifications
@@ -482,12 +524,13 @@ export default function AppointmentsPage() {
             headerRefreshFn.current?.refreshNotifications();
           }, 1000);
         }
+        // Show success message
+        showCancelSuccessMessage();
+        // Refresh appointments after success message is shown
         setTimeout(() => {
-          setShowCancelSuccess(false);
           setAppointmentToCancel(null);
           fetchAppointments(); // Refresh appointments (cancelled appointment will be removed)
-          setShowOrderDetailsModal(false);
-        }, 2000); // Increased to 2 seconds to show the success message
+        }, 2000);
       } else {
         Alert.alert('Error', response.data?.message || 'Failed to cancel appointment');
         setShowCancelConfirmation(false);
@@ -611,9 +654,9 @@ export default function AppointmentsPage() {
   const getOrderStatusColor = (status) => {
     switch (status) {
       case 'Pending':
-        return '#FFA500';
+        return '#FFE082';
       case 'Ready to Check':
-        return '#e91e63';
+        return '#FFAB91';
       case 'Completed':
         return '#4CAF50';
       case 'Finished':
@@ -1271,6 +1314,9 @@ export default function AppointmentsPage() {
         <View style={styles.modalBackdrop}>
           <View style={styles.confirmationModal}>
             <Text style={styles.confirmationTitle}>Are you sure you want to Cancel this order?</Text>
+            <Text style={styles.confirmationMessage}>
+              If you choose yes, this order will be permanently deleted from the system
+            </Text>
             <View style={styles.confirmationButtons}>
               <TouchableOpacity
                 style={styles.confirmationNoButton}
@@ -1292,25 +1338,28 @@ export default function AppointmentsPage() {
         </View>
       </Modal>
 
-      {/* Cancel Success Modal */}
-      {showCancelSuccess && (
-        <Modal
-          visible={showCancelSuccess}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowCancelSuccess(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.cancelSuccessModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>You have successfully cancelled an order!</Text>
-                <TouchableOpacity onPress={() => setShowCancelSuccess(false)}>
-                  <MaterialIcons name="close" size={22} color="#000" />
-                </TouchableOpacity>
-              </View>
-            </View>
+      {/* Edit Success Message */}
+      {showEditSuccess && (
+        <Animated.View style={[styles.successOverlay, { opacity: editSuccessFadeAnim }]}>
+          <View style={styles.successPopup}>
+            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center', color: '#000' }}>
+              You have successfully updated an appointment!
+            </Text>
           </View>
-        </Modal>
+        </Animated.View>
+      )}
+
+      {/* Cancel Success Message */}
+      {showCancelSuccess && (
+        <Animated.View style={[styles.successOverlay, { opacity: cancelSuccessFadeAnim }]}>
+          <View style={styles.successPopup}>
+            <MaterialIcons name="check-circle" size={48} color="#22C55E" />
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center' }}>
+              You have successfully cancelled an appointment!
+            </Text>
+          </View>
+        </Animated.View>
       )}
 
       {/* Image Zoom Modal */}
@@ -1355,6 +1404,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    position: 'relative',
   },
   background: {
     position: 'absolute',
@@ -1797,23 +1847,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  // Cancel Success Modal
-  cancelSuccessModal: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    width: '85%',
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  // Success Message Styles (matching BookAppointment.jsx)
+  successOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 100,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    flex: 1,
+  successPopup: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginHorizontal: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 10,
   },
   // Image Display Styles
   imageContainer: {

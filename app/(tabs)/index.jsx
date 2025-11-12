@@ -583,8 +583,8 @@ export default function HomePage() {
                             order?.status === 'Completed'
                               ? '#E8F5E9'
                               : order?.status === 'Ready to Check'
-                              ? '#FFEBEE'
-                              : '#FFF3E0',
+                              ? '#FFE3D6'
+                              : '#FFF5CC',
                         },
                       ]}
                     >
@@ -594,8 +594,8 @@ export default function HomePage() {
                             order?.status === 'Completed'
                               ? '#4caf50'
                               : order?.status === 'Ready to Check'
-                              ? '#e91e63'
-                              : '#FFA500',
+                              ? '#FFAB91'
+                              : '#FFE082',
                           fontSize: 12,
                           fontWeight: '500',
                         }}
@@ -1035,10 +1035,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E8B57', // Green for Completed
   },
   stepOrange: {
-    backgroundColor: '#FFA500', // Orange for Pending
+    backgroundColor: '#FFE082', // Pastel yellow for Pending
   },
   stepRed: {
-    backgroundColor: '#e91e63', // Red for Ready to Check
+    backgroundColor: '#FFAB91', // Pastel orange for Ready to Check
   },
   stepPending: {
     backgroundColor: '#A9A9A9',

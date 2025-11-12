@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -200,14 +200,14 @@ export default function BookAppointment({ visible, onClose }) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: crop, // crop when requested by caller
       // aspect removed to avoid forced cropping; user can free-crop when allowsEditing is true
-      quality: 0.8, // Reduced from 1.0 to reduce initial file size for weak networks
+      quality: 0.8,
       exif: true,
     });
 
     if (!result.canceled && result.assets?.[0]?.uri) {
       try {
         const asset = result.assets[0];
-        // More aggressive compression to reduce file size for weak networks
+        // Compress image to reduce file size
         const manip = await ImageManipulator.manipulateAsync(
           asset.uri,
           [{ resize: { width: 1024 } }], // Reduced from 1280 to 1024 for smaller files
@@ -306,7 +306,7 @@ export default function BookAppointment({ visible, onClose }) {
     setAppointmentTimeRaw(time);
     setTimeDropdown(false);
   };
-  
+
   const handleBookAppointment = async () => {
     try {
       // Step 3 validations with specific messages
@@ -324,6 +324,13 @@ export default function BookAppointment({ visible, onClose }) {
       }
 
       setIsLoading(true);
+      
+      console.log('📤 Starting appointment booking...', {
+        hasDesignImage: !!designImage,
+        hasGcashImage: !!gcashImage,
+        appointmentDate: appointmentDateRaw,
+        appointmentTime: appointmentTimeRaw,
+      });
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -461,19 +468,64 @@ export default function BookAppointment({ visible, onClose }) {
       
       console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
       
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
-          // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
-        },
-        body: formData,
-      });
+      // Add timeout using AbortController to prevent infinite loading
+      const timeoutDuration = 120000; // 120 seconds (2 minutes) for large file uploads
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Request timeout after', timeoutDuration, 'ms');
+        abortController.abort();
+      }, timeoutDuration);
+      
+      let response;
+      try {
+        response = await fetch(fullUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+            // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
+          },
+          body: formData,
+          signal: abortController.signal, // Add abort signal for timeout
+        });
+        
+        // Clear timeout if request completes
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        // Clear timeout if error occurs
+        clearTimeout(timeoutId);
+        
+        // Handle abort (timeout)
+        if (fetchError.name === 'AbortError' || abortController.signal.aborted) {
+          throw {
+            message: 'Request timeout. The server took too long to respond. Please try again.',
+            code: 'TIMEOUT',
+            response: null,
+          };
+        }
+        
+        // Handle network errors
+        if (fetchError.message && (fetchError.message.includes('Network') || fetchError.message.includes('Failed to fetch'))) {
+          throw {
+            message: 'Unable to connect to server. Please try again.',
+            code: 'NETWORK_ERROR',
+            response: null,
+          };
+        }
+        
+        // Re-throw other errors
+        throw fetchError;
+      }
       
       // Check if response is OK
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
         throw {
           response: {
             status: response.status,
@@ -484,7 +536,18 @@ export default function BookAppointment({ visible, onClose }) {
         };
       }
       
-      const responseData = await response.json();
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse response JSON:', parseError);
+        throw {
+          message: 'Invalid response from server. Please try again.',
+          code: 'PARSE_ERROR',
+          response: null,
+        };
+      }
+      
       // Convert fetch response to axios-like response for compatibility
       const axiosLikeResponse = {
         data: responseData,
@@ -493,13 +556,17 @@ export default function BookAppointment({ visible, onClose }) {
         headers: response.headers,
       };
       
-      console.log("Booking response:", axiosLikeResponse.data);
+      console.log("✅ Booking response:", axiosLikeResponse.data);
+      
+      // Reset loading state before showing success
+      setIsLoading(false);
       showSuccess();
       
     } catch (error) {
       console.error('Booking failed:', error);
       console.error('Error details:', {
         message: error.message,
+        code: error.code,
         response: error.response,
         status: error.response?.status,
       });
@@ -507,18 +574,33 @@ export default function BookAppointment({ visible, onClose }) {
       let errorMessage = 'Failed to book appointment.';
       let errorTitle = 'Booking Failed';
       
-      // Handle fetch API errors
-      if (error.response) {
+      // Handle timeout errors
+      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
+        errorTitle = 'Request Timeout';
+        errorMessage = 'The request took too long to complete. Please try again later.';
+      }
+      // Handle network errors
+      else if (error.code === 'NETWORK_ERROR' || (error.message && (error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
+        errorTitle = 'Connection Error';
+        errorMessage = 'Unable to connect to server. Please try again.';
+      }
+      // Handle parse errors
+      else if (error.code === 'PARSE_ERROR') {
+        errorTitle = 'Server Response Error';
+        errorMessage = 'The server returned an invalid response. Please try again.';
+      }
+      // Handle server response errors
+      else if (error.response) {
         // Server responded with an error status
         const responseData = error.response.data;
-        if (responseData.errors) {
+        if (responseData?.errors) {
           // Validation errors from Laravel
           errorTitle = 'Validation Error';
           const errorMessages = Object.entries(responseData.errors)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
             .join('\n');
           errorMessage = responseData.message || 'Please check your input:\n\n' + errorMessages;
-        } else if (responseData.message) {
+        } else if (responseData?.message) {
           errorMessage = responseData.message;
           if (error.response.status === 422) {
             errorTitle = 'Validation Error';
@@ -533,25 +615,15 @@ export default function BookAppointment({ visible, onClose }) {
             errorMessage = 'Server encountered an error. Please try again later.';
           }
         }
-      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
-        // Network error (fetch API doesn't have error.code like axios)
-        const serverURL = api.defaults.baseURL;
-        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-        
-        errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot upload appointment data. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Verify server is running on ' + serverHost + '\n' +
-                      '3. Try using smaller image files\n' +
-                      '4. Wait a moment and try again';
       } else {
-        // Unknown error
+        // Unknown error - use the error message if available
         console.error('Request error:', error.message);
         errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       
       Alert.alert(errorTitle, errorMessage);
     } finally {
+      // Always reset loading state, even if there's an error
       setIsLoading(false);
     }
   };
@@ -590,6 +662,14 @@ export default function BookAppointment({ visible, onClose }) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={step === 1 ? onClose : () => setStep(step - 1)} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={28} color="#222" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Book an Appointment</Text>
+        </View>
+
         {/* Progress Indicator */}
         <ProgressIndicator />
 
@@ -863,17 +943,6 @@ const styles = StyleSheet.create({
     color: '#222',
     flex: 1,
   },
-  testButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  testBtn: {
-    padding: 8,
-    backgroundColor: '#f0f8ff',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#4682B4',
-  },
   label: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -1093,9 +1162,5 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     fontStyle: 'italic',
-  },
-  testBtn: {
-    padding: 8,
-    marginLeft: 8,
   },
 });
