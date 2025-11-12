@@ -37,96 +37,59 @@ export default function Login() {
       return;
     }
 
+    // Log the server URL being used for debugging
+    const serverURL = api.defaults.baseURL;
+    const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'Unknown';
+    console.log('Attempting login to:', serverHost);
+    console.log('Full API URL:', serverURL);
+
     setLoading(true); 
     try {
-      // Log request details for debugging
-      const apiBaseURL = api.defaults.baseURL;
-      const loginEndpoint = '/login';
-      const fullURL = `${apiBaseURL.replace(/\/$/, '')}${loginEndpoint}`;
-      
-      console.log('🔐 Attempting login...', {
-        email: email,
-        apiURL: apiBaseURL,
-        endpoint: loginEndpoint,
-        fullURL: fullURL,
-        method: 'POST',
-      });
-      
-      // Ensure we're making a POST request with explicit method
-      const response = await api.request({
-        method: 'POST',
-        url: loginEndpoint,
-        data: {
-          email,
-          password,
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      });
-  
-      console.log('✅ Login response received:', {
-        status: response.status,
-        hasToken: !!response.data.access_token,
+      const response = await api.post('/login', {
+        email,
+        password,
       });
   
       const token = response.data.access_token;
   
       if (token) {
         await AsyncStorage.setItem('authToken', token);
-        console.log('✅ Login successful, token saved');
+        console.log('Login successful, token saved:', token);
   
         router.replace('/(tabs)'); 
       } else {
-        console.error('❌ Token not received from backend:', response.data);
+        console.error('Token not received from backend:', response.data);
         alert('Login failed. No token received from server.');
       }
   
     } catch (error) {
-      console.error('❌ Login error:', {
-        message: error.message,
+      console.error('Login error:', error.response?.data || error.message);
+      console.error('Error details:', {
         code: error.code,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        config: {
-          method: error.config?.method,
-          url: error.config?.url,
-          baseURL: error.config?.baseURL,
-          fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
-        },
+        message: error.message,
+        baseURL: error.config?.baseURL || api.defaults.baseURL,
+        url: error.config?.url,
+        fullUrl: error.config ? `${error.config.baseURL || ''}${error.config.url || ''}` : 'Unknown',
       });
       
       // Handle specific error cases
-      if (error.response?.status === 405) {
-        // Method Not Allowed - this shouldn't happen with POST, but handle it anyway
-        const serverURL = api.defaults.baseURL;
-        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-        alert(`Server configuration error.\n\nThe login endpoint is not accepting POST requests.\n\nPlease check:\n1. Backend server is running at ${serverHost}\n2. API routes are configured correctly\n3. Contact administrator if issue persists`);
-      } else if (error.response?.status === 401) {
+      if (error.response?.status === 401) {
         alert('Invalid email or password. Please check your credentials and try again.');
       } else if (error.response?.status === 404) {
         alert('Account not found. Please check your email address.');
       } else if (error.response?.status === 422) {
-        const errorMsg = error.response?.data?.message || error.response?.data?.errors 
-          ? JSON.stringify(error.response.data.errors) 
-          : 'Invalid email or password. Please try again.';
-        alert(errorMsg);
-      } else if (error.response?.status === 500) {
-        alert('Server error. Please try again later or contact support.');
+        alert(error.response?.data?.message || 'Invalid email or password. Please try again.');
       } else if (error.response?.data?.message) {
         alert(error.response.data.message);
       } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.code === 'ECONNABORTED') {
-        // Get the server URL from the API instance
-        const serverURL = api.defaults.baseURL;
+        // Get the server URL from the error config or API defaults
+        const serverURL = error.config?.baseURL || api.defaults.baseURL;
         const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        const fullUrl = error.config ? `${error.config.baseURL || ''}${error.config.url || ''}` : 'Unknown';
         
-        alert(`Cannot connect to the server at ${serverHost}.\n\nPlease check:\n1. Backend server is running\n2. Both devices are on the same network\n3. No firewall blocking the connection\n4. API URL is correct: ${serverURL}`);
+        alert(`Cannot connect to the server!\n\nServer: ${serverHost}\nEndpoint: ${fullUrl}\n\nPlease check:\n1. Backend server is running\n2. Server is listening on 0.0.0.0 (not just localhost)\n3. Both devices are on the same network\n4. Firewall is not blocking port 8000\n5. IP address is correct: ${serverHost}\n\nTo fix:\n- Run: php artisan serve --host=0.0.0.0 --port=8000`);
       } else {
-        const errorMsg = error.message || 'Unknown error occurred';
-        console.error('Unhandled login error:', errorMsg);
-        alert(`Login failed: ${errorMsg}\n\nPlease check your connection and try again.`);
+        alert(`Login failed: ${error.message || 'Unknown error'}\n\nPlease try again.`);
       }
     } finally {
       setLoading(false);

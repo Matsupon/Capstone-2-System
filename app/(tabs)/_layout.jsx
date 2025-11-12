@@ -104,9 +104,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="appointments"
         options={{
-          title: 'Appointments',
+          title: 'Appooint.',
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} iconName="event" label="Appointments" />
+            <TabIcon focused={focused} iconName="event" label="Appoint." />
           ),
           tabBarButton: (props) => <CustomTabBarButton {...props} accessibilityLabel="Appointments" />,
         }}
