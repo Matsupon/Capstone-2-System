@@ -26,8 +26,9 @@ class Order extends Model
         'scheduled_at' => 'datetime',
         'completed_at' => 'datetime',
         'total_amount' => 'decimal:2',
-        'check_appointment_date' => 'date',
-        'pickup_appointment_date' => 'date',
+        // Note: Do NOT cast check_appointment_date and pickup_appointment_date as 'date'
+        // because Laravel's date casting applies timezone conversions, causing 1-day shifts.
+        // Instead, keep them as strings and parse on frontend as YYYY-MM-DD (local date, no timezone).
     ];
 
     // Custom accessors to return time as simple time strings

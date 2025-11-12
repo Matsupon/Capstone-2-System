@@ -98,14 +98,23 @@ class OrderController extends Controller
                         'id' => $order->id,
                         'queue_number' => $order->queue_number,
                         'status' => $order->status,
-                        'handled' => (bool) ($order->handled ?? false),
+                    'handled' => (bool) ($order->handled ?? false),
                         'scheduled_at' => $order->scheduled_at ?? null,
                         'completed_at' => $order->completed_at ?? null,
                         'total_amount' => $order->total_amount ?? null,
-                        'check_appointment_date' => $order->check_appointment_date ?? null,
-                        'check_appointment_time' => $order->check_appointment_time ?? null,
-                        'pickup_appointment_date' => $order->pickup_appointment_date ?? null,
-                        'pickup_appointment_time' => $order->pickup_appointment_time ?? null,
+                        // Return dates as YYYY-MM-DD strings WITHOUT timezone conversion
+                        'check_appointment_date' => $order->check_appointment_date 
+                            ? substr($order->check_appointment_date, 0, 10) // Ensure YYYY-MM-DD format
+                            : null,
+                        'check_appointment_time' => $order->check_appointment_time 
+                            ? substr($order->check_appointment_time, 0, 5) // Ensure HH:MM format
+                            : null,
+                        'pickup_appointment_date' => $order->pickup_appointment_date 
+                            ? substr($order->pickup_appointment_date, 0, 10) // Ensure YYYY-MM-DD format
+                            : null,
+                        'pickup_appointment_time' => $order->pickup_appointment_time 
+                            ? substr($order->pickup_appointment_time, 0, 5) // Ensure HH:MM format
+                            : null,
                     'created_at' => $order->created_at,
                     'appointment' => [
                         'id' => $order->appointment->id,
@@ -170,10 +179,19 @@ class OrderController extends Controller
                     'scheduled_at' => $order->scheduled_at,
                     'completed_at' => $order->completed_at,
                     'total_amount' => $order->total_amount,
-                    'check_appointment_date' => $order->check_appointment_date,
-                    'check_appointment_time' => $order->check_appointment_time,
-                    'pickup_appointment_date' => $order->pickup_appointment_date,
-                    'pickup_appointment_time' => $order->pickup_appointment_time,
+                    // Return dates as YYYY-MM-DD strings WITHOUT timezone conversion
+                    'check_appointment_date' => $order->check_appointment_date 
+                        ? substr($order->check_appointment_date, 0, 10)
+                        : null,
+                    'check_appointment_time' => $order->check_appointment_time 
+                        ? substr($order->check_appointment_time, 0, 5)
+                        : null,
+                    'pickup_appointment_date' => $order->pickup_appointment_date 
+                        ? substr($order->pickup_appointment_date, 0, 10)
+                        : null,
+                    'pickup_appointment_time' => $order->pickup_appointment_time 
+                        ? substr($order->pickup_appointment_time, 0, 5)
+                        : null,
                     'created_at' => $order->created_at,
                     'appointment' => [
                         'id' => $order->appointment->id,
@@ -420,19 +438,38 @@ class OrderController extends Controller
                 ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
             $allTimes = $allTimes->merge($pickupTimes);
 
-            // Also include original customer-booked appointment times for the same date
-            // Only include appointments that have been accepted and have non-finished orders
+            // Also include ALL appointment times from Appointment table (pending AND accepted)
+            // This ensures that even unaccepted appointments claim their date/time slots
+            // Exclude rejected appointments (they don't claim slots anymore)
+            // Exclude cancelled appointments (they don't claim slots anymore)
             $appointmentTimesQuery = \App\Models\Appointment::whereDate('appointment_date', $date)
-                ->where('status', 'accepted')
-                ->whereHas('order', function($query) use ($excludeOrderId) {
-                    $query->where('status', '!=', 'Finished');
-                    if ($excludeOrderId) {
-                        $query->where('id', '!=', $excludeOrderId);
-                    }
+                ->whereNotNull('appointment_time')
+                ->whereIn('status', ['pending', 'accepted']) // Include both pending and accepted
+                ->where(function($q) {
+                    $q->where('state', 'active')
+                      ->orWhereNull('state'); // Include appointments without state column
                 });
             
+            // If excluding an order, also exclude appointments linked to that order
+            if ($excludeOrderId) {
+                $appointmentTimesQuery->whereDoesntHave('order', function($query) use ($excludeOrderId) {
+                    $query->where('id', $excludeOrderId);
+                });
+            }
+            
             $appointmentTimes = $appointmentTimesQuery->pluck('appointment_time')
-                ->map(function ($t) { return \Carbon\Carbon::parse($t)->format('H:i'); });
+                ->map(function ($t) { 
+                    try {
+                        return \Carbon\Carbon::parse($t)->format('H:i');
+                    } catch (\Exception $e) {
+                        // If already in H:i format, return as is
+                        if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
+                            return substr($t, 0, 5); // Return HH:MM format
+                        }
+                        return null;
+                    }
+                })
+                ->filter();
             $allTimes = $allTimes->merge($appointmentTimes);
 
             // Return unique times

@@ -659,9 +659,12 @@ public function dashboard()
                 \Log::info('Refund image uploaded', ['path' => $refundImagePath]);
             }
 
-            // Update appointment status to rejected and save refund image
+            // Update appointment status to rejected, save refund image, and clear appointment date/time
+            // Clearing appointment_date and appointment_time makes those slots available again
             $appointment->status = 'rejected';
             $appointment->refund_image = $refundImagePath;
+            $appointment->appointment_date = null;
+            $appointment->appointment_time = null;
             $appointment->save();
 
             // Delete the order if it exists (rejected appointments shouldn't have orders)
