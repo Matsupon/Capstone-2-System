@@ -83,6 +83,12 @@
   font-weight: 400;
 }
 
+/* Search Bar - Lower z-index so modal can cover it */
+.customers-table-content input[type="text"] {
+  position: relative !important;
+  z-index: 100 !important; /* Low z-index so customer modal can cover */
+}
+
 .customers-table-content tr:last-child td {
   border-bottom: none;
 }
@@ -99,20 +105,20 @@
   text-decoration: underline;
 }
 
-/* Modal Styles */
+/* Modal Styles - MUST COVER SEARCH BAR */
 .customers-modal-bg {
-  position: fixed;
-  top: 0;
+  position: fixed !important;
+  top: 0 !important;
   /* exclude the sidebar from being covered */
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
-  height: 100vh;
-  background: rgba(128, 128, 128, 0.5);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  left: clamp(200px, 20vw, 250px) !important;
+  width: calc(100% - clamp(200px, 20vw, 250px)) !important;
+  height: 100vh !important;
+  background: rgba(128, 128, 128, 0.5) !important;
+  z-index: 20000 !important; /* Very high to cover search bar and all other elements */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
 }
 .customers-modal-panel {
   background: white;

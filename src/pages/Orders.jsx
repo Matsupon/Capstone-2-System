@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Orders.css';
 import '../styles/Feedback.css';
@@ -657,15 +658,27 @@ const Orders = () => {
     console.log('formatDateForDisplay input:', dateString);
     
     try {
-      // Parse date string manually to avoid timezone conversion issues
-      // Handle YYYY-MM-DD format (date-only)
+      // Handle YYYY-MM-DD format (date-only) without timezone conversion issues
       const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (dateMatch) {
         const year = parseInt(dateMatch[1], 10);
         const month = parseInt(dateMatch[2], 10) - 1; // JavaScript months are 0-indexed
         const day = parseInt(dateMatch[3], 10);
-        const monthName = monthNames[month];
-        return `${monthName} ${day}`;
+        
+        // Create date using Date.UTC to avoid timezone conversion issues
+        const utcDate = new Date(Date.UTC(year, month, day));
+        
+        if (isNaN(utcDate.getTime())) {
+          console.warn('Invalid date:', dateString);
+          return '';
+        }
+        
+        // Get date components in local time
+        const localMonth = utcDate.getMonth();
+        const localDay = utcDate.getDate();
+        
+        const monthName = monthNames[localMonth];
+        return `${monthName} ${localDay}`;
       }
       
       // Handle date strings with time (ISO format or space-separated)
@@ -679,12 +692,26 @@ const Orders = () => {
           const hours = parseInt(dateTimeMatch[4], 10);
           const minutes = parseInt(dateTimeMatch[5], 10);
           
-          const monthName = monthNames[month];
-          const period = hours >= 12 ? 'PM' : 'AM';
-          const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-          const time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+          // Create date using Date.UTC to avoid timezone conversion issues
+          const utcDate = new Date(Date.UTC(year, month, day, hours, minutes, 0));
           
-          return `${monthName} ${day} - ${time}`;
+          if (isNaN(utcDate.getTime())) {
+            console.warn('Invalid datetime:', dateString);
+            return '';
+          }
+          
+          // Get date components in local time
+          const localMonth = utcDate.getMonth();
+          const localDay = utcDate.getDate();
+          const localHours = utcDate.getHours();
+          const localMinutes = utcDate.getMinutes();
+          
+          const monthName = monthNames[localMonth];
+          const period = localHours >= 12 ? 'PM' : 'AM';
+          const hour12 = localHours % 12 === 0 ? 12 : localHours % 12;
+          const time = `${hour12}:${localMinutes.toString().padStart(2, '0')} ${period}`;
+          
+          return `${monthName} ${localDay} - ${time}`;
         }
       }
       
@@ -713,50 +740,27 @@ const Orders = () => {
 
   const formatDateAndTime = (dateString, timeString) => {
     if (!dateString || !timeString) return '';
-    
     try {
-      // Backend now sends appointment_date as "Y-m-d" (e.g., "2024-11-03") 
-      // and appointment_time as "H:i:s" (e.g., "20:30:00")
-      // Combine them to create a proper date string
-      let dateTime;
-      
-      // Handle time formats: could be "HH:MM", "HH:MM:SS", or "HH:MM:SS.mmm"
-      const timeMatch = timeString.match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
-      if (!timeMatch) {
-        console.warn('Invalid time format:', timeString);
-        return '';
-      }
-      
+      // Parse date as YYYY-MM-DD (no timezone involved)
+      const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!dateMatch) return '';
+      const monthIdx = parseInt(dateMatch[2], 10) - 1;
+      const day = parseInt(dateMatch[3], 10);
+
+      // Parse time as HH:MM or HH:MM:SS (no timezone involved)
+      const timeMatch = timeString.match(/^(\d{2}):(\d{2})/);
+      if (!timeMatch) return '';
       const hours = parseInt(timeMatch[1], 10);
       const minutes = parseInt(timeMatch[2], 10);
-      
-      // Parse the date string (format: YYYY-MM-DD)
-      const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (!dateMatch) {
-        console.warn('Invalid date format:', dateString);
-        return '';
-      }
-      
-      const year = parseInt(dateMatch[1], 10);
-      const month = parseInt(dateMatch[2], 10) - 1; // JavaScript months are 0-indexed
-      const day = parseInt(dateMatch[3], 10);
-      
-      // Create date in local timezone to avoid timezone conversion issues
-      dateTime = new Date(year, month, day, hours, minutes, 0);
-      
-      if (isNaN(dateTime.getTime())) {
-        console.warn('Invalid datetime:', { dateString, timeString });
-        return '';
-      }
-      
-      // Format the date and time
-      const monthName = monthNames[dateTime.getMonth()];
-      const dayNum = dateTime.getDate();
+
+      // Build display string purely from parsed numeric components
+      // This avoids any timezone interpretation
+      const monthName = monthNames[monthIdx];
       const period = hours >= 12 ? 'PM' : 'AM';
       const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-      const time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-      
-      return `${monthName} ${dayNum} - ${time}`;
+      const timeStr = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+
+      return `${monthName} ${day} - ${timeStr}`;
     } catch (error) {
       console.warn('Error formatting date and time:', dateString, timeString, error);
       return '';
@@ -982,14 +986,11 @@ const Orders = () => {
             {/* Search and Filter Section */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
               {/* Search Bar */}
-              <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, maxWidth: 400 }}>
                 <FaSearch style={{
-                  position: 'absolute',
-                  left: 12,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
                   color: '#9ca3af',
-                  fontSize: 14
+                  fontSize: 16,
+                  flexShrink: 0
                 }} />
                 <input
                   type="text"
@@ -998,7 +999,7 @@ const Orders = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px 16px 8px 36px',
+                    padding: '8px 12px',
                     border: '1px solid #e5e7eb',
                     borderRadius: 6,
                     fontSize: 14,
@@ -1163,7 +1164,7 @@ const Orders = () => {
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
-            <div className={`table-scroll-container ${!loading && !error && filteredOrders.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
+            <div className="table-scroll-container">
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
@@ -1385,6 +1386,7 @@ const Orders = () => {
                         <div style={{ position: 'relative' }}>
                           <button
                             className="update-btn"
+                            data-order-id={order.id}
                             onClick={() => toggleUpdateDropdown(order.id)}
                             style={{
                               backgroundColor: '#3b82f6',
@@ -1404,8 +1406,20 @@ const Orders = () => {
                           >
                             Update
                           </button>
-                          {showUpdateDropdown === order.id && (
-                            <div className="update-dropdown">
+                          {showUpdateDropdown === order.id && ReactDOM.createPortal(
+                            <div 
+                              className="update-dropdown"
+                              ref={(el) => {
+                                if (el) {
+                                  const btn = document.querySelector(`button[data-order-id="${order.id}"]`);
+                                  if (btn) {
+                                    const rect = btn.getBoundingClientRect();
+                                    el.style.top = (rect.bottom + 4) + 'px';
+                                    el.style.left = (rect.left + rect.width / 2 - el.offsetWidth / 2) + 'px';
+                                  }
+                                }
+                              }}
+                            >
                               <div
                                 className="dropdown-item"
                                 onClick={() => handleUpdateStatus(order.id, 'Pending')}
@@ -1430,7 +1444,8 @@ const Orders = () => {
                               >
                                 Finished
                               </div>
-                            </div>
+                            </div>,
+                            document.body
                           )}
                         </div>
                       )}

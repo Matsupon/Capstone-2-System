@@ -192,6 +192,11 @@ const Appointments = () => {
     setSelectedAppointment(appointment);
     setShowDetails(true);
     
+    // Only update if appointment is unviewed
+    if (!unviewedAppointmentIds.has(appointment.id)) {
+      return;
+    }
+    
     // Optimistically update UI immediately for better UX
     setUnviewedAppointmentIds(prev => {
       if (!prev.has(appointment.id)) return prev;
@@ -201,16 +206,25 @@ const Appointments = () => {
     });
     
     // Update database - mark appointment as viewed (triggers viewed_at column)
-    api.patch(`/notifications/appointments/${appointment.id}/viewed`).then(() => {
+    try {
+      await api.patch(`/notifications/appointments/${appointment.id}/viewed`);
+      
       // Refresh view states to ensure consistency with database
-      api.get('/notifications/appointments/view-states').then((res) => {
-        if (res.data?.success) {
-          const items = res.data.data || [];
-          const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
-          setUnviewedAppointmentIds(unviewed);
-        }
-      }).catch(() => {});
-    }).catch(() => {});
+      const res = await api.get('/notifications/appointments/view-states');
+      if (res.data?.success) {
+        const items = res.data.data || [];
+        const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
+        setUnviewedAppointmentIds(unviewed);
+      }
+    } catch (err) {
+      console.error('Failed to mark appointment as viewed:', err);
+      // Revert optimistic update on error
+      setUnviewedAppointmentIds(prev => {
+        const next = new Set(prev);
+        next.add(appointment.id);
+        return next;
+      });
+    }
   };
 
   const handleImageClick = (imageSrc, imageAlt) => {
@@ -396,8 +410,13 @@ const Appointments = () => {
   <tbody>
     {currentAppointments.map((appt) => {
       const isCancelled = appt.state === 'cancelled';
+      const isUnviewed = unviewedAppointmentIds.has(appt.id);
       return (
-        <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
+        <tr 
+          key={appt.id} 
+          className={isUnviewed ? 'unviewed-appointment' : ''}
+          style={isUnviewed ? { background: '#e6f0ff' } : {}}
+        >
           <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
           <td>{appt.user?.name || 'N/A'}</td>
           <td>{appt.service_type}</td>
@@ -405,7 +424,7 @@ const Appointments = () => {
             <span
               className="action-link"
               onClick={() => handleViewDetails(appt)}
-              style={{ color: '#007bff', cursor: 'pointer' }}
+              style={{ cursor: 'pointer' }}
             >
               View Details
             </span>

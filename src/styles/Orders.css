@@ -96,20 +96,20 @@
   }
 }
 
-/* Dashboard modal styles (matching Customers modal) */
+/* Dashboard modal styles (matching Customers modal) - MUST COVER EVERYTHING */
 .dashboard-modal-bg {
-  position: fixed;
-  top: 0;
+  position: fixed !important;
+  top: 0 !important;
   /* exclude the sidebar from being covered */
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
-  height: 100vh;
-  background: rgba(128, 128, 128, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 10000;
+  left: clamp(200px, 20vw, 250px) !important;
+  width: calc(100% - clamp(200px, 20vw, 250px)) !important;
+  height: 100vh !important;
+  background: rgba(128, 128, 128, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  z-index: 20000 !important; /* Very high to cover search bar, filters, buttons, dropdowns */
 }
 .dashboard-modal-panel {
   background: white;
@@ -241,20 +241,20 @@
   .details-modal { padding: 1px; }
 }
 
-/* Orders Calendar Modal - Centered and styled */
+/* Orders Calendar Modal - Centered and styled - MUST COVER EVERYTHING */
 .orders-calendar-modal-bg {
-  position: fixed;
-  top: 0;
+  position: fixed !important;
+  top: 0 !important;
   /* exclude the sidebar from being covered */
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4vh 16px;
-  z-index: 10000;
+  left: clamp(200px, 20vw, 250px) !important;
+  width: calc(100% - clamp(200px, 20vw, 250px)) !important;
+  height: 100% !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 4vh 16px !important;
+  z-index: 20000 !important; /* Very high to cover search bar, filters, buttons, dropdowns */
 }
 
 .orders-calendar-modal-panel {
@@ -305,20 +305,15 @@
 .orders-set-date-btn { background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer; width: 100%; font-weight: 600; }
 .orders-set-date-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
-/* Update dropdown styles used on Orders list */
-.update-dropdown { 
-  position: absolute !important; 
-  right: 0 !important; 
-  top: 110% !important; 
-  background: #fff !important; 
-  border: 1px solid #e5e7eb !important; 
-  border-radius: 8px !important; 
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important; 
-  overflow: visible !important; 
-  z-index: 10000 !important; /* Very high z-index to appear above container */
-}
-.dropdown-item { padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+/* Dropdown items styling */
+.dropdown-item { padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; text-align: center; font-weight: 500; }
 .dropdown-item:hover { background: #f3f4f6; }
+
+/* Color-coded dropdown items based on status */
+.dropdown-item:nth-child(1) { color: #7a5f00; } /* Pending - yellow */
+.dropdown-item:nth-child(2) { color: #b23c17; } /* Ready to Check - orange */
+.dropdown-item:nth-child(3) { color: #2e7d32; } /* Completed - green */
+.dropdown-item:nth-child(4) { color: #1565c0; } /* Finished - blue */
 
 /* Orders Content - scrolling container */
 .orders-content {
@@ -359,28 +354,45 @@
 }
 
 /* Make sure the update button container allows dropdown to overflow */
-div[style*="position: relative"] {
+.orders-content div[style*="position: relative"] {
   overflow: visible !important;
-  z-index: 10001 !important;
+  z-index: 1 !important; /* Create stacking context but keep it low */
 }
 
+/* Update button - MUST be lower than dropdown */
+.orders-content .update-btn,
 .update-btn {
   position: relative !important;
-  z-index: 10001 !important; /* Higher than table container */
+  z-index: 1 !important; /* Low z-index - dropdown will be above */
 }
 
-/* Ensure dropdown appears above everything and can overflow container */
+/* Dropdown items styling with high z-index */
+.dropdown-item {
+  z-index: 99999 !important;
+}
+
+/* Ensure dropdown appears BELOW button - centered and above other elements */
+.orders-content .update-dropdown,
 .update-dropdown { 
-  position: absolute !important; 
-  right: 0 !important; 
-  top: calc(100% + 4px) !important; 
+  position: fixed !important; /* Use fixed positioning to escape scroll clipping */
   background: #fff !important; 
   border: 1px solid #e5e7eb !important; 
   border-radius: 8px !important; 
   box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important; 
   overflow: visible !important; 
-  z-index: 10000 !important; /* Very high z-index to appear above container */
+  z-index: 99999 !important; /* VERY HIGH z-index - above everything except modals */
   white-space: nowrap !important;
+  pointer-events: auto !important; /* Ensure dropdown is clickable */
+  min-width: 140px !important;
+  width: auto !important;
+}
+
+/* Search and Filter Section - Lower z-index so modals can cover them */
+.orders-content input[type="text"],
+.orders-content button,
+.filter-dropdown {
+  position: relative !important;
+  z-index: 100 !important; /* Low z-index so calendar modal can cover */
 }
 
 /* Orders Table Styling */
@@ -495,54 +507,45 @@ div[style*="position: relative"] {
 
 .pagination-meta { white-space: nowrap; }
 
-/* Table scrollbar styles - only visible when pagination is shown */
+/* Table scrollbar styles - always visible */
 .table-scroll-container {
-  max-height: none !important; /* Remove max-height constraint */
-  min-height: calc(100vh - 250px) !important; /* Force minimum height to be tall */
-  height: auto !important; /* Let it grow to fill parent */
-  flex: 1 1 auto !important; /* Fill available space in flex container */
-  overflow-y: hidden !important;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  border-radius: 0 0 16px 16px; /* Rounded bottom corners */
+  max-height: calc(100vh - 200px) !important;
+  min-height: calc(100vh - 200px) !important;
+  height: calc(100vh - 200px) !important;
+  flex: 1 1 auto !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1) !important;
+  padding-bottom: 300px !important;
+  padding-right: 10px !important;
+  border-radius: 0 0 16px 16px;
+  position: relative !important;
+  display: block !important;
 }
 
 .table-scroll-container::-webkit-scrollbar {
-  display: none;
-}
-
-.table-scroll-container.with-pagination {
-  max-height: none !important; /* Remove max-height constraint */
-  min-height: calc(100vh - 250px) !important; /* Force minimum height */
-  height: auto !important; /* Let it grow to fill parent */
-  flex: 1 1 auto !important; /* Fill available space in flex container */
-  overflow-y: scroll !important;
-  overflow-x: visible !important; /* Allow horizontal overflow for dropdown */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1);
-  padding-bottom: 20px; /* Extra padding at bottom so last row isn't covered */
-  position: relative !important; /* Create positioning context */
-}
-
-.table-scroll-container.with-pagination::-webkit-scrollbar {
   display: block;
   width: 8px;
 }
 
-.table-scroll-container.with-pagination::-webkit-scrollbar-track {
+.table-scroll-container::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.1);
   border-radius: 4px;
 }
 
-.table-scroll-container.with-pagination::-webkit-scrollbar-thumb {
+.table-scroll-container::-webkit-scrollbar-thumb {
   background: rgba(59, 130, 246, 0.5);
   border-radius: 4px;
   border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
-.table-scroll-container.with-pagination::-webkit-scrollbar-thumb:hover {
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
   background: rgba(59, 130, 246, 0.7);
 }
+
+
+/* Pagination modifier class no longer needed - scrollbar always visible */
 
 @media (max-width: 768px) {
   .pagination-panel {
