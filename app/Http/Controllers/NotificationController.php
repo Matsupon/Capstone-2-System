@@ -131,6 +131,12 @@ class NotificationController extends Controller
             $hasViewedAt = Schema::hasColumn('notifications', 'viewed_at');
             $hasIsViewed = Schema::hasColumn('notifications', 'is_viewed');
             
+            \Log::info('Marking appointment as viewed', [
+                'appointment_id' => $appointmentId,
+                'has_is_viewed' => $hasIsViewed,
+                'has_viewed_at' => $hasViewedAt
+            ]);
+            
             $updateData = [];
             if ($hasIsViewed) {
                 $updateData['is_viewed'] = true;
@@ -139,12 +145,31 @@ class NotificationController extends Controller
                 $updateData['viewed_at'] = now();
             }
             
-            $affected = Notification::where('type', 'appointment_book')
+            // Find notifications for this appointment
+            $notifications = Notification::where('type', 'appointment_book')
                 ->where(function ($q) use ($appointmentId) {
-                    $q->where('data->appointment_id', (int)$appointmentId)
+                    $q->whereJsonContains('data->appointment_id', (int)$appointmentId)
+                      ->orWhereJsonContains('data->appointment_id', (string)$appointmentId)
+                      ->orWhere('data->appointment_id', (int)$appointmentId)
                       ->orWhere('data->appointment_id', (string)$appointmentId);
                 })
-                ->update($updateData);
+                ->get();
+            
+            \Log::info('Found notifications', [
+                'count' => $notifications->count(),
+                'appointment_id' => $appointmentId
+            ]);
+            
+            $affected = 0;
+            foreach ($notifications as $notification) {
+                $notification->update($updateData);
+                $affected++;
+            }
+            
+            \Log::info('Updated notifications', [
+                'affected' => $affected,
+                'appointment_id' => $appointmentId
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -153,7 +178,8 @@ class NotificationController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error in markAppointmentAsViewed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'appointment_id' => $appointmentId
             ]);
             return response()->json([
                 'success' => false,

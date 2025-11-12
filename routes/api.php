@@ -45,6 +45,9 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
+// Public endpoint for fetching service types (no auth required)
+Route::get('/service-types', [AppointmentController::class, 'getServiceTypes']);
+
 Route::middleware('auth:sanctum')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
@@ -53,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Admin profile endpoints (admin only)
         Route::patch('/admin/profile', [AdminController::class, 'update']);
         Route::get('/admin/profile', [AdminController::class, 'me']);
+        Route::post('/admin/profile/photo', [AdminController::class, 'uploadProfilePhoto']);
         
         // Public endpoint for customers to get admin contact info
         Route::get('/admin/contact', [AdminController::class, 'getContactInfo']);
@@ -85,7 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/appointments/accepted', [AppointmentController::class, 'adminGetAcceptedAppointments']); 
     Route::get('/admin/appointments/{id}', [AppointmentController::class, 'adminGetAppointmentById']); 
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
-    Route::post('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']); 
+    Route::post('/admin/appointments/{id}/reject', [AppointmentController::class, 'adminRejectAppointment']);
+    Route::post('/admin/appointments/{id}/refund', [AppointmentController::class, 'adminRefundAppointment']); 
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index']);
@@ -94,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{orderId}/handled', [OrderController::class, 'toggleHandled']);
     Route::patch('/orders/{order}/sizes-quantity', [OrderController::class, 'updateSizesQuantity']);
+    Route::post('/admin/orders/{orderId}/refund', [OrderController::class, 'adminRefundOrder']);
     Route::get('/orders/booked-times', [OrderController::class, 'getBookedTimes']);
     Route::get('/orders/stats', [OrderController::class, 'getOrderStats']);
     Route::get('/orders/today-queue', [OrderController::class, 'getTodayQueue']);

@@ -9,9 +9,33 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use App\Models\Notification;
+use App\Models\ServiceType;
 
 class AppointmentController extends Controller
 {
+    public function getServiceTypes()
+    {
+        try {
+            $serviceTypes = ServiceType::orderBy('name')->get();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $serviceTypes
+            ], 200);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching service types', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch service types',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     // Test method for debugging
     public function test()
     {
@@ -73,19 +97,26 @@ class AppointmentController extends Controller
     
         // Check conflicts across both appointments and admin-set order schedules
         // EXCLUDE appointments that are linked to finished orders (those slots are now available)
+        // EXCLUDE cancelled appointments (state = 'cancelled') - their slots should be available
         try {
             $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
                 ->where('appointment_time', $validated['appointment_time'])
+                ->where(function($q) {
+                    $q->where('state', 'active')
+                      ->orWhereNull('state'); // Include appointments without state column (backward compatibility)
+                })
                 ->where(function ($q) {
                     $q->whereDoesntHave('order') // Appointments without orders (still pending)
                       ->orWhereHas('order', function ($q2) {
-                          $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
+                          $q2->where('status', '!=', 'Finished') // Or orders that aren't finished
+                             ->where('status', '!=', 'Cancelled'); // Exclude cancelled orders
                       });
                 })
                 ->exists();
 
-            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
+            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED AND CANCELLED ORDERS
             $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished') // Exclude finished orders
+                ->where('status', '!=', 'Cancelled') // Exclude cancelled orders - their slots should be available
                 ->where(function ($q) use ($validated) {
                     $q->where(function ($q1) use ($validated) {
                         $q1->whereDate('check_appointment_date', $validated['appointment_date'])
@@ -146,6 +177,7 @@ class AppointmentController extends Controller
                 'appointment_date' => $validated['appointment_date'],
                 'appointment_time' => $validated['appointment_time'],
                 'status' => 'pending', // Explicitly set status to pending for new appointments
+                'state' => 'active', // Default state is active for new appointments
             ]);
 
             \Log::info('Appointment created successfully', [
@@ -247,11 +279,16 @@ class AppointmentController extends Controller
 
         $allBooked = collect();
 
-        // 1. Booked from Appointment model: appointment_date and appointment_time (ALL appointments, regardless of order status)
+        // 1. Booked from Appointment model: appointment_date and appointment_time
+        // Exclude cancelled appointments (state = 'cancelled') - their slots should be available
         // If exclude_order_id is provided, exclude appointments linked to that order
         // If exclude_appointment_id is provided, exclude that specific appointment (for pending appointments without orders)
         $appointmentsQuery = Appointment::whereDate('appointment_date', $date)
-            ->whereNotNull('appointment_time');
+            ->whereNotNull('appointment_time')
+            ->where(function($q) {
+                $q->where('state', 'active')
+                  ->orWhereNull('state'); // Include appointments without state column (backward compatibility)
+            });
         
         if ($excludeOrderId) {
             $appointmentsQuery->whereDoesntHave('order', function($q) use ($excludeOrderId) {
@@ -283,8 +320,10 @@ class AppointmentController extends Controller
         $allBooked = $allBooked->merge($bookedFromAppointments);
 
         // 2. Booked from Order model: scheduled_at (extract time from datetime)
+        // Exclude cancelled orders - their slots should be available
         $scheduledQuery = \App\Models\Order::whereDate('scheduled_at', $date)
-            ->whereNotNull('scheduled_at');
+            ->whereNotNull('scheduled_at')
+            ->where('status', '!=', 'Cancelled');
         
         if ($excludeOrderId) {
             $scheduledQuery->where('id', '!=', $excludeOrderId);
@@ -304,8 +343,10 @@ class AppointmentController extends Controller
         $allBooked = $allBooked->merge($bookedFromScheduled);
 
         // 3. Booked from Order model: completed_at (extract time from datetime)
+        // Exclude cancelled orders - their slots should be available
         $completedQuery = \App\Models\Order::whereDate('completed_at', $date)
-            ->whereNotNull('completed_at');
+            ->whereNotNull('completed_at')
+            ->where('status', '!=', 'Cancelled');
         
         if ($excludeOrderId) {
             $completedQuery->where('id', '!=', $excludeOrderId);
@@ -325,8 +366,10 @@ class AppointmentController extends Controller
         $allBooked = $allBooked->merge($bookedFromCompleted);
 
         // 4. Booked from Order model: check_appointment_date and check_appointment_time
+        // Exclude cancelled orders - their slots should be available
         $checkQuery = \App\Models\Order::whereDate('check_appointment_date', $date)
-            ->whereNotNull('check_appointment_time');
+            ->whereNotNull('check_appointment_time')
+            ->where('status', '!=', 'Cancelled');
         
         if ($excludeOrderId) {
             $checkQuery->where('id', '!=', $excludeOrderId);
@@ -350,8 +393,10 @@ class AppointmentController extends Controller
         $allBooked = $allBooked->merge($bookedFromCheck);
 
         // 5. Booked from Order model: pickup_appointment_date and pickup_appointment_time
+        // Exclude cancelled orders - their slots should be available
         $pickupQuery = \App\Models\Order::whereDate('pickup_appointment_date', $date)
-            ->whereNotNull('pickup_appointment_time');
+            ->whereNotNull('pickup_appointment_time')
+            ->where('status', '!=', 'Cancelled');
         
         if ($excludeOrderId) {
             $pickupQuery->where('id', '!=', $excludeOrderId);
@@ -387,8 +432,19 @@ class AppointmentController extends Controller
 public function adminGetAllAppointments()
 {
     try {
+        // Get all pending appointments:
+        // - Active appointments (state = 'active')
+        // - Cancelled appointments without refund_image (need refund processing)
+        // Exclude appointments that already have refund_image (refund already processed)
         $appointments = Appointment::with('user')
-    ->where('status', 'pending') 
+    ->where('status', 'pending')
+    ->where(function($q) {
+        $q->where('state', 'active')
+          ->orWhere(function($q2) {
+              $q2->where('state', 'cancelled')
+                 ->whereNull('refund_image');
+          });
+    })
     ->orderBy('created_at', 'desc')
     ->get()
     ->map(function ($appointment) {
@@ -417,6 +473,7 @@ public function adminGetAllAppointments()
                 ? asset('storage/' . $appointment->refund_image) 
                 : null,
             'status' => $appointment->status,
+            'state' => $appointment->state ?? 'active',
             'created_at' => $appointment->created_at->toDateTimeString(),
             'user' => [
                 'id' => $appointment->user->id,
@@ -445,8 +502,11 @@ public function adminGetAcceptedAppointments()
     try {
         $appointments = Appointment::with(['user', 'order'])
             ->where('status', 'accepted')
+            ->where('state', 'active') // Only show active appointments (not cancelled)
+            ->whereNull('refund_image') // Exclude appointments with refund_image (already refunded)
             ->whereHas('order', function($query) {
-                $query->where('status', '!=', 'Finished');
+                $query->where('status', '!=', 'Finished')
+                      ->where('status', '!=', 'Cancelled');
             })
             ->orderBy('created_at', 'desc')
             ->get()
@@ -472,7 +532,11 @@ public function adminGetAcceptedAppointments()
                     'gcash_proof' => $appointment->gcash_proof 
                         ? asset('storage/' . $appointment->gcash_proof) 
                         : null,
+                    'refund_image' => $appointment->refund_image 
+                        ? asset('storage/' . $appointment->refund_image) 
+                        : null,
                     'status' => $appointment->status,
+                    'state' => $appointment->state ?? 'active',
                     'order_status' => $appointment->order->status ?? 'N/A',
                     'created_at' => $appointment->created_at->toDateTimeString(),
                     'user' => [
@@ -895,19 +959,26 @@ public function dashboard()
 
             // Check for conflicts across both appointments and admin-set order schedules
             // EXCLUDE the current appointment when checking for conflicts
+            // EXCLUDE cancelled appointments (state = 'cancelled') - their slots should be available
             $conflictInAppointments = Appointment::where('appointment_date', $validated['appointment_date'])
                 ->where('appointment_time', $validated['appointment_time'])
                 ->where('id', '!=', $appointment->id)
+                ->where(function($q) {
+                    $q->where('state', 'active')
+                      ->orWhereNull('state'); // Include appointments without state column (backward compatibility)
+                })
                 ->where(function ($q) {
                     $q->whereDoesntHave('order') // Appointments without orders (still pending)
                       ->orWhereHas('order', function ($q2) {
-                          $q2->where('status', '!=', 'Finished'); // Or orders that aren't finished
+                          $q2->where('status', '!=', 'Finished') // Or orders that aren't finished
+                             ->where('status', '!=', 'Cancelled'); // Exclude cancelled orders
                       });
                 })
                 ->exists();
 
-            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED ORDERS
+            // Also check conflicts in Orders: Ready to Check (check_appointment_*) and Completed (pickup_appointment_*) - EXCLUDE FINISHED AND CANCELLED ORDERS
             $conflictInOrders = \App\Models\Order::where('status', '!=', 'Finished')
+                ->where('status', '!=', 'Cancelled') // Exclude cancelled orders - their slots should be available
                 ->where(function ($q) use ($validated) {
                     $q->where(function ($q1) use ($validated) {
                         $q1->whereDate('check_appointment_date', $validated['appointment_date'])
@@ -1015,11 +1086,15 @@ public function dashboard()
                     $handled = $order ? (bool)($order->handled ?? false) : false;
                     
                     // Determine display status for filtering
+                    // cancelled -> Cancelled (if state is cancelled)
                     // pending -> Requesting (whether or not order exists - pending appointments may not have orders yet)
                     // accepted -> Accepted (when order exists)
                     // rejected -> Rejected
+                    $appointmentState = $appointment->state ?? 'active';
                     $displayStatus = 'Requesting'; // Default for pending appointments
-                    if ($appointmentStatus === 'accepted' && $order) {
+                    if ($appointmentState === 'cancelled') {
+                        $displayStatus = 'Cancelled';
+                    } elseif ($appointmentStatus === 'accepted' && $order) {
                         $displayStatus = 'Accepted';
                     } elseif ($appointmentStatus === 'rejected') {
                         $displayStatus = 'Rejected';
@@ -1052,7 +1127,8 @@ public function dashboard()
                             ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i') 
                             : null,
                         'status' => $appointmentStatus, // Appointment status: pending, accepted, rejected
-                        'display_status' => $displayStatus, // For filtering: Requesting, Accepted, Rejected
+                        'display_status' => $displayStatus, // For filtering: Requesting, Accepted, Rejected, Cancelled
+                        'state' => $appointment->state ?? 'active', // Appointment state: active, cancelled
                         'created_at' => $appointment->created_at->toDateTimeString(),
                         'order' => $order ? [
                             'id' => $order->id,
@@ -1130,16 +1206,69 @@ public function dashboard()
                 }
             }
 
-            // Store user_id before deletion for notification
+            // Store user_id and user info before deletion for notifications
             $appointmentUserId = $appointment->user_id;
-
-            // Delete the order first (if exists) - this will cascade delete if foreign key constraints are set
-            if ($order) {
-                $order->delete();
+            $appointment->load('user'); // Load user relationship to get customer name
+            $customerName = $appointment->user->name ?? 'Customer';
+            
+            // Determine if this is a booking appointment or an order
+            // Booking appointment: status is 'pending' and no order exists (not accepted by admin yet)
+            // Order: order exists and order status is 'Pending' (accepted by admin, order created)
+            $isBookingAppointment = $appointment->status === 'pending' && !$order;
+            $isOrder = $order && $order->status === 'Pending';
+            
+            // Create admin notification BEFORE deletion
+            try {
+                // Determine notification message based on what was cancelled
+                if ($isBookingAppointment) {
+                    $notificationTitle = $customerName . ' cancelled a booking appointment';
+                    $cancellationType = 'booking_appointment';
+                } elseif ($isOrder) {
+                    $notificationTitle = $customerName . ' cancelled an order';
+                    $cancellationType = 'order';
+                } else {
+                    // Fallback case (shouldn't happen based on validation, but handle gracefully)
+                    $notificationTitle = $customerName . ' cancelled an appointment';
+                    $cancellationType = 'appointment';
+                }
+                
+                \DB::statement('SET FOREIGN_KEY_CHECKS=0');
+                \DB::table('notifications')->insert([
+                    'user_id' => 0,
+                    'type' => 'customer_appointment_updated',
+                    'title' => $notificationTitle,
+                    'body' => null,
+                    'data' => json_encode([
+                        'appointment_id' => $appointment->id,
+                        'customer_name' => $customerName,
+                        'customer_user_id' => $appointmentUserId,
+                        'cancellation_type' => $cancellationType,
+                        'cancelled_at' => now()->toDateTimeString(),
+                    ]),
+                    'is_viewed' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            } catch (\Exception $adminNotifError) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1');
+                \Log::error('Failed to create admin cancellation notification', [
+                    'error' => $adminNotifError->getMessage(),
+                    'appointment_id' => $id,
+                    'customer_user_id' => $appointmentUserId
+                ]);
+                // Don't fail the request if admin notification creation fails
             }
 
-            // Delete the appointment
-            $appointment->delete();
+            // Update appointment state to 'cancelled' instead of deleting
+            $appointment->state = 'cancelled';
+            $appointment->save();
+
+            // If order exists, set its status to 'Cancelled' instead of deleting
+            if ($order) {
+                $order->status = 'Cancelled';
+                $order->save();
+            }
 
             // Create notification for the user
             try {
@@ -1174,6 +1303,71 @@ public function dashboard()
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to cancel appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function adminRefundAppointment(Request $request, $id)
+    {
+        try {
+            // Validate refund image is required
+            $validated = $request->validate([
+                'refund_image' => 'required|file|image|max:5120',
+            ]);
+
+            $appointment = Appointment::with('order', 'user')->findOrFail($id);
+
+            // Check if appointment is cancelled
+            if ($appointment->state !== 'cancelled') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only cancelled appointments can be refunded'
+                ], 400);
+            }
+
+            // Upload refund image
+            $refundImagePath = null;
+            if ($request->hasFile('refund_image')) {
+                $refundImagePath = $request->file('refund_image')->store('refunds', 'public');
+                \Log::info('Refund image uploaded', ['path' => $refundImagePath]);
+            }
+
+            // Update appointment with refund image
+            $appointment->refund_image = $refundImagePath;
+            $appointment->save();
+
+            // Create notification for the user
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'type'    => 'refund_processed',
+                'title'   => 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.',
+                'body'    => null,
+                'data'    => [
+                    'appointment_id' => $appointment->id,
+                    'refund_image'   => $refundImagePath ? asset('storage/' . $refundImagePath) : null,
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Refund processed successfully'
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error processing refund', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'appointment_id' => $id
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process refund',
                 'error' => $e->getMessage()
             ], 500);
         }

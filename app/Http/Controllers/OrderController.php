@@ -79,9 +79,14 @@ class OrderController extends Controller
             // First, recalculate queue numbers for all orders grouped by their derived next-appointment date
             $this->recalculateAllQueueNumbers();
             
+            // Get all orders (including Cancelled) that don't have refund_image yet
+            // Exclude orders whose appointments already have refund_image (refund already processed)
             $orders = Order::with(['appointment.user'])
                 ->where('status', '!=', 'Finished')
-                ->whereHas('appointment') // Only include orders that have an appointment (exclude orphaned orders)
+                ->whereHas('appointment', function($q) {
+                    // Show orders whose appointments don't have refund_image yet
+                    $q->whereNull('refund_image');
+                })
                 ->orderBy('created_at', 'asc')
                 ->get()
                 ->filter(function ($order) {
@@ -108,6 +113,11 @@ class OrderController extends Controller
                         'sizes' => json_decode($order->appointment->sizes, true),
                         'total_quantity' => $order->appointment->total_quantity,
                         'notes' => $order->appointment->notes,
+                        'status' => $order->appointment->status ?? 'pending',
+                        'state' => $order->appointment->state ?? 'active',
+                        'refund_image' => $order->appointment->refund_image 
+                            ? asset('storage/' . $order->appointment->refund_image) 
+                            : null,
                         'design_image' => $order->appointment->design_image 
                             ? asset('storage/' . $order->appointment->design_image) 
                             : null,
@@ -171,6 +181,7 @@ class OrderController extends Controller
                         'sizes' => json_decode($order->appointment->sizes, true),
                         'total_quantity' => $order->appointment->total_quantity,
                         'notes' => $order->appointment->notes,
+                        'status' => $order->appointment->status ?? 'pending',
                         'design_image' => $order->appointment->design_image 
                             ? asset('storage/' . $order->appointment->design_image) 
                             : null,
@@ -221,6 +232,14 @@ class OrderController extends Controller
         'pickup_appointment_date' => 'nullable|date|required_if:status,Completed',
         'pickup_appointment_time' => 'nullable|date_format:H:i|required_if:status,Completed',
     ]);
+
+    // Prevent admin from setting status to 'Cancelled' - only users can cancel orders
+    if ($validated['status'] === 'Cancelled') {
+        return response()->json([
+            'success' => false,
+            'message' => 'Admin cannot set order status to Cancelled. Only users can cancel their orders.'
+        ], 403);
+    }
 
     $order->status = $validated['status'];
     // Reset handled to false when status is updated
@@ -452,6 +471,7 @@ class OrderController extends Controller
                     $q->where('user_id', $userId);
                 })
                 ->where('status', '!=', 'Finished')
+                ->where('status', '!=', 'Cancelled') // Exclude cancelled orders
                 ->orderBy('created_at', 'desc')
                 ->first();
     
@@ -484,6 +504,7 @@ class OrderController extends Controller
                         'total_quantity'   => $order->appointment->total_quantity,
                         'preferred_due_date' => $order->appointment->preferred_due_date,
                         'notes'            => $order->appointment->notes,
+                        'status'           => $order->appointment->status ?? 'pending',
                         'design_image'     => $order->appointment->design_image
                             ? asset('storage/' . $order->appointment->design_image)
                             : null,
@@ -535,6 +556,7 @@ class OrderController extends Controller
                     $q->where('user_id', $userId);
                 })
                 ->where('status', '!=', 'Finished')
+                ->where('status', '!=', 'Cancelled') // Exclude cancelled orders from customer view
                 ->orderBy('created_at', 'desc')
                 ->get();
     
@@ -559,6 +581,7 @@ class OrderController extends Controller
                             'total_quantity'   => $order->appointment->total_quantity,
                             'preferred_due_date' => $order->appointment->preferred_due_date,
                             'notes'            => $order->appointment->notes,
+                            'status'           => $order->appointment->status ?? 'pending',
                             'design_image'     => $order->appointment->design_image
                                 ? asset('storage/' . $order->appointment->design_image)
                                 : null,
@@ -607,13 +630,14 @@ class OrderController extends Controller
             $userId = $request->user()->id;
             \Log::info('Fetching finished orders for user', ['user_id' => $userId]);
     
-            $orders = Order::with(['appointment.user', 'feedback'])
-                ->whereHas('appointment', function ($q) use ($userId) {
-                    $q->where('user_id', $userId);
-                })
-                ->where('status', 'Finished')
-                ->orderBy('created_at', 'desc')
-                ->get();
+        $orders = Order::with(['appointment.user', 'feedback'])
+            ->whereHas('appointment', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+            ->where('status', 'Finished')
+            ->where('status', '!=', 'Cancelled') // Exclude cancelled orders
+            ->orderBy('created_at', 'desc')
+            ->get();
     
             if ($orders->isEmpty()) {
                 \Log::info('No finished orders found for user', ['user_id' => $userId]);
@@ -643,6 +667,7 @@ class OrderController extends Controller
                             'total_quantity'   => $order->appointment->total_quantity,
                             'preferred_due_date' => $order->appointment->preferred_due_date,
                             'notes'            => $order->appointment->notes,
+                            'status'           => $order->appointment->status ?? 'pending',
                             'design_image'     => $order->appointment->design_image
                                 ? asset('storage/' . $order->appointment->design_image)
                                 : null,
@@ -728,49 +753,109 @@ class OrderController extends Controller
     public function getTodayQueue()
     {
         try {
-            $today = \Carbon\Carbon::today()->toDateString();
-            $nowTime = \Carbon\Carbon::now()->format('H:i:s');
+            // Use application timezone (defaults to Asia/Manila)
+            $timezone = config('app.timezone', 'Asia/Manila');
+            
+            // Set timezone for Carbon operations
+            $today = \Carbon\Carbon::now($timezone)->toDateString();
+            $nowTime = \Carbon\Carbon::now($timezone)->format('H:i:s');
+            $currentDateTime = \Carbon\Carbon::now($timezone);
 
-            // Check if columns exist before querying
-            $hasCheckDate = Schema::hasColumn('orders', 'check_appointment_date');
-            $hasPickupDate = Schema::hasColumn('orders', 'pickup_appointment_date');
+            \Log::info('getTodayQueue called', [
+                'today' => $today,
+                'now_time' => $nowTime,
+                'timezone' => $timezone,
+                'server_time' => \Carbon\Carbon::now()->toDateTimeString(),
+                'local_time' => \Carbon\Carbon::now($timezone)->toDateTimeString()
+            ]);
 
-            // Fetch all non-finished orders that could possibly have a next appointment today
+            // Fetch orders with status: Pending, Ready to Check, Completed
+            // Exclude Finished and Cancelled orders
+            // Exclude orders where appointment status is 'pending' (not accepted)
             $candidateOrders = Order::with('appointment.user')
-                ->where('status', '!=', 'Finished')
-                ->where(function($q) use ($today, $hasCheckDate, $hasPickupDate) {
-                    if ($hasCheckDate) {
-                        $q->whereDate('check_appointment_date', $today);
-                    }
-                    if ($hasPickupDate) {
-                        $q->orWhereDate('pickup_appointment_date', $today);
-                    }
-                    $q->orWhereHas('appointment', function($qa) use ($today) {
-                        $qa->whereDate('appointment_date', $today);
+                ->whereIn('status', ['Pending', 'Ready to Check', 'Completed'])
+                ->whereHas('appointment', function($qa) {
+                    // Exclude orders where appointment status is 'pending' (not accepted)
+                    // Include orders with null/empty status (treated as accepted)
+                    // Handle case-insensitive comparison
+                    $qa->where(function($q) {
+                        $q->whereNull('status')
+                          ->orWhere('status', '')
+                          ->orWhereRaw('LOWER(TRIM(status)) != ?', ['pending']);
                     });
                 })
                 ->get();
 
-            // Compute derived next-appointment date/time for each order (without mutating model attributes)
+            \Log::info('Candidate orders fetched', [
+                'count' => $candidateOrders->count(),
+                'order_ids' => $candidateOrders->pluck('id')->toArray()
+            ]);
+
+            // Compute next appointment date/time for each order using getDerivedDateTime
+            // This matches the logic in Orders.jsx
             $enriched = $candidateOrders->map(function($order) {
-                [$d, $t] = $this->getDerivedDateTime($order);
+                [$date, $time] = $this->getDerivedDateTime($order);
+                
+                \Log::debug('Order derived datetime', [
+                    'order_id' => $order->id,
+                    'order_status' => $order->status,
+                    'appointment_status' => optional($order->appointment)->status,
+                    'derived_date' => $date,
+                    'derived_time' => $time,
+                    'check_appointment_date' => $order->check_appointment_date,
+                    'check_appointment_time' => $order->check_appointment_time,
+                    'pickup_appointment_date' => $order->pickup_appointment_date,
+                    'pickup_appointment_time' => $order->pickup_appointment_time,
+                    'appointment_date' => optional($order->appointment)->appointment_date,
+                    'appointment_time' => optional($order->appointment)->appointment_time,
+                ]);
+                
                 return [
                     'model' => $order,
-                    'derived_date' => $d,
-                    'derived_time' => $t,
+                    'next_appointment_date' => $date,
+                    'next_appointment_time' => $time,
                 ];
             });
 
+            // Filter orders that have an appointment today
             $todayOrders = $enriched
                 ->filter(function($item) use ($today) {
-                    return !empty($item['derived_date']) && $item['derived_date'] === $today;
+                    $orderDate = $item['next_appointment_date'];
+                    $hasTodayAppointment = !empty($orderDate) && $orderDate === $today;
+                    
+                    \Log::debug('Checking if order has today appointment', [
+                        'order_id' => $item['model']->id,
+                        'order_date' => $orderDate,
+                        'today' => $today,
+                        'dates_match' => $orderDate === $today,
+                        'has_today_appointment' => $hasTodayAppointment,
+                        'order_date_type' => gettype($orderDate),
+                        'today_type' => gettype($today),
+                    ]);
+                    
+                    if ($hasTodayAppointment) {
+                        \Log::info('Order has today appointment', [
+                            'order_id' => $item['model']->id,
+                            'date' => $item['next_appointment_date'],
+                            'time' => $item['next_appointment_time'],
+                            'status' => $item['model']->status
+                        ]);
+                    }
+                    
+                    return $hasTodayAppointment;
                 })
                 ->sortBy(function($item) {
-                    return $item['derived_time'] ?? '23:59:59';
+                    return $item['next_appointment_time'] ?? '23:59:59';
                 })
                 ->values();
 
+            \Log::info('Today orders filtered', [
+                'count' => $todayOrders->count(),
+                'order_ids' => $todayOrders->pluck('model.id')->toArray()
+            ]);
+
             if ($todayOrders->isEmpty()) {
+                \Log::info('No today orders found');
                 return response()->json([
                     'success' => true,
                     'data' => [
@@ -778,7 +863,9 @@ class OrderController extends Controller
                         'message' => 'No upcoming queues for today',
                         'current_customer' => null,
                         'next_customer' => null,
-                        'all_orders' => []
+                        'all_orders' => [],
+                        'current_date' => $today,
+                        'current_time' => $nowTime
                     ]
                 ]);
             }
@@ -795,13 +882,22 @@ class OrderController extends Controller
             // Determine current and next based on current time
             $currentIndex = 0;
             foreach ($todayOrders as $idx => $item) {
-                $derivedTime = $item['derived_time'] ?? '23:59:59';
-                if ($derivedTime >= $nowTime) { $currentIndex = $idx; break; }
+                $derivedTime = $item['next_appointment_time'] ?? '23:59:59';
+                if ($derivedTime >= $nowTime) { 
+                    $currentIndex = $idx; 
+                    break; 
+                }
                 $currentIndex = $idx; // if all earlier, last one becomes current
             }
 
             $currentCustomer = $todayOrders->get($currentIndex);
             $nextCustomer = $todayOrders->get($currentIndex + 1);
+
+            \Log::info('Current and next customer determined', [
+                'current_index' => $currentIndex,
+                'current_customer_id' => $currentCustomer ? $currentCustomer['model']->id : null,
+                'next_customer_id' => $nextCustomer ? $nextCustomer['model']->id : null
+            ]);
 
             // Format all orders for display
             $allOrders = $todayOrders->map(function ($item) {
@@ -811,26 +907,40 @@ class OrderController extends Controller
                     'queue_number' => $model->queue_number,
                     'name' => $model->appointment->user->name ?? 'N/A',
                     'service_type' => $model->appointment->service_type ?? 'N/A',
-                    'appointment_time' => $item['derived_time'] ?? 'N/A',
-                    'status' => $model->status
+                    'appointment_time' => $item['next_appointment_time'] ?? 'N/A',
+                    'appointment_date' => $item['next_appointment_date'] ?? 'N/A',
+                    'status' => $model->status,
+                    'appointment' => [
+                        'appointment_date' => optional($model->appointment)->appointment_date,
+                        'appointment_time' => optional($model->appointment)->appointment_time,
+                    ]
                 ];
             });
+
+            \Log::info('Today queue response prepared', [
+                'all_orders_count' => count($allOrders),
+                'has_queue' => true
+            ]);
 
             return response()->json([
                 'success' => true,
                 'data' => [
                     'has_queue' => true,
+                    'current_date' => $today,
+                    'current_time' => $nowTime,
                     'current_customer' => $currentCustomer ? [
                         'queue_number' => $currentCustomer['model']->queue_number,
                         'name' => $currentCustomer['model']->appointment->user->name ?? 'N/A',
-                        'appointment_time' => $currentCustomer['derived_time'] ?? 'N/A',
-                        'status' => $currentCustomer['model']->status
+                        'appointment_time' => $currentCustomer['next_appointment_time'] ?? 'N/A',
+                        'appointment_date' => $currentCustomer['next_appointment_date'] ?? 'N/A',
+                        'status' => $currentCustomer['model']->status,
                     ] : null,
                     'next_customer' => $nextCustomer ? [
                         'queue_number' => $nextCustomer['model']->queue_number,
                         'name' => $nextCustomer['model']->appointment->user->name ?? 'N/A',
-                        'appointment_time' => $nextCustomer['derived_time'] ?? 'N/A',
-                        'status' => $nextCustomer['model']->status
+                        'appointment_time' => $nextCustomer['next_appointment_time'] ?? 'N/A',
+                        'appointment_date' => $nextCustomer['next_appointment_date'] ?? 'N/A',
+                        'status' => $nextCustomer['model']->status,
                     ] : null,
                     'all_orders' => $allOrders
                 ]
@@ -859,6 +969,17 @@ class OrderController extends Controller
 
             $candidateOrders = Order::with('appointment')
                 ->where('status', '!=', 'Finished')
+                ->where('status', '!=', 'Cancelled') // Exclude cancelled orders
+                ->whereHas('appointment', function($qa) {
+                    // Exclude orders where appointment status is 'pending' (not accepted)
+                    // Include orders with null/empty status (treated as accepted)
+                    // Handle case-insensitive comparison
+                    $qa->where(function($q) {
+                        $q->whereNull('status')
+                          ->orWhere('status', '')
+                          ->orWhereRaw('LOWER(TRIM(status)) != ?', ['pending']);
+                    });
+                })
                 ->where(function($q) use ($today, $hasCheckDate, $hasPickupDate) {
                     if ($hasCheckDate) {
                         $q->whereDate('check_appointment_date', $today);
@@ -915,9 +1036,10 @@ class OrderController extends Controller
     
     private function recalculateAllQueueNumbers()
     {
-        // Get all non-finished orders and group by their derived next-appointment date
+        // Get all non-finished and non-cancelled orders and group by their derived next-appointment date
         $orders = Order::with('appointment')
             ->where('status', '!=', 'Finished')
+            ->where('status', '!=', 'Cancelled') // Exclude cancelled orders from queue
             ->get();
 
         $enriched = $orders->map(function($order) {
@@ -951,23 +1073,207 @@ class OrderController extends Controller
         }
     }
 
+    /**
+     * Get the next appointment date/time by checking ALL date/time fields from both Order and Appointment tables
+     * Returns the earliest upcoming appointment (today or future)
+     */
+    private function getNextAppointmentDateTime($order, $currentDateTime)
+    {
+        $appointments = [];
+        $allDateTimes = [];
+
+        // 1. Check scheduled_at from Order table
+        if ($order->scheduled_at) {
+            $scheduledAt = \Carbon\Carbon::parse($order->scheduled_at);
+            $appointments[] = [
+                'date' => $scheduledAt->toDateString(),
+                'time' => $scheduledAt->format('H:i:s'),
+                'datetime' => $scheduledAt,
+                'type' => 'scheduled_at'
+            ];
+            $allDateTimes['scheduled_at'] = [
+                'date' => $scheduledAt->toDateString(),
+                'time' => $scheduledAt->format('H:i:s'),
+                'datetime' => $scheduledAt->toDateTimeString()
+            ];
+        } else {
+            $allDateTimes['scheduled_at'] = null;
+        }
+
+        // 2. Check appointment_date and appointment_time from Appointment table
+        if ($order->appointment) {
+            if ($order->appointment->appointment_date && $order->appointment->appointment_time) {
+                $apptDate = \Carbon\Carbon::parse($order->appointment->appointment_date);
+                $apptTime = \Carbon\Carbon::parse($order->appointment->appointment_time);
+                $apptDateTime = $apptDate->copy()->setTime($apptTime->hour, $apptTime->minute, $apptTime->second);
+                
+                $appointments[] = [
+                    'date' => $apptDate->toDateString(),
+                    'time' => $apptTime->format('H:i:s'),
+                    'datetime' => $apptDateTime,
+                    'type' => 'appointment_date_time'
+                ];
+                $allDateTimes['appointment_date_time'] = [
+                    'date' => $apptDate->toDateString(),
+                    'time' => $apptTime->format('H:i:s'),
+                    'datetime' => $apptDateTime->toDateTimeString()
+                ];
+            } else {
+                $allDateTimes['appointment_date_time'] = null;
+            }
+        } else {
+            $allDateTimes['appointment_date_time'] = null;
+        }
+
+        // 3. Check check_appointment_date and check_appointment_time from Order table
+        if ($order->check_appointment_date && $order->check_appointment_time) {
+            $checkDate = \Carbon\Carbon::parse($order->check_appointment_date);
+            $checkTime = \Carbon\Carbon::parse($order->check_appointment_time);
+            $checkDateTime = $checkDate->copy()->setTime($checkTime->hour, $checkTime->minute, $checkTime->second);
+            
+            $appointments[] = [
+                'date' => $checkDate->toDateString(),
+                'time' => $checkTime->format('H:i:s'),
+                'datetime' => $checkDateTime,
+                'type' => 'check_appointment'
+            ];
+            $allDateTimes['check_appointment'] = [
+                'date' => $checkDate->toDateString(),
+                'time' => $checkTime->format('H:i:s'),
+                'datetime' => $checkDateTime->toDateTimeString()
+            ];
+        } else {
+            $allDateTimes['check_appointment'] = null;
+        }
+
+        // 4. Check pickup_appointment_date and pickup_appointment_time from Order table
+        if ($order->pickup_appointment_date && $order->pickup_appointment_time) {
+            $pickupDate = \Carbon\Carbon::parse($order->pickup_appointment_date);
+            $pickupTime = \Carbon\Carbon::parse($order->pickup_appointment_time);
+            $pickupDateTime = $pickupDate->copy()->setTime($pickupTime->hour, $pickupTime->minute, $pickupTime->second);
+            
+            $appointments[] = [
+                'date' => $pickupDate->toDateString(),
+                'time' => $pickupTime->format('H:i:s'),
+                'datetime' => $pickupDateTime,
+                'type' => 'pickup_appointment'
+            ];
+            $allDateTimes['pickup_appointment'] = [
+                'date' => $pickupDate->toDateString(),
+                'time' => $pickupTime->format('H:i:s'),
+                'datetime' => $pickupDateTime->toDateTimeString()
+            ];
+        } else {
+            $allDateTimes['pickup_appointment'] = null;
+        }
+
+        // Find the earliest upcoming appointment (today or future)
+        $upcomingAppointments = collect($appointments)
+            ->filter(function($apt) use ($currentDateTime) {
+                return $apt['datetime'] >= $currentDateTime->copy()->startOfDay();
+            })
+            ->sortBy('datetime')
+            ->values();
+
+        if ($upcomingAppointments->isEmpty()) {
+            return [
+                'date' => null,
+                'time' => null,
+                'type' => null,
+                'all_date_times' => $allDateTimes
+            ];
+        }
+
+        $nextAppointment = $upcomingAppointments->first();
+
+        return [
+            'date' => $nextAppointment['date'],
+            'time' => $nextAppointment['time'],
+            'type' => $nextAppointment['type'],
+            'all_date_times' => $allDateTimes
+        ];
+    }
+
     private function getDerivedDateTime($order)
     {
+        // FIRST CHECK: If appointment is still pending (Requesting), NEVER return appointment date/time
+        // This must be checked FIRST before any other logic
+        $appointmentStatus = optional($order->appointment)->status;
+        $normalizedStatus = $appointmentStatus ? strtolower(trim($appointmentStatus)) : '';
+        
+        // If appointment status is 'pending' (Requesting), don't return any appointment date
+        // This means the appointment hasn't been accepted by admin yet
+        if ($normalizedStatus === 'pending') {
+            return [null, null];
+        }
+        
         $status = $order->status;
-        $date = null; $time = null;
+        $date = null; 
+        $time = null;
+        
+        // For Ready to Check: Show admin-set check appointment, otherwise fall back to original user appointment
         if ($status === 'Ready to Check') {
-            $date = $order->check_appointment_date;
-            $time = $order->check_appointment_time;
-        } elseif ($status === 'Completed') {
-            $date = $order->pickup_appointment_date;
-            $time = $order->pickup_appointment_time;
-        } else { // Pending, Ongoing, etc. default to original appointment
+            if ($order->check_appointment_date && $order->check_appointment_time) {
+                $date = $order->check_appointment_date;
+                $time = $order->check_appointment_time;
+            } else {
+                $date = optional($order->appointment)->appointment_date;
+                $time = optional($order->appointment)->appointment_time;
+            }
+        } 
+        // For Completed: Show admin-set pickup appointment, otherwise fall back to original user appointment
+        elseif ($status === 'Completed') {
+            if ($order->pickup_appointment_date && $order->pickup_appointment_time) {
+                $date = $order->pickup_appointment_date;
+                $time = $order->pickup_appointment_time;
+            } else {
+                $date = optional($order->appointment)->appointment_date;
+                $time = optional($order->appointment)->appointment_time;
+            }
+        } 
+        // For Pending order status: Only show appointment date if appointment is accepted (not pending)
+        // Double check: even if order status is Pending, don't show if appointment is still pending
+        elseif ($status === 'Pending') {
+            // Already checked above - if appointment is pending, return null
+            // So if we reach here, appointment is accepted
             $date = optional($order->appointment)->appointment_date;
             $time = optional($order->appointment)->appointment_time;
         }
-        // Normalize formats
-        $date = $date ? \Carbon\Carbon::parse($date)->toDateString() : null;
-        $time = $time ? \Carbon\Carbon::parse($time)->format('H:i:s') : null;
+        // For Finished or Cancelled: No next appointment
+        elseif ($status === 'Finished' || $status === 'Cancelled') {
+            return [null, null];
+        }
+        // Default fallback (shouldn't happen, but just in case)
+        else {
+            $date = optional($order->appointment)->appointment_date;
+            $time = optional($order->appointment)->appointment_time;
+        }
+        
+        // Normalize formats - extract date part if datetime string is provided
+        if ($date) {
+            // If date contains time (datetime string), extract just the date part
+            if (strpos($date, ' ') !== false) {
+                $date = explode(' ', $date)[0];
+            }
+            // Parse and normalize to YYYY-MM-DD format
+            $date = \Carbon\Carbon::parse($date)->toDateString();
+        } else {
+            $date = null;
+        }
+        
+        // Normalize time format - handle HH:MM or HH:MM:SS
+        if ($time) {
+            // If time contains seconds, keep them; otherwise add :00
+            $timeParts = explode(':', $time);
+            if (count($timeParts) === 2) {
+                $time = $time . ':00';
+            }
+            // Ensure format is H:i:s
+            $time = \Carbon\Carbon::parse($time)->format('H:i:s');
+        } else {
+            $time = null;
+        }
+        
         return [$date, $time];
     }
 
@@ -1141,6 +1447,80 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update sizes and quantity',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function adminRefundOrder(Request $request, $orderId)
+    {
+        try {
+            // Validate refund image is required
+            $validated = $request->validate([
+                'refund_image' => 'required|file|image|max:5120',
+            ]);
+
+            $order = Order::with('appointment.user')->findOrFail($orderId);
+            $appointment = $order->appointment;
+
+            if (!$appointment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Appointment not found for this order'
+                ], 404);
+            }
+
+            // Check if order is cancelled
+            if ($order->status !== 'Cancelled') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only cancelled orders can be refunded'
+                ], 400);
+            }
+
+            // Upload refund image
+            $refundImagePath = null;
+            if ($request->hasFile('refund_image')) {
+                $refundImagePath = $request->file('refund_image')->store('refunds', 'public');
+                \Log::info('Refund image uploaded', ['path' => $refundImagePath]);
+            }
+
+            // Update appointment with refund image
+            $appointment->refund_image = $refundImagePath;
+            $appointment->save();
+
+            // Create notification for the user
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'type'    => 'refund_processed',
+                'title'   => 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.',
+                'body'    => null,
+                'data'    => [
+                    'appointment_id' => $appointment->id,
+                    'order_id' => $order->id,
+                    'refund_image'   => $refundImagePath ? asset('storage/' . $refundImagePath) : null,
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Refund processed successfully'
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error processing refund', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'order_id' => $orderId
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process refund',
                 'error' => $e->getMessage()
             ], 500);
         }
