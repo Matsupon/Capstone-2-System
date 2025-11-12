@@ -101,6 +101,16 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+/* Global scrollbar hiding for all scrollable elements */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 /* Allow scroll when explicitly enabled by a page */
 body.feedback-scroll {
   overflow: auto;

@@ -18,11 +18,15 @@
   --card-border: rgba(59, 130, 246, 0.15);
 }
 
+/* Page Title - Fixed at top - LOW z-index so it doesn't cover modals */
 .page-title {
+  position: sticky;
+  top: 0;
+  z-index: 1; /* Very low z-index so it stays below modals (modal: 999999) */
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
-  padding: 4px 20px;
+  padding: 12px 20px;
   border-radius: 0 0 12px 12px;
   box-shadow: var(--shadow-glow);
   margin: 0 0 4px 0;
@@ -41,12 +45,24 @@
 .appointments-content {
   padding: 8px 16px;
   max-width: 100%;
-  margin: 0;
+  margin: 0 0 20px 0; /* Bottom margin to prevent content from reaching bottom */
   position: relative;
   z-index: 2;
-  height: calc(100vh - 120px);
-  overflow-y: auto;
-  padding-bottom: 80px; /* Space for pagination panel */
+  height: calc(100vh - 80px) !important; /* Extended to just above pagination (header ~60px + margin ~20px) */
+  min-height: calc(100vh - 80px) !important; /* Force minimum height */
+  overflow: hidden !important; /* Prevent page scrolling - only table containers scroll */
+  padding-bottom: 20px; /* Reduced space for pagination panel */
+}
+
+/* FORCE THE ENTIRE CONTAINER TO BE TALLER - OVERRIDE EVERYTHING */
+.feedback-card-container {
+  min-height: calc(100vh - 120px) !important;
+  max-height: calc(100vh - 120px) !important;
+  height: calc(100vh - 120px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  overflow: visible !important;
 }
 
 .placeholder-content {
@@ -123,19 +139,31 @@
 /* Appointments Table */
 .appointments-content table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: clamp(14px, 1.4vw, 16px);
-  background: transparent;
-  font-family: 'Lato', sans-serif;
+  border-collapse: separate;
+  border-spacing: 0;
+  position: relative;
+  display: table;
 }
 
-.appointments-content th, .appointments-content td {
+.appointments-content thead {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: table-header-group;
+}
+
+.appointments-content tbody {
+  position: relative;
+  z-index: 1;
+  display: table-row-group;
+}
+
+.appointments-content th,
+.appointments-content td {
   padding: 12px;
   text-align: center;
   border-bottom: 1px solid #e5e7eb;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  font-family: 'Lato', sans-serif;
+  display: table-cell;
 }
 
 .appointments-content th {
@@ -144,14 +172,23 @@
   font-size: 14px;
   background: #e8f4fd;
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: 0; /* Sticks to top of scrolling container (directly under page title when scrolled) */
+  z-index: 100;
+}
+
+.appointments-content tbody tr {
+  position: relative;
+  display: table-row;
+  z-index: 1;
 }
 
 .appointments-content td {
   color: #374151;
   font-size: 14px;
   font-weight: 400;
+  position: relative;
+  z-index: 1;
+  background: white;
 }
 
 .appointments-content tr:last-child td {
@@ -245,6 +282,13 @@ input[type="checkbox"]:checked::before {
   position: relative;
   box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   padding: 24px;
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.modal-panel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 
 /* Image Modal Styles */
@@ -272,56 +316,99 @@ input[type="checkbox"]:checked::before {
   box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   padding: 20px;
   transform: none;
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
 
-/* Dashboard modal styles (match Orders) */
+.image-modal-panel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Dashboard modal styles - EXTREMELY HIGH z-index to ensure it's above EVERYTHING */
 .dashboard-modal-bg {
-  position: fixed;
-  top: 0;
-  left: clamp(200px, 20vw, 250px);
-  width: calc(100% - clamp(200px, 20vw, 250px));
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
+  position: fixed !important;
+  top: 0 !important;
+  left: clamp(200px, 20vw, 250px) !important;
+  width: calc(100% - clamp(200px, 20vw, 250px)) !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  background: rgba(128, 128, 128, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  z-index: 999999 !important; /* Extremely high z-index to ensure it's above EVERYTHING (header: 1000, page-title: 1000) */
+  margin: 0 !important;
+  border: none !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  isolation: isolate !important; /* Create new stacking context */
+  pointer-events: auto !important;
 }
+
 .dashboard-modal-panel {
-  background: white;
-  border-radius: 10px;
-  max-width: 620px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  scrollbar-gutter: stable both-edges;
-  padding: 20px 24px;
+  background: white !important;
+  border-radius: 10px !important;
+  padding: 20px 28px 24px 28px !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+  position: relative !important;
+  text-align: left !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  transform: none !important;
+  z-index: 999999 !important; /* Extremely high z-index */
+  margin: 0 !important;
+  border: none !important;
+  box-sizing: border-box !important;
+  isolation: isolate !important; /* Create new stacking context */
+  pointer-events: auto !important;
+  /* Hide scrollbar */
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
 }
+
+.dashboard-modal-panel::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari and Opera */
+}
+
 .dashboard-modal-title {
-  margin-bottom: 16px;
-  margin-top: 8px;
-  color: #1a3c6c;
-  font-size: 22px;
-  font-weight: 700;
-  text-align: center;
-  width: 100%;
+  text-align: center !important;
+  margin-bottom: 18px !important;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  color: #000 !important;
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  line-height: 28px !important; /* Match X icon height alignment */
+  position: relative !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
 }
+
 .dashboard-modal-exit-icon {
-  position: absolute;
-  top: 15px;
-  right: 20px;
-  font-size: 1.5rem;
-  color: #444;
-  cursor: pointer;
-  z-index: 10;
-  transition: transform 0.2s ease;
+  position: absolute !important;
+  top: 20px !important; /* Aligned with padding-top */
+  right: 20px !important;
+  font-size: 1.5rem !important;
+  color: #444 !important;
+  cursor: pointer !important;
+  z-index: 1000000 !important; /* Even higher than panel */
+  transition: transform 0.2s ease !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+  pointer-events: auto !important;
 }
-.dashboard-modal-exit-icon:hover { transform: scale(1.2); }
+
+.dashboard-modal-exit-icon:hover {
+  transform: scale(1.2) !important;
+}
 
 .modal-panel::before { content: none; }
 
@@ -617,6 +704,28 @@ input[type="checkbox"]:checked::before {
   display: flex;
   gap: 40px;
   width: 100%;
+  overflow-y: auto;
+  /* Show scrollbar */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(59, 130, 246, 0.3) rgba(0, 0, 0, 0.05); /* Firefox */
+}
+
+.details-container::-webkit-scrollbar {
+  width: 8px; /* Chrome, Safari and Opera */
+}
+
+.details-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.details-container::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+}
+
+.details-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
 }
 .details-left {
   flex: 1;
@@ -745,7 +854,7 @@ input[type="checkbox"]:checked::before {
   .image-modal-bg { left: 0; width: 100%; }
   .modal-bg { left: 0; width: 100%; }
   .dashboard-modal-bg { left: 0; width: 100%; }
-  .dashboard-modal-panel { width: 95%; padding: 16px 20px; }
+  .dashboard-modal-panel { width: 95%; padding: 18px 6px 12px 6px; }
   .details-container { flex-direction: column; gap: 20px; }
   .details-modal { max-width: 90vw !important; padding: 16px 20px; }
 }
@@ -770,30 +879,32 @@ input[type="checkbox"]:checked::before {
 /* Pagination Panel Styles */
 .pagination-panel {
   position: fixed;
-  bottom: 0;
+  bottom: 8px;
   left: clamp(200px, 20vw, 250px);
-  right: 0;
-  background: white;
-  border-top: 2px solid #e5e7eb;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  right: 8px;
+  background: transparent;
   z-index: 100;
-  padding: 16px 24px;
+  padding: 0 8px;
 }
 
 .pagination-controls {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  max-width: calc(100vw - clamp(200px, 20vw, 250px) - 32px); /* Match content area width */
+  gap: 6px;
   margin: 0 auto;
-  width: 100%;
+  width: fit-content;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
 }
 
 .pagination-btn {
-  padding: 8px 14px;
+  padding: 8px 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 9999px;
   background: white;
   cursor: pointer;
   font-size: 14px;
@@ -803,7 +914,7 @@ input[type="checkbox"]:checked::before {
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: #eef2ff;
   border-color: #d1d5db;
   transform: translateY(-1px);
 }
@@ -815,21 +926,72 @@ input[type="checkbox"]:checked::before {
 }
 
 .pagination-btn.active {
-  background: #3b82f6;
+  background: #4f46e5;
   color: white;
-  border-color: #3b82f6;
+  border-color: #4f46e5;
   font-weight: 600;
 }
 
 .pagination-btn.active:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.pagination-meta { white-space: nowrap; }
+
+/* Table scrollbar styles - only visible when pagination is shown */
+.table-scroll-container {
+  max-height: none !important; /* Remove max-height constraint */
+  min-height: calc(100vh - 250px) !important; /* Force minimum height to be tall */
+  height: auto !important; /* Let it grow to fill parent */
+  flex: 1 1 auto !important; /* Fill available space in flex container */
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-radius: 0 0 16px 16px; /* Rounded bottom corners */
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.table-scroll-container.with-pagination {
+  max-height: none !important; /* Remove max-height constraint */
+  min-height: calc(100vh - 250px) !important; /* Force minimum height */
+  height: auto !important; /* Let it grow to fill parent */
+  flex: 1 1 auto !important; /* Fill available space in flex container */
+  overflow-y: scroll !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1);
+  padding-bottom: 20px; /* Extra padding at bottom so last row isn't covered */
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.7);
 }
 
 @media (max-width: 768px) {
   .pagination-panel {
-    left: 0;
-    padding: 12px 16px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    padding: 0;
   }
   
   .pagination-btn {

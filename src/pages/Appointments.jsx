@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Appointments.css';
+import '../styles/Feedback.css';
 import { FaTrashAlt } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
@@ -8,7 +9,7 @@ import api from '../api';
 const Appointments = () => {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Start with false - only show loading if request is slow
   const [error, setError] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -26,6 +27,12 @@ const Appointments = () => {
   const [refundImagePreview, setRefundImagePreview] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const [rejectSuccess, setRejectSuccess] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAppointmentId, setRefundAppointmentId] = useState(null);
+  const [refundImageFile, setRefundImageFile] = useState(null);
+  const [refundImagePreviewFile, setRefundImagePreviewFile] = useState(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundSuccess, setRefundSuccess] = useState(false);
 
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken');
@@ -35,26 +42,30 @@ const Appointments = () => {
   }, [navigate]);
 
   useEffect(() => {
+    // Create abort controller for request cancellation
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    
+    // Optimistic UI - only show loading if request takes longer than 150ms
+    const showLoadingTimeout = setTimeout(() => {
+      setIsLoading(true);
+    }, 150);
+
     const fetchAppointments = async () => {
       try {
         const token = localStorage.getItem('adminToken');
         if (!token) {
+          clearTimeout(showLoadingTimeout);
           setError('No admin token found');
           setIsLoading(false);
           return;
         }
 
-        console.log('=== DEBUGGING API CALLS ===');
-        console.log('Admin token:', token);
-        console.log('Using proxy configuration from package.json');
-        console.log('Full admin endpoint URL: /api/admin/appointments');
-        console.log('Full original endpoint URL: /api/appointments');
-        
         let response;
         try {
-          console.log('Trying admin endpoint...');
-          response = await api.get('/admin/appointments');
-          console.log('Admin endpoint response:', response);
+          response = await api.get('/admin/appointments', { signal });
+          
+          if (signal.aborted) return;
           
           if (response.data.success && response.data.data) {
             setAppointments(response.data.data);
@@ -64,20 +75,21 @@ const Appointments = () => {
             throw new Error('Invalid response format from server');
           }
           
+          clearTimeout(showLoadingTimeout);
           setIsLoading(false);
           setError(null);
           return;
         } catch (adminError) {
-          console.log('Admin endpoint failed:', adminError);
-          console.log('Admin error response:', adminError.response);
+          if (signal.aborted || adminError.name === 'CanceledError' || adminError.name === 'AbortError') return;
           
           try {
-            console.log('Trying original endpoint...');
-            response = await api.get('/appointments');
-            console.log('Original endpoint response:', response);
+            response = await api.get('/appointments', { signal });
+            
+            if (signal.aborted) return;
             
             if (Array.isArray(response.data)) {
               setAppointments(response.data);
+              clearTimeout(showLoadingTimeout);
               setIsLoading(false);
               setError(null);
               return;
@@ -85,40 +97,61 @@ const Appointments = () => {
               throw new Error('Invalid response format from original endpoint');
             }
           } catch (originalError) {
-            console.error('Both endpoints failed:', { adminError, originalError });
-            console.log('Original error response:', originalError.response);
-            throw new Error('Failed to fetch appointments from both endpoints');
+            if (signal.aborted || originalError.name === 'CanceledError' || originalError.name === 'AbortError') return;
+            clearTimeout(showLoadingTimeout);
+            console.error('Failed to fetch appointments from both endpoints:', originalError);
+            setError(originalError.response?.data?.message || 'Failed to fetch appointments');
+            setIsLoading(false);
           }
         }
         
       } catch (err) {
+        if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
+        clearTimeout(showLoadingTimeout);
         console.error('Final error in fetchAppointments:', err);
-        setError(err.message);
+        setError(err.response?.data?.message || err.message || 'Failed to fetch appointments');
         setIsLoading(false);
       }
     };
 
     const fetchViewStates = async () => {
       try {
-        const res = await api.get('/notifications/appointments/view-states');
+        const res = await api.get('/notifications/appointments/view-states', { signal });
+        if (signal.aborted) return;
         if (res.data?.success) {
           const items = res.data.data || [];
           const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
           setUnviewedAppointmentIds(unviewed);
         }
-      } catch (_) {}
+      } catch (err) {
+        if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
+        // Silently fail for view states - not critical
+      }
     };
 
-    fetchAppointments();
-    fetchViewStates();
+    // Fetch both in parallel for faster loading
+    Promise.all([
+      fetchAppointments(),
+      fetchViewStates()
+    ]).catch(() => {
+      // Errors handled individually
+    });
     
-    // Refresh appointments every 5 seconds to reflect cancellations
+    // Refresh appointments every 30 seconds to reflect cancellations
     const refreshInterval = setInterval(() => {
-      fetchAppointments();
-    }, 5000);
+      if (!signal.aborted) {
+        fetchAppointments();
+        fetchViewStates();
+      }
+    }, 30000);
     
-    return () => clearInterval(refreshInterval);
-  }, [navigate]);
+    return () => {
+      clearTimeout(showLoadingTimeout);
+      clearInterval(refreshInterval);
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   const formatTime = (timeString) => {
     if (!timeString) return 'N/A';
@@ -167,28 +200,17 @@ const Appointments = () => {
       return next;
     });
     
-    // Update database - mark appointment as viewed
-    try {
-      const response = await api.patch(`/notifications/appointments/${appointment.id}/viewed`);
-      console.log('Appointment marked as viewed:', response.data);
-      
+    // Update database - mark appointment as viewed (triggers viewed_at column)
+    api.patch(`/notifications/appointments/${appointment.id}/viewed`).then(() => {
       // Refresh view states to ensure consistency with database
-      try {
-        const res = await api.get('/notifications/appointments/view-states');
+      api.get('/notifications/appointments/view-states').then((res) => {
         if (res.data?.success) {
           const items = res.data.data || [];
           const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
           setUnviewedAppointmentIds(unviewed);
         }
-      } catch (refreshError) {
-        console.error('Failed to refresh view states:', refreshError);
-        // Don't revert the optimistic update - user already viewed it
-      }
-    } catch (err) {
-      console.error('Failed to mark appointment as viewed:', err);
-      // Don't revert the optimistic update - user already viewed it
-      // The error is logged but UI remains updated for better UX
-    }
+      }).catch(() => {});
+    }).catch(() => {});
   };
 
   const handleImageClick = (imageSrc, imageAlt) => {
@@ -264,11 +286,64 @@ const Appointments = () => {
     }
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(appointments.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentAppointments = appointments.slice(startIndex, endIndex);
+  const handleRefundAppointment = (id) => {
+    setRefundAppointmentId(id);
+    setShowRefundModal(true);
+  };
+
+  const handleRefundImageFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setRefundImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRefundImagePreviewFile(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProcessRefund = async () => {
+    if (!refundImageFile) {
+      alert('Please upload a GCash refund image before processing the refund.');
+      return;
+    }
+
+    try {
+      setRefunding(true);
+      const formData = new FormData();
+      formData.append('refund_image', refundImageFile);
+
+      await api.post(`/admin/appointments/${refundAppointmentId}/refund`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Remove appointment from list after refund is processed
+      setAppointments(appointments.filter(a => a.id !== refundAppointmentId));
+      setShowRefundModal(false);
+      setRefundAppointmentId(null);
+      setRefundImageFile(null);
+      setRefundImagePreviewFile(null);
+      setRefundSuccess(true);
+      setTimeout(() => setRefundSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to process refund:', err);
+      setError(err.response?.data?.message || 'Failed to process refund. Please try again.');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
+  // Pagination calculations - memoized for performance
+  const { totalPages, currentAppointments } = useMemo(() => {
+    const total = Math.ceil(appointments.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const current = appointments.slice(start, end);
+    return { totalPages: total, currentAppointments: current };
+  }, [appointments, currentPage, itemsPerPage]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -286,12 +361,18 @@ const Appointments = () => {
 
   return (
     <>
-      <div className="page-title">
-        <h1>APPOINTMENTS</h1>
-      </div>
-      
-      <div className="appointments-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 16px' }}>
+      <div className="appointments-content" style={{ marginTop: 8 }}>
+          <div
+            className="feedback-card-container"
+            style={{
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+              marginBottom: 10,
+              overflow: 'hidden',
+              padding: '24px 24px 8px 24px',
+              margin: '0 16px 10px 16px'
+            }}
+          >
             {isLoading ? (
               <p>Loading appointments...</p>
             ) : error ? (
@@ -299,6 +380,7 @@ const Appointments = () => {
             ) : appointments.length === 0 ? (
               <p>No appointments found.</p>
             ) : (
+              <div className={`table-scroll-container ${!isLoading && !error && appointments.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
   <thead>
     <tr style={{ background: '#e8f4fd' }}>
@@ -306,39 +388,81 @@ const Appointments = () => {
       <th>Name</th>
       <th>Service</th>
       <th>Action</th>
+      <th>State</th>
       <th>Add to Queue</th>
       <th>Reject</th>
     </tr>
   </thead>
   <tbody>
-    {currentAppointments.map((appt) => (
-      <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
-        <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
-        <td>{appt.user?.name || 'N/A'}</td>
-        <td>{appt.service_type}</td>
-        <td>
-          <span
-            className="action-link"
-            onClick={() => handleViewDetails(appt)}
-            style={{ color: '#007bff', cursor: 'pointer' }}
-          >
-            View Details
-          </span>
-        </td>
-                      <td>
-                        <input 
-                          type="checkbox" 
-                          onChange={() => handleAddToQueue(appt.id)}
-                          checked={queueConfirmId === appt.id}
-                        />
-                      </td>
-                      <td>
-                        <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} style={{ color: '#ef4444', cursor: 'pointer' }} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+    {currentAppointments.map((appt) => {
+      const isCancelled = appt.state === 'cancelled';
+      return (
+        <tr key={appt.id} style={unviewedAppointmentIds.has(appt.id) ? { background: '#e6f0ff' } : {}}>
+          <td>{formatDateTime(appt.appointment_date, appt.appointment_time)}</td>
+          <td>{appt.user?.name || 'N/A'}</td>
+          <td>{appt.service_type}</td>
+          <td>
+            <span
+              className="action-link"
+              onClick={() => handleViewDetails(appt)}
+              style={{ color: '#007bff', cursor: 'pointer' }}
+            >
+              View Details
+            </span>
+          </td>
+          <td>
+            <span style={{ 
+              display: 'inline-block',
+              padding: '4px 10px',
+              borderRadius: 9999,
+              background: appt.state === 'active' ? 'rgba(76, 175, 80, 0.15)' : 'rgba(244, 67, 54, 0.15)',
+              color: appt.state === 'active' ? '#2e7d32' : '#c62828',
+              fontWeight: 700,
+              lineHeight: 1
+            }}>
+              {appt.state === 'active' ? 'Active' : 'Cancelled'}
+            </span>
+          </td>
+          {isCancelled ? (
+            <>
+              <td colSpan="2" style={{ textAlign: 'center' }}>
+                <button
+                  onClick={() => handleRefundAppointment(appt.id)}
+                  style={{
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Refund
+                </button>
+              </td>
+            </>
+          ) : (
+            <>
+              <td>
+                <input 
+                  type="checkbox" 
+                  onChange={() => handleAddToQueue(appt.id)}
+                  checked={queueConfirmId === appt.id}
+                />
+              </td>
+              <td>
+                <FaTrashAlt className="delete-icon" onClick={() => handleRemove(appt.id)} style={{ color: '#ef4444', cursor: 'pointer' }} />
+              </td>
+            </>
+          )}
+        </tr>
+      );
+    })}
+  </tbody>
               </table>
+              </div>
             )}
           </div>
 
@@ -371,14 +495,21 @@ const Appointments = () => {
                 >
                   Next
                 </button>
+                <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
+                  Showing {currentAppointments.length} of {appointments.length} results
+                </span>
               </div>
             </div>
           )}
 
-          {/* View Details Modal (match Orders dashboard modal design) */}
+          {/* View Details Modal (match Orders dashboard modal design) - MAXIMUM z-index to ensure it's above everything */}
           {showDetails && selectedAppointment && (
             <div
               className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+              style={{
+                zIndex: 999999,
+                isolation: 'isolate'
+              }}
               onClick={() => {
                 setDetailsClosing(true);
                 setTimeout(() => {
@@ -389,10 +520,17 @@ const Appointments = () => {
             >
               <div
                 className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
+                style={{
+                  zIndex: 999999,
+                  isolation: 'isolate'
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <AiOutlineClose
                   className="dashboard-modal-exit-icon"
+                  style={{
+                    zIndex: 1000000
+                  }}
                   onClick={() => {
                     setDetailsClosing(true);
                     setTimeout(() => {
@@ -401,7 +539,7 @@ const Appointments = () => {
                     }, 200);
                   }}
                 />
-                <h2 className="dashboard-modal-title">Appointment Details</h2>
+                <h2 className="dashboard-modal-title" style={{ marginTop: 0, paddingTop: 0 }}>Appointment Details</h2>
                 <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
                   <div className="details-left">
                     <div className="detail-group">
@@ -633,6 +771,83 @@ const Appointments = () => {
           {rejectSuccess && (
             <div className="popup-delete-success">
               <h3>Appointment Successfully Rejected!</h3>
+            </div>
+          )}
+
+          {/* Refund Modal */}
+          {showRefundModal && (
+            <div className="dashboard-modal-bg animate-fade" onClick={() => {
+              setShowRefundModal(false);
+              setRefundImageFile(null);
+              setRefundImagePreviewFile(null);
+            }}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+                <AiOutlineClose
+                  className="dashboard-modal-exit-icon"
+                  onClick={() => {
+                    setShowRefundModal(false);
+                    setRefundImageFile(null);
+                    setRefundImagePreviewFile(null);
+                  }}
+                  style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
+                />
+                <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Process Refund</h3>
+                <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
+                  Please upload a GCash refund image to process the refund for this cancelled appointment.
+                </p>
+                
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
+                    GCash Refund Image *
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleRefundImageFileChange}
+                    style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                  />
+                  {refundImagePreviewFile && (
+                    <div style={{ marginTop: 12 }}>
+                      <img
+                        src={refundImagePreviewFile}
+                        alt="Refund preview"
+                        style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                        onClick={() => handleImageClick(refundImagePreviewFile, 'Refund Preview')}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => {
+                      setShowRefundModal(false);
+                      setRefundImageFile(null);
+                      setRefundImagePreviewFile(null);
+                    }}
+                    disabled={refunding}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: refunding || !refundImageFile ? 'not-allowed' : 'pointer', opacity: refunding || !refundImageFile ? 0.6 : 1 }}
+                    onClick={handleProcessRefund}
+                    disabled={refunding || !refundImageFile}
+                  >
+                    {refunding ? 'Processing...' : 'Process Refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Refund Success Popup */}
+          {refundSuccess && (
+            <div className="popup-delete-success">
+              <h3>Refund Processed Successfully!</h3>
             </div>
           )}
 

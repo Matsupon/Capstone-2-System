@@ -14,7 +14,7 @@ import {
 import Header from '../../components/Header';
 import api from '../../utils/api';
 
-export default function AppointmentsPage() {
+export default function OrdersPage() {
   const [expandedRecent, setExpandedRecent] = useState(null); // Changed to store order ID
   const [expandedHistory, setExpandedHistory] = useState({
     first: false,
@@ -162,10 +162,10 @@ export default function AppointmentsPage() {
       case 'Completed':
         return '#4caf50';
       case 'Ready to Check':
-        return '#e91e63';
+        return '#FFAB91';
       case 'Pending':
       default:
-        return '#FFA500';
+        return '#FFE082';
     }
   };
 
@@ -218,9 +218,11 @@ export default function AppointmentsPage() {
                   <View style={[styles.indicator, {backgroundColor: getStatusColor(order?.status || 'Pending')}]} />
                   <View style={styles.cardContent}>
                     <View style={styles.cardHeader}>
-                      <Text style={styles.cardDate}>
-                        {`Order: ${order?.appointment?.service_type || 'N/A'}`}
-                      </Text>
+                      <View style={styles.orderInfo}>
+                        <Text style={styles.cardDate} numberOfLines={1} ellipsizeMode="tail">
+                          {`Order: ${order?.appointment?.service_type || 'N/A'}`}
+                        </Text>
+                      </View>
                       <TouchableOpacity onPress={() => toggleRecent(order.id)} style={styles.statusContainer}>
                         {order?.status ? (
                           <Text
@@ -232,11 +234,13 @@ export default function AppointmentsPage() {
                                 ? styles.statusReadyToCheck
                                 : styles.statusPending,
                             ]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                           >
                             {order?.status}
                           </Text>
                         ) : (
-                          <Text style={[styles.statusText, styles.statusPending]}>Pending</Text>
+                          <Text style={[styles.statusText, styles.statusPending]} numberOfLines={1} ellipsizeMode="tail">Pending</Text>
                         )}
                         <MaterialIcons
                           name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
@@ -504,18 +508,21 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start', // Changed from 'center' to 'flex-start'
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   orderInfo: {
-    flex: 1, // Takes available space
-    marginRight: 10, // Adds spacing between text and status
-    minWidth: '60%', // Ensures text doesn't get too squeezed
+    flex: 1,
+    marginRight: 10,
+    minWidth: 0, // Allows flex to work properly
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 0, // Prevents shrinking
+    flexShrink: 1,
+    maxWidth: '45%',
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: 16,
@@ -525,15 +532,15 @@ const styles = StyleSheet.create({
   cardDate: {
     fontSize: 14,
     color: '#000',
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    minWidth: 0,
+    flexShrink: 1,
   },
   statusText: {
     fontSize: 14,
     fontWeight: '500',
     marginRight: 5,
+    flexShrink: 1,
+    minWidth: 0,
   },
   statusOngoing: {
     color: '#FFA500',

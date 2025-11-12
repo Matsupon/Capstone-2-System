@@ -25,10 +25,16 @@ const Profile = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [originalForm, setOriginalForm] = useState(null);
+  const [profileUrl, setProfileUrl] = useState(stored?.profile_image_url || null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoSuccess, setPhotoSuccess] = useState(false);
 
   useEffect(() => {
     if (stored) {
       setForm((f) => ({ ...f, fullname: stored.fullname || '', email: stored.email || '', phone: stored.phone || '', address: stored.address || '' }));
+      if (stored.profile_image_url) {
+        setProfileUrl(stored.profile_image_url);
+      }
     }
   }, [stored]);
 
@@ -47,6 +53,7 @@ const Profile = () => {
             phone: admin.phone || '',
             address: admin.address || '',
           }));
+          setProfileUrl(admin.profile_image_url || null);
         }
       } catch (e) {
         // silently ignore; UI will show stored values if any
@@ -106,11 +113,89 @@ const Profile = () => {
     setOriginalForm(null);
   };
 
-  return (
-    <div className="page-wrap profile-page" style={{ position: 'relative', padding: '0 20px 20px 20px'}}>
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    setError('');
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const res = await api.post('/admin/profile/photo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const updated = res?.data?.admin;
+      if (updated) {
+        localStorage.setItem('adminData', JSON.stringify(updated));
+        setProfileUrl(updated.profile_image_url || null);
+        setPhotoSuccess(true);
+        setTimeout(() => setPhotoSuccess(false), 3000);
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Failed to upload profile picture';
+      setError(msg);
+    } finally {
+      setUploadingPhoto(false);
+      // reset the input so same file can be selected again if needed
+      e.target.value = '';
+    }
+  };
 
-      <div className="page-title">
-        <h1>PROFILE</h1>
+  return (
+    <div className="page-wrap profile-page" style={{ position: 'relative', padding: '8px 20px 20px 20px'}}>
+
+      {/* Avatar */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+        <div style={{ position: 'relative' }}>
+          {profileUrl ? (
+            <img
+              src={profileUrl}
+              alt="Profile"
+              style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e5e7eb' }}
+            />
+          ) : (
+            <div style={{
+              width: 120, height: 120, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#f3f4f6', color: '#6b7280', fontWeight: 700, fontSize: 36, border: '2px solid #e5e7eb'
+            }}>
+              {(form.fullname || 'A').slice(0,1).toUpperCase()}
+            </div>
+          )}
+          <label
+            htmlFor="profile_photo_input"
+            title="Edit profile picture"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              transform: 'translate(15%, 15%)',
+              background: '#3b82f6',
+              color: 'white',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid white',
+              cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+              boxShadow: '0 6px 12px rgba(0,0,0,0.15)',
+              fontSize: 18,
+              fontWeight: 800
+            }}
+          >
+            {uploadingPhoto ? '…' : '✎'}
+          </label>
+          <input
+            id="profile_photo_input"
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            disabled={uploadingPhoto}
+            style={{ display: 'none' }}
+          />
+        </div>
       </div>
 
       {success && (
@@ -129,6 +214,25 @@ const Profile = () => {
           fontWeight: 700,
         }}>
           You have successfully updated your profile!
+        </div>
+      )}
+
+      {photoSuccess && (
+        <div style={{
+          position: 'fixed',
+          top: '30%',
+          left: '60%',
+          transform: 'translate(-50%, -50%)',
+          background: 'white',
+          color: '#065f46',
+          border: '1px solid rgba(16,185,129,0.3)',
+          padding: '16px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 10px 30px rgba(16, 185, 129, 0.25)',
+          zIndex: 2000,
+          fontWeight: 700,
+        }}>
+          Profile picture updated successfully!
         </div>
       )}
 

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import '../styles/Orders.css';
+import '../styles/Feedback.css';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
 
@@ -8,48 +9,71 @@ const OrdersHistory = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [detailsClosing, setDetailsClosing] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false - only show loading if request is slow
   const [error, setError] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fetch orders from API
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/orders/history');
-      if (response.data.success) {
-        setOrders(response.data.data);
-      } else {
-        throw new Error('Failed to fetch order history');
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Error fetching order history');
-      console.error('Error fetching order history:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    // Create abort controller for request cancellation
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    
+    // Optimistic UI - only show loading if request takes longer than 150ms
+    const showLoadingTimeout = setTimeout(() => {
+      setLoading(true);
+    }, 150);
+
+    const fetchOrders = async () => {
+      try {
+        const response = await api.get('/orders/history', { signal });
+        
+        if (signal.aborted) return;
+        clearTimeout(showLoadingTimeout);
+        
+        if (response.data.success) {
+          setOrders(response.data.data);
+          setError(null);
+        } else {
+          throw new Error('Failed to fetch order history');
+        }
+        setLoading(false);
+      } catch (err) {
+        if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
+        clearTimeout(showLoadingTimeout);
+        setError(err.response?.data?.error || err.message || 'Error fetching order history');
+        console.error('Error fetching order history:', err);
+        setLoading(false);
+      }
+    };
+
     fetchOrders();
-  }, []);
+    
+    return () => {
+      clearTimeout(showLoadingTimeout);
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   // Color for order status
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
+        return '#1565c0';
       case 'finished':
-        return '#2196f3';
+        return '#1565c0';
       case 'pending':
-        return '#ff9800';
+        return '#1565c0'; // darker yellow text
       case 'ongoing':
-        return '#2196f3';
+        return '#1565c0';
+      case 'ready to check':
+        return '#b23c17'; // darker orange text
       case 'cancelled':
       case 'canceled':
-        return '#f44336';
+        return '#c62828';
       default:
         return '#333';
     }
@@ -85,11 +109,14 @@ const OrdersHistory = () => {
     setShowImageModal(true);
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(orders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = orders.slice(startIndex, endIndex);
+  // Pagination calculations - memoized for performance
+  const { totalPages, currentOrders } = useMemo(() => {
+    const total = Math.ceil(orders.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const current = orders.slice(start, end);
+    return { totalPages: total, currentOrders: current };
+  }, [orders, currentPage, itemsPerPage]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -109,10 +136,7 @@ const OrdersHistory = () => {
   if (loading) {
     return (
       <div className="page-wrap">
-        <div className="page-title">
-          <h1>ORDER HISTORY</h1>
-        </div>
-        <div className="orders-content">
+        <div className="orders-content" style={{ marginTop: 8 }}>
           <p>Loading order history...</p>
         </div>
       </div>
@@ -123,10 +147,7 @@ const OrdersHistory = () => {
   if (error) {
     return (
       <div className="page-wrap">
-        <div className="page-title">
-          <h1>ORDER HISTORY</h1>
-        </div>
-        <div className="orders-content">
+        <div className="orders-content" style={{ marginTop: 8 }}>
           <p style={{ color: 'red' }}>Error: {error}</p>
         </div>
       </div>
@@ -135,20 +156,19 @@ const OrdersHistory = () => {
 
   return (
     <div className="page-wrap">
-      <div className="page-title">
-        <h1>ORDER HISTORY</h1>
-      </div>
-
-      <div className="orders-content">
+      <div className="orders-content" style={{ marginTop: 8 }}>
         <div
+          className="feedback-card-container"
           style={{
-            background: 'white',
-            borderRadius: 8,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            borderBottomLeftRadius: 16,
+            borderBottomRightRadius: 16,
+            marginBottom: 10,
+            overflow: 'hidden',
             padding: '24px 24px 8px 24px',
-            margin: '0 16px',
+            margin: '0 16px 10px 16px'
           }}
         >
+          <div className={`table-scroll-container ${orders.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#e8f4fd' }}>
@@ -170,16 +190,28 @@ const OrdersHistory = () => {
                       <div>
                         <span
                           style={{
+                            display: 'inline-block',
+                            padding: '4px 10px',
+                            borderRadius: 9999,
+                            background: (() => {
+                              const s = (order.status || '').toLowerCase();
+                              if (s === 'pending') return 'rgba(33, 150, 243, 0.15)';
+                              if (s === 'ready to check') return 'rgba(33, 150, 243, 0.15)';
+                              if (s === 'completed') return 'rgba(33, 150, 243, 0.15)';
+                              if (s === 'finished') return 'rgba(33, 150, 243, 0.15)';
+                              if (s === 'cancelled' || s === 'canceled') return 'rgba(33, 150, 243, 0.15)';
+                              return 'rgba(0,0,0,0.06)';
+                            })(),
                             color: getStatusColor(order.status),
-                            display: 'block',
-                            fontWeight: 500,
+                            fontWeight: 700,
+                            lineHeight: 1,
                           }}
                         >
                           {order.status === 'Completed' ? 'Finished' : (order.status || 'Unknown')}
                         </span>
                         {order.total_amount && (
-                          <span style={{ fontSize: '12px', color: '#000' }}>
-                            (₱{order.total_amount.toLocaleString()} total fee)
+                          <span style={{ display: 'block', fontSize: '12px', color: '#000', marginTop: 4 }}>
+                            ₱{order.total_amount.toLocaleString()} total fee
                           </span>
                         )}
                       </div>
@@ -204,6 +236,7 @@ const OrdersHistory = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -236,6 +269,9 @@ const OrdersHistory = () => {
             >
               Next
             </button>
+            <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
+              Showing {currentOrders.length} of {orders.length} results
+            </span>
           </div>
         </div>
       )}
@@ -266,7 +302,7 @@ const OrdersHistory = () => {
                   }, 200);
                 }}
               />
-              <h2 className="dashboard-modal-title">Order Details</h2>
+              <h2 className="dashboard-modal-title" style={{ marginTop: 0, paddingTop: 0 }}>Order Details</h2>
                 <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
                   <div className="details-left">
                     <div className="detail-group">

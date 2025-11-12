@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Orders.css';
+import '../styles/Feedback.css';
 import { FaTimes, FaChevronLeft, FaChevronRight, FaFilter, FaSearch, FaCheck, FaEdit } from 'react-icons/fa';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
@@ -86,6 +87,12 @@ const Orders = () => {
   const [editSizes, setEditSizes] = useState({});
   const [editQuantity, setEditQuantity] = useState('');
   const [savingSizes, setSavingSizes] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundOrderId, setRefundOrderId] = useState(null);
+  const [refundImageFile, setRefundImageFile] = useState(null);
+  const [refundImagePreview, setRefundImagePreview] = useState(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundSuccess, setRefundSuccess] = useState(false);
   const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
   const today = new Date();
@@ -111,39 +118,44 @@ const Orders = () => {
     }
   }, [navigate]);
 
-  const fetchOrders = useCallback(async () => {
-    try {
+  const fetchOrders = useCallback(async (signal = null) => {
+    // Optimistic UI - only show loading if request takes longer than 150ms
+    const showLoadingTimeout = setTimeout(() => {
       setLoading(true);
+    }, 150);
+    
+    try {
       const token = localStorage.getItem('adminToken');
       if (!token) {
+        clearTimeout(showLoadingTimeout);
         setError('No admin token found');
         setLoading(false);
         navigate('/login');
         return;
       }
 
-      const response = await api.get('/orders');
+      const config = signal ? { signal } : {};
+      const response = await api.get('/orders', config);
+      
+      if (signal?.aborted) {
+        clearTimeout(showLoadingTimeout);
+        return;
+      }
+      clearTimeout(showLoadingTimeout);
+      
       if (response.data.success) {
-        console.log('Orders data received:', response.data.data.map(order => ({
-          id: order.id,
-          status: order.status,
-          scheduled_at: order.scheduled_at,
-          completed_at: order.completed_at,
-          check_appointment_date: order.check_appointment_date,
-          check_appointment_time: order.check_appointment_time,
-          pickup_appointment_date: order.pickup_appointment_date,
-          pickup_appointment_time: order.pickup_appointment_time,
-          appointment_date: order.appointment?.appointment_date,
-          appointment_time: order.appointment?.appointment_time,
-          preferred_due_date: order.appointment?.preferred_due_date,
-          handled: order.handled
-        })));
-        
         setOrders(response.data.data);
+        setError(null);
       } else {
         setError('Failed to fetch orders');
       }
+      setLoading(false);
     } catch (err) {
+      if (signal?.aborted || err.name === 'CanceledError' || err.name === 'AbortError') {
+        clearTimeout(showLoadingTimeout);
+        return;
+      }
+      clearTimeout(showLoadingTimeout);
       if (err.response?.status === 401) {
         setError('Unauthorized. Please login again.');
         localStorage.removeItem('adminToken');
@@ -152,16 +164,23 @@ const Orders = () => {
         setError(err.response?.data?.error || 'Error fetching orders');
         console.error('Error fetching orders:', err);
       }
-    } finally {
       setLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
+    // Create abort controller for request cancellation
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    
     const adminToken = localStorage.getItem('adminToken');
     if (adminToken) {
-      fetchOrders();
+      fetchOrders(signal);
     }
+    
+    return () => {
+      abortController.abort();
+    };
   }, [fetchOrders]);
 
   // Close dropdown when clicking outside
@@ -320,13 +339,15 @@ const Orders = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Ready to Check':
-        return '#e91e63';
+        return '#b23c17'; // darker orange text
       case 'Pending':
-        return '#ff9800';
+        return '#7a5f00'; // darker yellow text
       case 'Completed':
-        return '#4caf50';
+        return '#2e7d32';
       case 'Finished':
-        return '#2196f3';
+        return '#1565c0';
+      case 'Cancelled':
+        return '#616161'; // Grey color for cancelled
       default:
         return '#333';
     }
@@ -572,6 +593,56 @@ const Orders = () => {
     }
   };
 
+  const handleRefundOrder = (orderId) => {
+    setRefundOrderId(orderId);
+    setShowRefundModal(true);
+  };
+
+  const handleRefundImageFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setRefundImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRefundImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProcessRefund = async () => {
+    if (!refundImageFile) {
+      alert('Please upload a GCash refund image before processing the refund.');
+      return;
+    }
+
+    try {
+      setRefunding(true);
+      const formData = new FormData();
+      formData.append('refund_image', refundImageFile);
+
+      await api.post(`/admin/orders/${refundOrderId}/refund`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Remove order from list after refund is processed
+      setOrders(orders.filter(o => o.id !== refundOrderId));
+      setShowRefundModal(false);
+      setRefundOrderId(null);
+      setRefundImageFile(null);
+      setRefundImagePreview(null);
+      setRefundSuccess(true);
+      setTimeout(() => setRefundSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to process refund:', err);
+      setError(err.response?.data?.message || 'Failed to process refund. Please try again.');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
   // Auto-calculate quantity when sizes change
   useEffect(() => {
     if (editingSizes) {
@@ -586,8 +657,39 @@ const Orders = () => {
     console.log('formatDateForDisplay input:', dateString);
     
     try {
-      const date = new Date(dateString);
+      // Parse date string manually to avoid timezone conversion issues
+      // Handle YYYY-MM-DD format (date-only)
+      const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10) - 1; // JavaScript months are 0-indexed
+        const day = parseInt(dateMatch[3], 10);
+        const monthName = monthNames[month];
+        return `${monthName} ${day}`;
+      }
       
+      // Handle date strings with time (ISO format or space-separated)
+      if (dateString.includes('T') || (dateString.includes(' ') && dateString.includes(':'))) {
+        // Parse ISO format or space-separated datetime
+        const dateTimeMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+        if (dateTimeMatch) {
+          const year = parseInt(dateTimeMatch[1], 10);
+          const month = parseInt(dateTimeMatch[2], 10) - 1;
+          const day = parseInt(dateTimeMatch[3], 10);
+          const hours = parseInt(dateTimeMatch[4], 10);
+          const minutes = parseInt(dateTimeMatch[5], 10);
+          
+          const monthName = monthNames[month];
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+          const time = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+          
+          return `${monthName} ${day} - ${time}`;
+        }
+      }
+      
+      // Fallback to Date parsing if format doesn't match
+      const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.warn('Invalid date:', dateString);
         return '';
@@ -596,14 +698,11 @@ const Orders = () => {
       const month = monthNames[date.getMonth()];
       const day = date.getDate();
       
-      // If the original string contains time information (T or space with colon), include it
+      // If the original string contains time information, include it
       if (dateString.includes('T') || (dateString.includes(' ') && dateString.includes(':'))) {
         const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-        console.log('Final formatted string with time:', `${month} ${day} - ${time}`);
         return `${month} ${day} - ${time}`;
       } else {
-        // For date-only strings, just show the date
-        console.log('Final formatted string (date only):', `${month} ${day}`);
         return `${month} ${day}`;
       }
     } catch (error) {
@@ -765,32 +864,6 @@ const Orders = () => {
     return slots;
   };
 
-  if (loading) {
-    return (
-      <div className="page-wrap">
-        <div className="page-title">
-          <h1>ORDERS</h1>
-        </div>
-        <div className="orders-content">
-          <p>Loading orders...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="page-wrap">
-        <div className="page-title">
-          <h1>ORDERS</h1>
-        </div>
-        <div className="orders-content">
-          <p>Error: {error}</p>
-        </div>
-      </div>
-    );
-  }
-
   // Helper function to get filter display name
   const getFilterDisplayName = (filter) => {
     switch(filter) {
@@ -813,14 +886,15 @@ const Orders = () => {
     }
   };
 
-  // Filter and sort orders based on selected filter and search query
-  const getFilteredOrders = () => {
-    let filteredOrders = [...orders];
+  // Filter and sort orders based on selected filter and search query - memoized for performance
+  // IMPORTANT: This hook must be called before any early returns to follow React Hooks rules
+  const { filteredOrders, totalPages, currentOrders } = useMemo(() => {
+    let filtered = [...orders];
     
     // Apply search filter first
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filteredOrders = filteredOrders.filter(order => {
+      filtered = filtered.filter(order => {
         const name = order.appointment?.user?.name?.toLowerCase() || '';
         const service = order.appointment?.service_type?.toLowerCase() || '';
         return name.includes(query) || service.includes(query);
@@ -830,7 +904,7 @@ const Orders = () => {
     switch(filterOption) {
       case 'deadline-nearest':
         // Sort by nearest deadline (preferred_due_date)
-        filteredOrders.sort((a, b) => {
+        filtered.sort((a, b) => {
           const dateA = a.appointment?.preferred_due_date ? new Date(a.appointment.preferred_due_date) : new Date('9999-12-31');
           const dateB = b.appointment?.preferred_due_date ? new Date(b.appointment.preferred_due_date) : new Date('9999-12-31');
           return dateA - dateB;
@@ -838,47 +912,73 @@ const Orders = () => {
         break;
       case 'oldest-newest':
         // Sort by order creation date (oldest first)
-        filteredOrders.sort((a, b) => a.id - b.id);
+        filtered.sort((a, b) => a.id - b.id);
         break;
       case 'newest-oldest':
         // Sort by order creation date (newest first)
-        filteredOrders.sort((a, b) => b.id - a.id);
+        filtered.sort((a, b) => b.id - a.id);
         break;
       case 'status-pending':
-        filteredOrders = filteredOrders.filter(order => order.status === 'Pending');
+        filtered = filtered.filter(order => order.status === 'Pending');
         break;
       case 'status-ready':
-        filteredOrders = filteredOrders.filter(order => order.status === 'Ready to Check');
+        filtered = filtered.filter(order => order.status === 'Ready to Check');
         break;
       case 'status-completed':
-        filteredOrders = filteredOrders.filter(order => order.status === 'Completed');
+        filtered = filtered.filter(order => order.status === 'Completed');
         break;
       default:
         // No filter applied
         break;
     }
     
-    return filteredOrders;
-  };
-
-  // Pagination calculations
-  const filteredOrders = getFilteredOrders();
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+    // Pagination calculations
+    const total = Math.ceil(filtered.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const current = filtered.slice(start, end);
+    
+    return { filteredOrders: filtered, totalPages: total, currentOrders: current };
+  }, [orders, searchQuery, filterOption, currentPage, itemsPerPage]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
   };
 
+  if (loading) {
+    return (
+      <div className="page-wrap">
+        <div className="orders-content" style={{ marginTop: 8 }}>
+          <p>Loading orders...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-wrap">
+        <div className="orders-content" style={{ marginTop: 8 }}>
+          <p>Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-wrap">
-      <div className="page-title">
-        <h1>ORDERS</h1>
-      </div>
-      <div className="orders-content">
-          <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px 24px 8px 24px', margin: '0 8px' }}>
+      <div className="orders-content" style={{ marginTop: 8 }}>
+          <div
+            className="feedback-card-container"
+            style={{
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+              marginBottom: 10,
+              overflow: 'hidden',
+              padding: '24px 24px 8px 24px',
+              margin: '0 8px 10px 8px'
+            }}
+          >
             {/* Search and Filter Section */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
               {/* Search Bar */}
@@ -1063,121 +1163,190 @@ const Orders = () => {
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
+            <div className={`table-scroll-container ${!loading && !error && filteredOrders.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#e8f4fd' }}>
-                 <th style={{ width: '5%' }}>Order #</th>
-                 <th style={{ width: '15%' }}>Name</th>
-                 <th style={{ width: '18%' }}>Services</th>
-                 <th style={{ width: '15%' }}>Deadline</th>
-                 <th style={{ width: '15%' }}>Status</th>
-                 <th style={{ width: '5%' }}>Attended</th>
-                 <th style={{ width: '17%' }}>Next Appoint.</th>
-                 <th style={{ width: '10%' }}>Layout/Notes</th>
-                 <th style={{ width: '10%' }}>Actions</th>
+                 <th style={{ width: '10%' }}>Order #</th>
+                 <th style={{ width: '14%' }}>Name</th>
+                 <th style={{ width: '17%' }}>Services</th>
+                 <th style={{ width: '14%' }}>Deadline</th>
+                 <th style={{ width: '14%' }}>Status</th>
+                 <th style={{ width: '2%' }}>Attended</th>
+                 <th style={{ width: '16%' }}>Next Appoint.</th>
+                 <th style={{ width: '9%' }}>Layout/Notes</th>
+                 <th style={{ width: '9%' }}>Actions</th>
                </tr>
               </thead>
               <tbody>
                 {currentOrders.map((order) => (
                   <tr key={order.id}>
-                    <td>{order.id}</td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontWeight: '600', color: '#000' }}>#{order.id}</span>
+                      </div>
+                    </td>
                     <td>{order.appointment?.user?.name || 'N/A'}</td>
                     <td>{order.appointment?.service_type || 'N/A'}</td>
                     <td>
                       {order.appointment?.preferred_due_date ? (
-                        <span>{new Date(order.appointment.preferred_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        <span>{(() => {
+                          // Parse date manually to avoid timezone conversion issues
+                          const dateStr = order.appointment.preferred_due_date;
+                          const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                          if (dateMatch) {
+                            const year = parseInt(dateMatch[1], 10);
+                            const month = parseInt(dateMatch[2], 10) - 1;
+                            const day = parseInt(dateMatch[3], 10);
+                            // Use monthNames array for consistent formatting
+                            const monthName = monthNames[month];
+                            return `${monthName} ${day}, ${year}`;
+                          }
+                          // Fallback
+                          return dateStr;
+                        })()}</span>
                       ) : (
                         <span style={{ color: '#999' }}>N/A</span>
                       )}
                     </td>
                     <td>
                       <div>
-                        <span style={{ color: getStatusColor(order.status), display: 'block' }}>
+                        <span style={{ 
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          borderRadius: 9999,
+                          background: (() => {
+                            const s = order.status;
+                            if (s === 'Pending') return 'rgba(255, 224, 130, 0.5)';
+                            if (s === 'Ready to Check') return 'rgba(255, 171, 145, 0.5)';
+                            if (s === 'Completed') return 'rgba(76, 175, 80, 0.15)';
+                            if (s === 'Finished') return 'rgba(33, 150, 243, 0.15)';
+                            if (s === 'Cancelled') return 'rgba(158, 158, 158, 0.15)';
+                            return 'rgba(0,0,0,0.06)';
+                          })(),
+                          color: getStatusColor(order.status),
+                          fontWeight: 700,
+                          lineHeight: 1
+                        }}>
                           {order.status}
                         </span>
                         {order.status === 'Completed' && order.total_amount && (
-                          <span style={{ fontSize: '12px', color: '#000' }}>
+                          <span style={{ fontSize: '12px', color: '#000', marginLeft: 8 }}>
                             (₱{order.total_amount} total fee)
                           </span>
                         )}
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleToggleHandled(order.id, !order.handled)}
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          border: `2px solid ${order.handled ? '#4caf50' : '#ccc'}`,
-                          borderRadius: '4px',
-                          background: order.handled ? '#4caf50' : 'white',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.2s',
-                          margin: '0 auto'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.1)';
-                          if (!order.handled) {
-                            e.currentTarget.style.borderColor = '#4caf50';
-                            e.currentTarget.style.background = '#e8f5e9';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          if (!order.handled) {
-                            e.currentTarget.style.borderColor = '#ccc';
-                            e.currentTarget.style.background = 'white';
-                          }
-                        }}
-                        title={order.handled ? 'Mark as unhandled' : 'Mark as handled'}
-                      >
-                        {order.handled && (
-                          <FaCheck 
-                            style={{ 
-                              color: 'white',
-                              fontSize: '14px'
-                            }} 
-                          />
-                        )}
-                      </button>
+                      {order.status === 'Cancelled' ? (
+                        <span style={{ color: '#999' }}>N/A</span>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleHandled(order.id, !order.handled)}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            border: `2px solid ${order.handled ? '#4caf50' : '#ccc'}`,
+                            borderRadius: '4px',
+                            background: order.handled ? '#4caf50' : 'white',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s',
+                            margin: '0 auto'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            if (!order.handled) {
+                              e.currentTarget.style.borderColor = '#4caf50';
+                              e.currentTarget.style.background = '#e8f5e9';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            if (!order.handled) {
+                              e.currentTarget.style.borderColor = '#ccc';
+                              e.currentTarget.style.background = 'white';
+                            }
+                          }}
+                          title={order.handled ? 'Mark as unhandled' : 'Mark as handled'}
+                        >
+                          {order.handled && (
+                            <FaCheck 
+                              style={{ 
+                                color: 'white',
+                                fontSize: '14px'
+                              }} 
+                            />
+                          )}
+                        </button>
+                      )}
                     </td>
                     <td>
                       {/* NEXT APPOINT COLUMN */}
-                      {/* For Ready to Check: Show admin-set check appointment, otherwise fall back to original user appointment */}
-                      {order.status === 'Ready to Check' && (() => {
-                        if (order.check_appointment_date && order.check_appointment_time) {
-                          return <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>;
-                        } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
-                          return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
-                        } else {
-                          return <span style={{ color: '#999' }}>No appointment set</span>;
+                      {/* Check if appointment is still pending (Requesting) - don't show reminders if not accepted yet */}
+                      {(() => {
+                        // FIRST CHECK: If appointment is still pending (Requesting), NEVER show appointment date/time
+                        // This must be checked FIRST before any other logic
+                        const appointmentStatus = order.appointment?.status;
+                        const normalizedStatus = appointmentStatus ? String(appointmentStatus).toLowerCase().trim() : '';
+                        
+                        // If appointment status is 'pending' (Requesting), don't show any appointment date
+                        // This means the appointment hasn't been accepted by admin yet
+                        if (normalizedStatus === 'pending') {
+                          return <span style={{ color: '#999' }}>No next appointment for now</span>;
                         }
-                      })()}
-                      {/* For Pending: Show original user-set appointment date and time */}
-                      {order.status === 'Pending' && (
-                        order.appointment?.appointment_date && order.appointment?.appointment_time ? (
-                          <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>
-                        ) : (
-                          <span style={{ color: '#999' }}>No appointment set</span>
-                        )
-                      )}
-                      {/* For Completed: Show admin-set pickup appointment, otherwise fall back to original user appointment */}
-                      {order.status === 'Completed' && (() => {
-                        if (order.pickup_appointment_date && order.pickup_appointment_time) {
-                          return <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>;
-                        } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
-                          return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
-                        } else {
-                          return <span style={{ color: '#999' }}>No appointment set</span>;
+                        
+                        // Only proceed to show appointment dates if appointment is accepted (status is 'accepted' or 'rejected')
+                        // For Ready to Check: Show admin-set check appointment, otherwise fall back to original user appointment
+                        if (order.status === 'Ready to Check') {
+                          if (order.check_appointment_date && order.check_appointment_time) {
+                            return <span>{formatDateAndTime(order.check_appointment_date, order.check_appointment_time)}</span>;
+                          } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                            return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                          } else {
+                            return <span style={{ color: '#999' }}>No next appointment for now</span>;
+                          }
                         }
+                        
+                        // For Pending order status: Only show appointment date if appointment is accepted (not pending)
+                        if (order.status === 'Pending') {
+                          // Double check: even if order status is Pending, don't show if appointment is still pending
+                          if (normalizedStatus === 'pending') {
+                            return <span style={{ color: '#999' }}>No next appointment for now</span>;
+                          }
+                          if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                            return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                          } else {
+                            return <span style={{ color: '#999' }}>No next appointment for now</span>;
+                          }
+                        }
+                        
+                        // For Completed: Show admin-set pickup appointment, otherwise fall back to original user appointment
+                        if (order.status === 'Completed') {
+                          if (order.pickup_appointment_date && order.pickup_appointment_time) {
+                            return <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>;
+                          } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                            return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                          } else {
+                            return <span style={{ color: '#999' }}>No next appointment for now</span>;
+                          }
+                        }
+                        
+                        // For Finished: N/A
+                        if (order.status === 'Finished') {
+                          return <span>N/A</span>;
+                        }
+                        
+                        // For Cancelled: N/A
+                        if (order.status === 'Cancelled') {
+                          return <span style={{ color: '#999' }}>N/A</span>;
+                        }
+                        
+                        // Default fallback
+                        return <span style={{ color: '#999' }}>No next appointment for now</span>;
                       })()}
-                      {/* For Finished: N/A */}
-                      {order.status === 'Finished' && (
-                        <span>N/A</span>
-                      )}
                     </td>
                     <td>
                       <span
@@ -1189,62 +1358,88 @@ const Orders = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ position: 'relative' }}>
+                      {order.status === 'Cancelled' ? (
                         <button
-                          className="update-btn"
-                          onClick={() => toggleUpdateDropdown(order.id)}
+                          onClick={() => handleRefundOrder(order.id)}
                           style={{
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: '#f44336',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             padding: '8px 16px',
                             cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '600',
                             transition: 'background-color 0.3s ease'
                           }}
                           onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = '#1d4ed8';
+                            e.target.style.backgroundColor = '#d32f2f';
                           }}
                           onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = '#3b82f6';
+                            e.target.style.backgroundColor = '#f44336';
                           }}
                         >
-                          Update
+                          Refund
                         </button>
-                        {showUpdateDropdown === order.id && (
-                          <div className="update-dropdown">
-                            <div
-                              className="dropdown-item"
-                              onClick={() => handleUpdateStatus(order.id, 'Pending')}
-                            >
-                              Pending
+                      ) : (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            className="update-btn"
+                            onClick={() => toggleUpdateDropdown(order.id)}
+                            style={{
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '8px 16px',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = '#1d4ed8';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = '#3b82f6';
+                            }}
+                          >
+                            Update
+                          </button>
+                          {showUpdateDropdown === order.id && (
+                            <div className="update-dropdown">
+                              <div
+                                className="dropdown-item"
+                                onClick={() => handleUpdateStatus(order.id, 'Pending')}
+                              >
+                                Pending
+                              </div>
+                              <div
+                                className="dropdown-item"
+                                onClick={() => handleUpdateStatus(order.id, 'Ready to Check')}
+                              >
+                                Ready to check
+                              </div>
+                              <div
+                                className="dropdown-item"
+                                onClick={() => handleUpdateStatus(order.id, 'Completed')}
+                              >
+                                Completed
+                              </div>
+                              <div
+                                className="dropdown-item"
+                                onClick={() => handleUpdateStatus(order.id, 'Finished')}
+                              >
+                                Finished
+                              </div>
                             </div>
-                            <div
-                              className="dropdown-item"
-                              onClick={() => handleUpdateStatus(order.id, 'Ready to Check')}
-                            >
-                              Ready to check
-                            </div>
-                            <div
-                              className="dropdown-item"
-                              onClick={() => handleUpdateStatus(order.id, 'Completed')}
-                            >
-                              Completed
-                            </div>
-                            <div
-                              className="dropdown-item"
-                              onClick={() => handleUpdateStatus(order.id, 'Finished')}
-                            >
-                              Finished
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
             )}
           </div>
 
@@ -1277,6 +1472,9 @@ const Orders = () => {
                 >
                   Next
                 </button>
+                <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
+                  Showing {currentOrders.length} of {filteredOrders.length} results
+                </span>
               </div>
             </div>
           )}
@@ -1307,7 +1505,7 @@ const Orders = () => {
                     }, 200);
                   }}
                 />
-                <h2 className="dashboard-modal-title">Order Details</h2>
+                <h2 className="dashboard-modal-title" style={{ marginTop: 0, paddingTop: 0 }}>Order Details</h2>
                 <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
                   <div className="details-left">
                     <div className="detail-group">
@@ -1466,7 +1664,18 @@ const Orders = () => {
                   <div className="details-right">
                     <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? (() => {
+                        const dateStr = selectedOrder.appointment.preferred_due_date;
+                        const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        if (dateMatch) {
+                          const year = parseInt(dateMatch[1], 10);
+                          const month = parseInt(dateMatch[2], 10) - 1;
+                          const day = parseInt(dateMatch[3], 10);
+                          const date = new Date(year, month, day);
+                          return date.toLocaleDateString();
+                        }
+                        return dateStr;
+                      })() : 'N/A'}</div>
                     </div>
                     {selectedOrder.status === 'Completed' && selectedOrder.completed_at && (
                       <div className="detail-group">
@@ -1476,8 +1685,26 @@ const Orders = () => {
                     )}
                     <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
-                      <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>
-                        {selectedOrder.status}
+                      <div className="detail-value">
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          borderRadius: 9999,
+                          background: (() => {
+                            const s = selectedOrder.status;
+                            if (s === 'Pending') return 'rgba(255, 224, 130, 0.5)';
+                            if (s === 'Ready to Check') return 'rgba(255, 171, 145, 0.5)';
+                            if (s === 'Completed') return 'rgba(76, 175, 80, 0.15)';
+                            if (s === 'Finished') return 'rgba(33, 150, 243, 0.15)';
+                            if (s === 'Cancelled') return 'rgba(158, 158, 158, 0.15)';
+                            return 'rgba(0,0,0,0.06)';
+                          })(),
+                          color: getStatusColor(selectedOrder.status),
+                          fontWeight: 700,
+                          lineHeight: 1
+                        }}>
+                          {selectedOrder.status}
+                        </span>
                       </div>
                     </div>
                     <div className="detail-group">
@@ -1486,7 +1713,18 @@ const Orders = () => {
                     </div>
                     <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Appointment Date Accepted</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? new Date(selectedOrder.appointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
+                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.appointment_date ? (() => {
+                        const dateStr = selectedOrder.appointment.appointment_date;
+                        const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        if (dateMatch) {
+                          const year = parseInt(dateMatch[1], 10);
+                          const month = parseInt(dateMatch[2], 10) - 1;
+                          const day = parseInt(dateMatch[3], 10);
+                          const date = new Date(year, month, day);
+                          return date.toLocaleDateString();
+                        }
+                        return dateStr;
+                      })() : 'N/A'}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '4px' }}>
                       <div>
@@ -1507,6 +1745,26 @@ const Orders = () => {
                           />
                         ) : (
                           <p style={{ marginBottom: '0' }}>No design image available</p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="image-label" style={{ fontWeight: 600 }}>GCash Proof</div>
+                        {selectedOrder.appointment?.gcash_proof ? (
+                          <img 
+                            src={selectedOrder.appointment.gcash_proof} 
+                            alt="GCash Proof" 
+                            className="dashboard-modal-image"
+                            onClick={() => handleImageClick(
+                              selectedOrder.appointment.gcash_proof,
+                              'GCash Proof'
+                            )}
+                            onError={(e) => {
+                              console.error('Failed to load GCash proof image:', e.target.src);
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <p style={{ marginBottom: '0' }}>No GCash proof available</p>
                         )}
                       </div>
                     </div>
@@ -1696,7 +1954,18 @@ const Orders = () => {
                       <div style={{ width: '100%', padding: '12px', background: '#f0f9ff', border: '1px solid #3b82f6', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
                         <div style={{ fontSize: 14, color: '#1e40af', fontWeight: 600, marginBottom: 4 }}>Selected Pickup Date & Time:</div>
                         <div style={{ fontSize: 16, color: '#1e3a8a', fontWeight: 700 }}>
-                          {new Date(order.pickup_appointment_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeToAMPM(order.pickup_appointment_time)}
+                          {(() => {
+                            const dateStr = order.pickup_appointment_date;
+                            const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                            if (dateMatch) {
+                              const year = parseInt(dateMatch[1], 10);
+                              const month = parseInt(dateMatch[2], 10) - 1;
+                              const day = parseInt(dateMatch[3], 10);
+                              const date = new Date(year, month, day);
+                              return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                            }
+                            return dateStr;
+                          })()} at {formatTimeToAMPM(order.pickup_appointment_time)}
                         </div>
                       </div>
                     );
@@ -1771,6 +2040,83 @@ const Orders = () => {
                   style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Refund Modal */}
+          {showRefundModal && (
+            <div className="dashboard-modal-bg animate-fade" onClick={() => {
+              setShowRefundModal(false);
+              setRefundImageFile(null);
+              setRefundImagePreview(null);
+            }}>
+              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+                <AiOutlineClose
+                  className="dashboard-modal-exit-icon"
+                  onClick={() => {
+                    setShowRefundModal(false);
+                    setRefundImageFile(null);
+                    setRefundImagePreview(null);
+                  }}
+                  style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
+                />
+                <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Process Refund</h3>
+                <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
+                  Please upload a GCash refund image to process the refund for this cancelled order.
+                </p>
+                
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
+                    GCash Refund Image *
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleRefundImageFileChange}
+                    style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                  />
+                  {refundImagePreview && (
+                    <div style={{ marginTop: 12 }}>
+                      <img
+                        src={refundImagePreview}
+                        alt="Refund preview"
+                        style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                        onClick={() => handleImageClick(refundImagePreview, 'Refund Preview')}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                    onClick={() => {
+                      setShowRefundModal(false);
+                      setRefundImageFile(null);
+                      setRefundImagePreview(null);
+                    }}
+                    disabled={refunding}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="modal-button"
+                    style={{ flex: 1, fontSize: 16, background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: refunding || !refundImageFile ? 'not-allowed' : 'pointer', opacity: refunding || !refundImageFile ? 0.6 : 1 }}
+                    onClick={handleProcessRefund}
+                    disabled={refunding || !refundImageFile}
+                  >
+                    {refunding ? 'Processing...' : 'Process Refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Refund Success Popup */}
+          {refundSuccess && (
+            <div className="popup-success">
+              <h3 style={{ color: '#4caf50' }}>Refund Processed Successfully!</h3>
             </div>
           )}
         </div>

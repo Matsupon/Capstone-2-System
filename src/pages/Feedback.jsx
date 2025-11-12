@@ -57,23 +57,49 @@ export default function FeedbackPage() {
   const [animateStats, setAnimateStats] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
   const [displayAvg, setDisplayAvg] = useState(0);
+  const [barWidths, setBarWidths] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const storageBase = useStorageBase();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const load = async () => {
-    try {
+  useEffect(() => {
+    // Create abort controller for request cancellation
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    
+    // Optimistic UI - only show loading if request takes longer than 150ms
+    const showLoadingTimeout = setTimeout(() => {
       setLoading(true);
-      const res = await api.get('/feedback');
-      if (res.data?.success) setItems(res.data.data || []);
-    } catch (e) {
-      setError(e?.response?.data?.message || 'Failed to load feedback');
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 150);
+    
+    const load = async () => {
+      try {
+        const res = await api.get('/feedback', { signal });
+        if (signal.aborted) return;
+        
+        clearTimeout(showLoadingTimeout);
+        if (res.data?.success) {
+          setItems(res.data.data || []);
+          setError(null);
+        } else {
+          setError('Failed to load feedback');
+        }
+        setLoading(false);
+      } catch (e) {
+        if (signal.aborted || e.name === 'CanceledError' || e.name === 'AbortError') return;
+        clearTimeout(showLoadingTimeout);
+        setError(e?.response?.data?.message || 'Failed to load feedback');
+        setLoading(false);
+      }
+    };
 
-  useEffect(() => { load(); }, []);
+    load();
+    
+    return () => {
+      clearTimeout(showLoadingTimeout);
+      abortController.abort();
+    };
+  }, []);
 
   // Remove page-level scrolling for this page to enable container scrolling
   useEffect(() => {
@@ -94,23 +120,50 @@ export default function FeedbackPage() {
   }, [items]);
 
   useEffect(() => {
-    if (!loading && !error) {
+    if (!loading && !error && stats.total > 0) {
       setAnimateStats(false);
       setDisplayTotal(0);
       setDisplayAvg(0);
+      setBarWidths({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+      
+      // Calculate target bar widths immediately
+      const targetWidths = {};
+      [5,4,3,2,1].forEach((s) => {
+        const pct = stats.total ? Math.round((stats.dist[s] / stats.total) * 100) : 0;
+        targetWidths[s] = pct;
+      });
+      
       const start = performance.now();
       const dur = 1000;
       const totalTarget = stats.total;
       const avgTarget = Number(stats.avg.toFixed(1));
+      
       const tick = (t) => {
         const p = Math.min(1, (t - start) / dur);
         setDisplayTotal(Math.round(totalTarget * p));
         setDisplayAvg(Number((avgTarget * p).toFixed(1)));
-        if (p < 1) requestAnimationFrame(tick); else setAnimateStats(true);
+        
+        // Animate bar widths in parallel with numbers
+        const animatedWidths = {};
+        [5,4,3,2,1].forEach((s) => {
+          animatedWidths[s] = targetWidths[s] * p;
+        });
+        setBarWidths(animatedWidths);
+        
+        if (p < 1) {
+          requestAnimationFrame(tick);
+        } else {
+          setAnimateStats(true);
+        }
       };
       requestAnimationFrame(tick);
+    } else if (!loading && !error && stats.total === 0) {
+      // Reset when no data
+      setDisplayTotal(0);
+      setDisplayAvg(0);
+      setBarWidths({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     }
-  }, [loading, error, stats.total, stats.avg]);
+  }, [loading, error, stats.total, stats.avg, stats.dist]);
 
   const handleSubmit = async (id) => {
     const payload = {};
@@ -166,11 +219,14 @@ export default function FeedbackPage() {
     }
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(items.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = items.slice(startIndex, endIndex);
+  // Pagination calculations - memoized for performance
+  const { totalPages, currentItems } = useMemo(() => {
+    const total = Math.ceil(items.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const current = items.slice(start, end);
+    return { totalPages: total, currentItems: current };
+  }, [items, currentPage, itemsPerPage]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -189,8 +245,7 @@ export default function FeedbackPage() {
   if (loading) {
     return (
       <div className="page-wrap">
-        <div className="page-title"><h1>FEEDBACK</h1></div>
-        <div className="feedback-outer">
+        <div className="feedback-outer" style={{ marginTop: 8 }}>
           <div className="feedback-card-container">Loading...</div>
         </div>
       </div>
@@ -200,8 +255,7 @@ export default function FeedbackPage() {
   if (error) {
     return (
       <div className="page-wrap">
-        <div className="page-title"><h1>FEEDBACK</h1></div>
-        <div className="feedback-outer">
+        <div className="feedback-outer" style={{ marginTop: 8 }}>
           <div className="feedback-card-container" style={{ color: '#c62828' }}>{error}</div>
         </div>
       </div>
@@ -210,29 +264,27 @@ export default function FeedbackPage() {
 
   return (
     <div className="page-wrap feedback-page-wrapper">
-      <div className="page-title"><h1>FEEDBACK</h1></div>
-      <div className="feedback-outer">
+      <div className="feedback-outer" style={{ marginTop: 8 }}>
           <div className="feedback-stats">
             <div className="stat-block">
               <div className="stat-title">Total Reviews</div>
               <div className="stat-number">{displayTotal}</div>
-              <div className="stat-sub">Growth in reviews this year</div>
             </div>
             <div className="stat-sep" />
             <div className="stat-block">
               <div className="stat-title">Average Rating</div>
               <div className="stat-number">{displayAvg.toFixed(1)}</div>
               <StarRating value={Math.round(stats.avg)} />
-              <div className="stat-sub">Average rating this year</div>
             </div>
             <div className="stat-sep" />
             <div className="stat-block dist-block">
               {[5,4,3,2,1].map((s) => {
-                const pct = stats.total ? Math.round((stats.dist[s] / stats.total) * 100) : 0;
                 return (
                   <div key={s} className="dist-row">
                     <span className="dist-label">{s}</span>
-                    <div className={`dist-bar ${animateStats ? 'animate' : ''} star-${s}`} style={{ width: animateStats ? `${pct}%` : 0 }} />
+                    <div className="dist-bar-container">
+                    <div className={`dist-bar ${animateStats ? 'animate' : ''} star-${s}`} style={{ width: `${barWidths[s]}%` }} />
+                    </div>
                     <span className="dist-value">{stats.dist[s]}</span>
                   </div>
                 );
@@ -240,11 +292,11 @@ export default function FeedbackPage() {
             </div>
           </div>
           {/* container is now relative so popup can center inside it */}
-          <div className="feedback-card-container feedback-card-relative">
+          <div className="feedback-card-container feedback-card-relative" style={{ borderBottomLeftRadius: 16, borderBottomRightRadius: 16, marginBottom: 10, overflow: 'hidden' }}>
             {items.length === 0 ? (
               <p className="feedback-empty">No feedback yet.</p>
             ) : (
-              <div className="feedback-list">
+              <div className="feedback-list" style={{ maxHeight: 520, overflowY: 'scroll' }}>
                 {currentItems.map((fb) => {
                   const user = fb?.order?.appointment?.user;
                   const appt = fb?.order?.appointment;
@@ -382,6 +434,9 @@ export default function FeedbackPage() {
                 >
                   Next
                 </button>
+                <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
+                  Showing {currentItems.length} of {items.length} results
+                </span>
               </div>
             </div>
           )}

@@ -17,20 +17,21 @@
 }
 
 .header {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--glass-border);
+  margin-top: 10px;
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
   padding: 0 clamp(10px, 2vw, 20px);
   height: clamp(50px, 8vh, 60px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: var(--shadow-glow);
+  box-shadow: none;
   position: fixed;
   top: 0;
-  left: 0;
+  left: clamp(-2px, 1vw, -1px); /* Start after sidebar */
   right: 0;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .header-content {
@@ -43,6 +44,28 @@
 .header-left {
   display: flex;
   align-items: center;
+  margin-left: clamp(245px, 16.5vw, 245px); /* Push title to the right to avoid sidebar overlap */
+}
+
+.header-title {
+  margin: 0;
+  font-size: 202px !important; /* Fixed smaller size (half of original), independent of other elements */
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #000000 !important; /* Pure black, independent color - not following other colors - using !important to override Welcome.css */
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  align-items: center;
+}
+
+/* More specific selector to override Welcome.css .header h1 and App.css h1 */
+.header .header-title,
+.header-left .header-title,
+.header h1.header-title {
+  color: #000000 !important;
+  font-size: 30px !important;
+  font-weight: 550 !important;
+  font-family: 'Poppins', sans-serif !important;
 }
 
 .header-right {
@@ -70,6 +93,19 @@
   transition: all 0.3s ease;
   border: 2px solid var(--glass-border);
   box-shadow: var(--shadow-glow);
+  outline: none;
+}
+
+.profile-picture:focus,
+.profile-picture:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+}
+
+.notification-bell-button:focus,
+.notification-bell-button:focus-visible {
+  outline: none;
+  box-shadow: 0 4px 12px rgba(59,130,246,0.08);
 }
 
 .profile-picture:hover {
@@ -125,12 +161,16 @@
     margin-left: 0;
     position: fixed;
     top: 0;
-    left: 0;
+    left: 0; /* Full width on mobile */
     right: 0;
-    z-index: 1000;
+    z-index: 1100;
   }
   .main-content {
     padding-top: 50px;
+  }
+  
+  .header-left {
+    margin-left: 0; /* Reset margin on mobile since sidebar is hidden */
   }
   
   .header-right {

@@ -5,6 +5,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Soft pastel blue gradient app background */
+  background: linear-gradient(135deg, #eaf6ff 0%, #e0f2fe 35%, #d6ecff 70%, #cfe9ff 100%);
+  background-attachment: fixed;
 }
 
 code {

@@ -2,7 +2,7 @@ import axios from "axios";
 
 const baseURL =
   process.env.NODE_ENV === "development"
-    ? "http://192.168.137.188:8000/api" 
+    ? "http://192.168.10.87:8000/api" 
     : "/api"; 
 
 const api = axios.create({

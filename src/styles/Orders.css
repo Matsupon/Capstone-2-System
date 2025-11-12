@@ -89,51 +89,61 @@
 
 @media (max-width: 768px) {
   .orders-calendar-modal-bg,
-  .image-modal-bg {
+  .image-modal-bg,
+  .dashboard-modal-bg {
     left: 0;
     width: 100%;
   }
 }
 
-/* Dashboard modal styles (duplicated here so Orders pages have same design) */
+/* Dashboard modal styles (matching Customers modal) */
 .dashboard-modal-bg {
   position: fixed;
   top: 0;
   /* exclude the sidebar from being covered */
   left: clamp(200px, 20vw, 250px);
   width: calc(100% - clamp(200px, 20vw, 250px));
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  height: 100vh;
+  background: rgba(128, 128, 128, 0.5);
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 2000;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10000;
 }
 .dashboard-modal-panel {
   background: white;
   border-radius: 10px;
-  padding: 32px 28px 24px 28px;
-  max-width: 620px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.13);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  padding: 20px 28px 24px 28px; /* Reduced top padding to align title with X icon */
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   position: relative;
-  scrollbar-gutter: stable both-edges;
+  text-align: left;
+  max-height: 90vh;
+  overflow-y: auto;
+  /* Center within overlay (overlay already excludes sidebar) */
+  transform: none;
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+.dashboard-modal-panel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 .dashboard-modal-title {
-  margin-bottom: 18px;
-  color: #1a3c6c;
-  font-size: 22px;
-  font-weight: 700;
   text-align: center;
+  margin-bottom: 18px;
+  margin-top: 0;
+  padding-top: 0;
+  color: #000;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px; /* Match X icon height alignment */
 }
 .dashboard-modal-exit-icon {
   position: absolute;
-  top: 15px;
+  top: 20px; /* Aligned with padding-top */
   right: 20px;
   font-size: 1.5rem;
   color: #444;
@@ -141,7 +151,9 @@
   z-index: 10;
   transition: transform 0.2s ease;
 }
-.dashboard-modal-exit-icon:hover { transform: scale(1.2); }
+.dashboard-modal-exit-icon:hover {
+  transform: scale(1.2);
+}
 .dashboard-modal-image { width: 100%; max-width: 200px; height: 120px; border-radius: 4px; background: #f0f0f0; object-fit: cover; cursor: pointer; }
 
 /* Animations */
@@ -294,7 +306,17 @@
 .orders-set-date-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 /* Update dropdown styles used on Orders list */
-.update-dropdown { position: absolute; right: 0; top: 110%; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); overflow: hidden; z-index: 20; }
+.update-dropdown { 
+  position: absolute !important; 
+  right: 0 !important; 
+  top: 110% !important; 
+  background: #fff !important; 
+  border: 1px solid #e5e7eb !important; 
+  border-radius: 8px !important; 
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important; 
+  overflow: visible !important; 
+  z-index: 10000 !important; /* Very high z-index to appear above container */
+}
 .dropdown-item { padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .dropdown-item:hover { background: #f3f4f6; }
 
@@ -302,10 +324,63 @@
 .orders-content {
   padding: 8px 8px;
   max-width: 100%;
-  margin: 0;
-  height: calc(100vh - 120px);
-  overflow-y: auto;
-  padding-bottom: 80px; /* Space for pagination panel */
+  margin: 0 0 20px 0; /* Bottom margin to prevent content from reaching bottom */
+  height: calc(100vh - 80px) !important; /* Extended to just above pagination (header ~60px + margin ~20px) */
+  min-height: calc(100vh - 80px) !important; /* Force minimum height */
+  overflow: hidden !important; /* Prevent page scrolling - only table containers scroll */
+  padding-bottom: 20px; /* Reduced space for pagination panel */
+}
+
+/* FORCE THE ENTIRE CONTAINER TO BE TALLER - OVERRIDE EVERYTHING */
+.feedback-card-container {
+  min-height: calc(100vh - 120px) !important;
+  max-height: calc(100vh - 120px) !important;
+  height: calc(100vh - 120px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  overflow: visible !important;
+}
+
+/* Ensure dropdown can overflow the table container */
+.table-scroll-container {
+  position: relative;
+}
+
+/* Make sure table cells and rows allow dropdown to overflow */
+.orders-content td {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.orders-content tr {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+/* Make sure the update button container allows dropdown to overflow */
+div[style*="position: relative"] {
+  overflow: visible !important;
+  z-index: 10001 !important;
+}
+
+.update-btn {
+  position: relative !important;
+  z-index: 10001 !important; /* Higher than table container */
+}
+
+/* Ensure dropdown appears above everything and can overflow container */
+.update-dropdown { 
+  position: absolute !important; 
+  right: 0 !important; 
+  top: calc(100% + 4px) !important; 
+  background: #fff !important; 
+  border: 1px solid #e5e7eb !important; 
+  border-radius: 8px !important; 
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important; 
+  overflow: visible !important; 
+  z-index: 10000 !important; /* Very high z-index to appear above container */
+  white-space: nowrap !important;
 }
 
 /* Orders Table Styling */
@@ -360,30 +435,32 @@
 /* Pagination Panel Styles */
 .pagination-panel {
   position: fixed;
-  bottom: 0;
+  bottom: 8px;
   left: clamp(200px, 20vw, 250px);
-  right: 0;
-  background: white;
-  border-top: 2px solid #e5e7eb;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  right: 8px;
+  background: transparent;
   z-index: 100;
-  padding: 16px 24px;
+  padding: 0 8px;
 }
 
 .pagination-controls {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  max-width: calc(100vw - clamp(200px, 20vw, 250px) - 16px); /* Match content area width */
+  gap: 6px;
   margin: 0 auto;
-  width: 100%;
+  width: fit-content;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
 }
 
 .pagination-btn {
-  padding: 8px 14px;
+  padding: 8px 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 9999px;
   background: white;
   cursor: pointer;
   font-size: 14px;
@@ -393,7 +470,7 @@
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: #eef2ff;
   border-color: #d1d5db;
   transform: translateY(-1px);
 }
@@ -405,21 +482,74 @@
 }
 
 .pagination-btn.active {
-  background: #3b82f6;
+  background: #4f46e5;
   color: white;
-  border-color: #3b82f6;
+  border-color: #4f46e5;
   font-weight: 600;
 }
 
 .pagination-btn.active:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.pagination-meta { white-space: nowrap; }
+
+/* Table scrollbar styles - only visible when pagination is shown */
+.table-scroll-container {
+  max-height: none !important; /* Remove max-height constraint */
+  min-height: calc(100vh - 250px) !important; /* Force minimum height to be tall */
+  height: auto !important; /* Let it grow to fill parent */
+  flex: 1 1 auto !important; /* Fill available space in flex container */
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-radius: 0 0 16px 16px; /* Rounded bottom corners */
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.table-scroll-container.with-pagination {
+  max-height: none !important; /* Remove max-height constraint */
+  min-height: calc(100vh - 250px) !important; /* Force minimum height */
+  height: auto !important; /* Let it grow to fill parent */
+  flex: 1 1 auto !important; /* Fill available space in flex container */
+  overflow-y: scroll !important;
+  overflow-x: visible !important; /* Allow horizontal overflow for dropdown */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1);
+  padding-bottom: 20px; /* Extra padding at bottom so last row isn't covered */
+  position: relative !important; /* Create positioning context */
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.table-scroll-container.with-pagination::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.7);
 }
 
 @media (max-width: 768px) {
   .pagination-panel {
-    left: 0;
-    padding: 12px 16px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    padding: 0;
   }
   
   .pagination-btn {

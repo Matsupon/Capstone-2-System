@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { FaUser, FaBell } from 'react-icons/fa';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AiOutlineClose } from 'react-icons/ai';
 import api from '../api';
 import '../styles/Header.css';
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [unviewedCount, setUnviewedCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -18,6 +19,20 @@ const Header = () => {
   const adminToken = localStorage.getItem('adminToken');
 
   useEffect(() => {
+    // Preload admin profile as soon as app starts
+    const preloadProfile = async () => {
+      if (!adminToken) return;
+      try {
+        const res = await api.get('/admin/profile');
+        if (res?.data?.admin) {
+          localStorage.setItem('adminData', JSON.stringify(res.data.admin));
+        }
+      } catch (_) {
+        // silently ignore
+      }
+    };
+    preloadProfile();
+
     if (!adminToken) {
       navigate('/login');
       return;
@@ -67,10 +82,27 @@ const Header = () => {
     return null;
   }
 
+  // Sync title with sidebar title items
+  const titleItems = [
+    { path: '/dashboard', name: 'Dashboard' },
+    { path: '/appointments', name: 'Appointments' },
+    { path: '/orders', name: 'Orders' },
+    { path: '/orders-history', name: 'Order History' },
+    { path: '/customers', name: 'Customers' },
+    { path: '/feedback', name: 'Feedback' },
+    { path: '/profile', name: 'Profile' },
+  ];
+  
+  const activeTitleItem = titleItems.find(item => location.pathname === item.path);
+  const currentTitle = activeTitleItem ? activeTitleItem.name.toUpperCase() : 'ADMIN';
+
   return (
     <header className="header">
       <div className="header-content">
         <div className="header-left">
+          <h1 className="header-title">
+            {currentTitle}
+          </h1>
         </div>
         <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ position: 'relative' }}>
@@ -83,18 +115,23 @@ const Header = () => {
               }}
               className="notification-bell-button"
               style={{
-                background: 'none',
-                border: 'none',
+                background: '#ffffff',
+                border: '1px solid rgba(59,130,246,0.2)',
                 cursor: 'pointer',
                 position: 'relative',
-                padding: '8px',
+                padding: 10,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'transform 0.3s ease',
+                borderRadius: '9999px',
+                boxShadow: '0 4px 12px rgba(59,130,246,0.08)',
+                outline: 'none'
               }}
+              onFocus={(e) => e.target.style.outline = 'none'}
+              onBlur={(e) => e.target.style.outline = 'none'}
             >
-              <FaBell size={20} color="#4682B4" />
+              <FaBell size={18} color="#3b82f6" />
               {unviewedCount > 0 && (
                 <span style={{
                   position: 'absolute',
@@ -120,7 +157,8 @@ const Header = () => {
               <div style={{
                 position: 'absolute',
                 top: '100%',
-                right: 0,
+                right: '50%',
+                transform: 'translateX(50%)',
                 marginTop: '8px',
                 background: 'white',
                 borderRadius: '8px',
@@ -129,7 +167,7 @@ const Header = () => {
                 maxWidth: '400px',
                 maxHeight: showAllNotifications ? '320px' : 'auto',
                 overflowY: showAllNotifications ? 'auto' : 'visible',
-                zIndex: 1000,
+                zIndex: 1100,
               }}>
                 {adminNotifications.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#687076' }}>
@@ -187,65 +225,117 @@ const Header = () => {
             )}
           </div>
           
-          <Link to="/profile" className="profile-link">
-            <div className="profile-picture">
+          <Link to="/profile" className="profile-link" style={{ outline: 'none' }}>
+          <div className="profile-picture" style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', border: '1px solid #e5e7eb', outline: 'none' }}>
+            {adminData?.profile_image_url ? (
+              <img src={adminData.profile_image_url} alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
               <FaUser />
-            </div>
+            )}
+          </div>
           </Link>
-          <span className="user-role">{adminData.fullname || 'Administrator'}</span>
+          <span className="user-role" style={{
+            background: '#ffffff',
+            border: '1px solid rgba(59,130,246,0.2)',
+            padding: '6px 10px',
+            borderRadius: 9999,
+            boxShadow: '0 4px 12px rgba(59,130,246,0.08)'
+          }}>{adminData.fullname || 'Administrator'}</span>
         </div>
       </div>
 
       {/* Notification Detail Modal */}
       {showNotificationModal && selectedNotification && (
         <div
+          className="dashboard-modal-bg animate-fade"
+          onClick={() => setShowNotificationModal(false)}
           style={{
             position: 'fixed',
             top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.7)',
+            left: 'clamp(200px, 20vw, 250px)',
+            width: 'calc(100% - clamp(200px, 20vw, 250px))',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999,
-            width: '100vw',
-            height: '100vh',
+            padding: '20px',
+            zIndex: 10000,
           }}
-          onClick={() => setShowNotificationModal(false)}
         >
           <div
+            className="dashboard-modal-panel animate-pop"
+            onClick={(e) => e.stopPropagation()}
             style={{
               background: 'white',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '500px',
-              width: '90%',
+              borderRadius: '16px',
+              padding: '32px',
+              width: '100%',
+              maxWidth: '600px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
               position: 'relative',
+              textAlign: 'left',
+              maxHeight: '85vh',
+              overflowY: 'auto',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <button
+            <AiOutlineClose
+              className="dashboard-modal-exit-icon"
               onClick={() => setShowNotificationModal(false)}
               style={{
                 position: 'absolute',
-                top: '12px',
-                right: '12px',
-                background: 'none',
-                border: 'none',
+                top: '20px',
+                right: '20px',
                 cursor: 'pointer',
-                fontSize: '20px',
+                fontSize: '24px',
+                color: '#666',
+                transition: 'color 0.2s ease',
+                zIndex: 1,
               }}
-            >
-              <AiOutlineClose />
-            </button>
-            <h2 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 'bold' }}>
-              {selectedNotification.title}
-            </h2>
-            <p style={{ color: '#687076', lineHeight: '1.6' }}>
-              {selectedNotification.body || 'No additional information.'}
-            </p>
+              onMouseEnter={(e) => e.target.style.color = '#000'}
+              onMouseLeave={(e) => e.target.style.color = '#666'}
+            />
+            <div style={{ paddingRight: '40px' }}>
+              <h2 style={{ 
+                marginBottom: '20px', 
+                fontSize: '24px', 
+                fontWeight: '700',
+                color: '#0f172a',
+                lineHeight: '1.3',
+                paddingTop: '4px',
+              }}>
+                {selectedNotification.title}
+              </h2>
+              <div style={{ 
+                marginBottom: '16px',
+                paddingBottom: '12px',
+                borderBottom: '1px solid #e5e7eb',
+              }}>
+                <span style={{ 
+                  fontSize: '13px', 
+                  color: '#687076',
+                  fontWeight: '500',
+                }}>
+                  {new Date(selectedNotification.created_at).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              <p style={{ 
+                color: '#334155', 
+                lineHeight: '1.7',
+                fontSize: '15px',
+                marginTop: '16px',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+              }}>
+                {selectedNotification.body || 'No additional information.'}
+              </p>
+            </div>
           </div>
         </div>
       )}

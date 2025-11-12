@@ -199,6 +199,8 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
       return 'You have successfully updated your Order Details!';
     } else if (notification.type === 'order_cancelled') {
       return 'You have successfully cancelled an order!';
+    } else if (notification.type === 'refund_processed') {
+      return 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.';
     }
     return notification.title || 'Notification';
   };
@@ -230,6 +232,8 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
       return 'Your order details have been successfully updated.';
     } else if (notification.type === 'order_cancelled') {
       return notification.body || '';
+    } else if (notification.type === 'refund_processed') {
+      return 'Your refund has been processed. Please check the refund proof image.';
     }
     return notification.body || '';
   };
@@ -286,7 +290,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
                   <Text style={styles.notificationDate}>{formatMonthDay(notification.created_at)}</Text>
                   <View style={styles.notificationContent}>
                     <Text style={styles.notificationTitle}>{getNotificationTitle(notification)}</Text>
-                    {notification.type === 'appointment_booked' ? (
+                    {notification.type === 'appointment_booked' || notification.type === 'refund_processed' ? (
                       <View>
                         <Text style={styles.notificationBody}>{getNotificationBody(notification)}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -326,18 +330,40 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Appointment Details</Text>
+              <Text style={styles.modalTitle}>
+                {selectedNotification?.type === 'refund_processed' ? 'Refund Details' : 'Appointment Details'}
+              </Text>
               <TouchableOpacity onPress={() => setDetailsModalVisible(false)}>
                 <MaterialIcons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
-            {selectedNotification && selectedNotification.type === 'appointment_booked' && (
-              <View>
-                <Text style={styles.modalBody}>
-                  {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.'}
-                </Text>
-              </View>
-            )}
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
+              {selectedNotification && selectedNotification.type === 'appointment_booked' && (
+                <View>
+                  <Text style={styles.modalBody}>
+                    {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.'}
+                  </Text>
+                </View>
+              )}
+              {selectedNotification && selectedNotification.type === 'refund_processed' && (
+                <View>
+                  <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600', marginBottom: 12 }]}>
+                    {selectedNotification.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.'}
+                  </Text>
+                  {selectedNotification.data?.refund_image && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.modalBody, { fontSize: 14, color: '#666', marginBottom: 8 }]}>
+                        GCash Refund Proof:
+                      </Text>
+                      <Image
+                        source={{ uri: selectedNotification.data.refund_image }}
+                        style={{ width: '100%', height: 200, borderRadius: 8, resizeMode: 'contain' }}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -496,6 +522,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    marginLeft: 0, // Account for sidebar if needed
   },
   modalCard: {
     backgroundColor: '#fff',
@@ -508,6 +535,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 10,
+    alignSelf: 'center',
+  },
+  modalScrollView: {
+    maxHeight: 400,
   },
   modalHeader: {
     flexDirection: 'row',

@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import '../styles/Customers.css';
 import '../styles/Orders.css';
+import '../styles/Feedback.css';
 import { AiOutlineClose } from 'react-icons/ai';
+import { FaSearch } from 'react-icons/fa';
 import api from '../api';
 
 const getStatusColor = (status) => {
   switch (status) {
-    case 'Ongoing':
-      return '#cddc39';
     case 'Completed':
       return '#4caf50';
     case 'Finished':
       return '#2196f3';
     case 'Pending':
-      return '#ff9800';
+      return '#FFE082'; // pastel yellow
     case 'Ready to Check':
-      return '#e91e63';
+      return '#FFAB91'; // pastel orange
     case 'No Orders':
       return '#9e9e9e';
     default:
@@ -25,7 +25,8 @@ const getStatusColor = (status) => {
 
 const Customers = () => {
   const [customersData, setCustomersData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false); // Start with false - only show loading if request is slow
   const [error, setError] = useState(null);
   const [profileModal, setProfileModal] = useState({ open: false, customer: null });
   const [expandedOrder, setExpandedOrder] = useState(null);
@@ -35,29 +36,50 @@ const Customers = () => {
   const itemsPerPage = 10;
 
   useEffect(() => {
+    // Create abort controller for request cancellation
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    
+    // Optimistic UI - only show loading if request takes longer than 150ms
+    const showLoadingTimeout = setTimeout(() => {
+      setLoading(true);
+    }, 150);
+
     const fetchCustomers = async () => {
       try {
-        const response = await api.get('/customers');
+        const response = await api.get('/customers', { signal });
+        
+        if (signal.aborted) return;
+        clearTimeout(showLoadingTimeout);
 
         if (response.data.success) {
           // Sort customers from newest to oldest (by ID, assuming higher ID = newer)
           const sortedCustomers = [...response.data.data].sort((a, b) => b.id - a.id);
           setCustomersData(sortedCustomers);
+          setError(null);
+          setLoading(false);
         } else {
           throw new Error(response.data.message || 'Failed to fetch customers');
         }
       } catch (err) {
+        if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
+        clearTimeout(showLoadingTimeout);
         setError(err.response?.data?.message || err.message || 'Failed to fetch customers');
         console.error('Error fetching customers:', err);
-      } finally {
         setLoading(false);
       }
     };
 
     fetchCustomers();
-  }, []);
+    
+    return () => {
+      clearTimeout(showLoadingTimeout);
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
-  const handleViewProfile = async (customer) => {
+  const handleViewProfile = useCallback(async (customer) => {
     try {
       const response = await api.get(`/customers/${customer.id}`);
 
@@ -68,10 +90,11 @@ const Customers = () => {
         throw new Error(response.data.message || 'Failed to fetch customer profile');
       }
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       console.error('Error fetching customer profile:', err);
       alert('Failed to load customer profile');
     }
-  };
+  }, []);
 
   const handleCloseModal = () => {
     setProfileModal({ open: false, customer: null });
@@ -87,11 +110,18 @@ const Customers = () => {
     setShowImageModal(true);
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(customersData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentCustomers = customersData.slice(startIndex, endIndex);
+  // Pagination calculations - memoized for performance
+  const { totalPages, currentCustomers, filteredCount } = useMemo(() => {
+    // Apply search filter by name (case-insensitive)
+    const filtered = customersData.filter((c) =>
+      (c.name || '').toLowerCase().includes(searchQuery.trim().toLowerCase())
+    );
+    const total = Math.ceil(filtered.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const current = filtered.slice(start, end);
+    return { totalPages: total, currentCustomers: current, filteredCount: filtered.length };
+  }, [customersData, currentPage, itemsPerPage, searchQuery]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -110,10 +140,7 @@ const Customers = () => {
   if (loading) {
     return (
       <div className="page-wrap">
-        <div className="page-title">
-          <h1>CUSTOMERS</h1>
-        </div>
-        <div className="customers-table-content">
+        <div className="customers-table-content" style={{ marginTop: 8 }}>
           <div className="customers-table-wrapper">
             <div style={{ textAlign: 'center', padding: '50px' }}>Loading customers...</div>
           </div>
@@ -125,10 +152,7 @@ const Customers = () => {
   if (error) {
     return (
       <div className="page-wrap">
-        <div className="page-title">
-          <h1>CUSTOMERS</h1>
-        </div>
-        <div className="customers-table-content">
+        <div className="customers-table-content" style={{ marginTop: 8 }}>
           <div className="customers-table-wrapper">
             <div style={{ textAlign: 'center', padding: '50px', color: 'red' }}>Error: {error}</div>
           </div>
@@ -139,19 +163,50 @@ const Customers = () => {
 
   return (
     <div className="page-wrap">
-      <div className="page-title">
-        <h1>CUSTOMERS</h1>
-      </div>
-      <div className="customers-table-content">
+      <div className="customers-table-content" style={{ marginTop: 8 }}>
         <div
+          className="feedback-card-container"
           style={{
-            background: 'white',
-            borderRadius: 8,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            borderBottomLeftRadius: 16,
+            borderBottomRightRadius: 16,
+            marginBottom: 10,
+            overflow: 'hidden',
             padding: '24px 24px 8px 24px',
-            margin: '0 8px',
+            margin: '0 8px 10px 8px'
           }}
         >
+          {/* Search Bar moved inside the container above the table */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+              <FaSearch style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#9ca3af',
+                fontSize: 14
+              }} />
+              <input
+                type="text"
+                placeholder="Search customers by name"
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 36px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+            <div />
+          </div>
+          <div className={`table-scroll-container ${customersData.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#e8f4fd' }}>
@@ -176,8 +231,29 @@ const Customers = () => {
                     <td>
                       <span
                         style={{
-                          color: getStatusColor(customer.lastOrderStatus),
-                          fontWeight: 500,
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          borderRadius: 9999,
+                          background: (() => {
+                            const s = (customer.lastOrderStatus || '').toLowerCase();
+                            if (s === 'completed') return 'rgba(76, 175, 80, 0.15)';
+                            if (s === 'finished') return 'rgba(33, 150, 243, 0.15)';
+                            if (s === 'pending') return 'rgba(255, 224, 130, 0.5)';
+                            if (s === 'ready to check') return 'rgba(255, 171, 145, 0.5)';
+                            if (s === 'no orders') return 'rgba(158, 158, 158, 0.15)';
+                            return 'rgba(0,0,0,0.06)';
+                          })(),
+                          color: (() => {
+                            const s = (customer.lastOrderStatus || '').toLowerCase();
+                            if (s === 'pending') return '#7a5f00'; // darker yellow text
+                            if (s === 'ready to check') return '#b23c17'; // darker orange text
+                            if (s === 'completed') return '#2e7d32';
+                            if (s === 'finished') return '#1565c0';
+                            if (s === 'no orders') return '#616161';
+                            return '#333';
+                          })(),
+                          fontWeight: 700,
+                          lineHeight: 1,
                         }}
                       >
                         {customer.lastOrderStatus}
@@ -203,6 +279,7 @@ const Customers = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -235,6 +312,9 @@ const Customers = () => {
             >
               Next
             </button>
+            <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
+              Showing {currentCustomers.length} of {filteredCount} results
+            </span>
           </div>
         </div>
       )}

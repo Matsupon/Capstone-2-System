@@ -5,7 +5,6 @@ import { FaUser, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 // Header and Sidebar are now provided by the persistent layout in App.js
 import api from '../api';
 import '../styles/Dashboard.css';
-import '../styles/Orders.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -120,10 +119,47 @@ const Dashboard = () => {
         const response = await api.get('/orders/today-queue');
         console.log('Today queue response:', response.data);
         if (response.data?.success) {
-          setQueueData(response.data.data);
-          const all = response.data.data?.all_orders || [];
-          // Count all orders (Pending, Ready to Check, Completed)
-          setTodaysAppointmentsCount(all.length);
+          const data = response.data.data;
+          const allOrders = data?.all_orders || [];
+          
+          // Backend already filters to only Pending, Ready to Check, and Completed orders
+          // with today's appointments, so we can use the data directly
+          // But we'll do a safety filter just in case
+          const allowedStatuses = ['Pending', 'Ready to Check', 'Completed'];
+          const filteredOrders = allOrders.filter(order => {
+            const status = order.status;
+            return status && allowedStatuses.includes(status);
+          });
+          
+          // Filter current_customer and next_customer if they have invalid status
+          let currentCustomer = data.current_customer;
+          let nextCustomer = data.next_customer;
+          
+          if (currentCustomer && !allowedStatuses.includes(currentCustomer.status)) {
+            currentCustomer = null;
+          }
+          if (nextCustomer && !allowedStatuses.includes(nextCustomer.status)) {
+            nextCustomer = null;
+          }
+          
+          // Update queueData with filtered data
+          setQueueData({
+            ...data,
+            all_orders: filteredOrders,
+            current_customer: currentCustomer,
+            next_customer: nextCustomer,
+            has_queue: filteredOrders.length > 0
+          });
+          
+          // Count matches the filtered orders count (should match backend count)
+          setTodaysAppointmentsCount(filteredOrders.length);
+          
+          console.log('Queue data updated:', {
+            filteredCount: filteredOrders.length,
+            hasQueue: filteredOrders.length > 0,
+            currentCustomer: currentCustomer?.name,
+            nextCustomer: nextCustomer?.name
+          });
         }
       } catch (err) {
         console.error('Failed to fetch today\'s queue:', err);
@@ -398,11 +434,6 @@ const Dashboard = () => {
   }, [showDetails, selectedAppointment]);
 
   return (
-    <div className="page-wrap">
-      <div className="page-title">
-        <h1>DASHBOARD</h1>
-      </div>
-      
       <div className="dashboard-content">
           <div className="left-panel">
             {/* Quick Stats */}
@@ -511,8 +542,8 @@ const Dashboard = () => {
                   <>
                     {/* Current Customer */}
                     {queueData.current_customer && isUpcomingToday(
-                      undefined,
-                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                      queueData.current_customer?.appointment_date,
+                      queueData.current_customer?.appointment_time
                     ) && (
                       <div className="current-customer">
                         <strong>Upcoming Customer:</strong>{' '}
@@ -521,7 +552,7 @@ const Dashboard = () => {
                         </span>{' '}
                         {queueData.current_customer?.name || 'N/A'}
                         <span className="queue-time">
-                          ({formatTime(queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time)})
+                          ({formatTime(queueData.current_customer?.appointment_time)})
                         </span>
                         {queueData.current_customer?.status && (
                           <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.current_customer.status) }}>
@@ -533,8 +564,8 @@ const Dashboard = () => {
 
                     {/* Next Customer */}
                     {queueData.next_customer && isUpcomingToday(
-                      undefined,
-                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                      queueData.next_customer?.appointment_date,
+                      queueData.next_customer?.appointment_time
                     ) && (
                       <div className="next-customer">
                         <strong>Next Customer:</strong>{' '}
@@ -543,7 +574,7 @@ const Dashboard = () => {
                         </span>{' '}
                         {queueData.next_customer?.name || 'N/A'}
                         <span className="queue-time">
-                          ({formatTime(queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time)})
+                          ({formatTime(queueData.next_customer?.appointment_time)})
                         </span>
                         {queueData.next_customer?.status && (
                           <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.next_customer.status) }}>
@@ -555,12 +586,12 @@ const Dashboard = () => {
 
                     {/* If neither upcoming, show message */}
                     {!(queueData.current_customer && isUpcomingToday(
-                      undefined,
-                      queueData.current_customer?.appointment_time || queueData.current_customer?.appointment?.appointment_time
+                      queueData.current_customer?.appointment_date,
+                      queueData.current_customer?.appointment_time
                     )) &&
                      !(queueData.next_customer && isUpcomingToday(
-                      undefined,
-                      queueData.next_customer?.appointment_time || queueData.next_customer?.appointment?.appointment_time
+                      queueData.next_customer?.appointment_date,
+                      queueData.next_customer?.appointment_time
                     )) && (
                       <div className="no-queue-message">
                         <div className="queue-status">
@@ -796,17 +827,17 @@ const Dashboard = () => {
                         <tbody>
                           {(queueData.all_orders || [])
                             .filter(o => isUpcomingToday(
-                              o.appointment?.appointment_date,
-                              o.appointment_time || o.appointment?.appointment_time
+                              o.appointment_date,
+                              o.appointment_time
                             ))
                             .slice()
                             .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))
                             .map((o, i) => (
                               <tr key={o.id || i}>
                                 <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
-                                <td style={{ padding: '8px' }}>{o.name || o.appointment?.user?.name || 'N/A'}</td>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time || o.appointment?.appointment_time)}</td>
-                                <td style={{ padding: '8px' }}>{o.service_type || o.appointment?.service_type || 'N/A'}</td>
+                                <td style={{ padding: '8px' }}>{o.name || 'N/A'}</td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time)}</td>
+                                <td style={{ padding: '8px' }}>{o.service_type || 'N/A'}</td>
                                 <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
                                   {o.status || 'N/A'}
                                 </td>
@@ -959,7 +990,6 @@ const Dashboard = () => {
             </div>
           </div>
       </div>
-    </div>
   );
 };
 

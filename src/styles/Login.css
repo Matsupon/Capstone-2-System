@@ -701,3 +701,14 @@ body {
     height: 180px;
   }
 }
+
+/* Hide native Edge/IE password reveal/clear icons so only our custom toggle shows */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+/* Also apply when toggled to text inside our password container to avoid artifacts */
+.password-input-container input::-ms-reveal,
+.password-input-container input::-ms-clear {
+  display: none;
+}

@@ -11,12 +11,6 @@ import testServerConnection from '../utils/testConnection';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const SERVICE_TYPES = [
-  'Jersey Production',
-  'Custom Tailoring (eg. Uniforms)',
-  'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)',
-];
-
 const SIZES = ['Extra Small', 'Small', 'Medium', 'Large', 'Extra Large'];
 
 const generateTimeSlots = () => {
@@ -59,7 +53,9 @@ export default function BookAppointment({ visible, onClose }) {
   const [appointmentTimeRaw, setAppointmentTimeRaw] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [timeDropdown, setTimeDropdown] = useState(false);
-  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789'); 
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('0912 345 6789');
+  const [serviceTypes, setServiceTypes] = useState([]);
+  const [downpaymentAmount, setDownpaymentAmount] = useState(500.00); 
 
   useEffect(() => {
     if (!visible) {
@@ -80,6 +76,7 @@ export default function BookAppointment({ visible, onClose }) {
       setAvailableSlots([]);
       setTimeDropdown(false);
       setIsLoading(false);
+      setDownpaymentAmount(500.00); // Reset to default
     }
     if (appointmentDateRaw) {
       fetchAvailableSlots();
@@ -103,6 +100,26 @@ export default function BookAppointment({ visible, onClose }) {
       }
     };
     fetchAdminPhone();
+
+    const fetchServiceTypes = async () => {
+      try {
+        const response = await api.get('/service-types');
+        console.log('Service types response:', response.data);
+        if (response.data?.success && response.data?.data) {
+          setServiceTypes(response.data.data);
+          console.log('Service types loaded:', response.data.data);
+        }
+      } catch (error) {
+        console.log('Could not fetch service types, using fallback:', error);
+        // Fallback to hardcoded service types if API fails
+        setServiceTypes([
+          { id: 1, name: 'Jersey Production', downpayment_amount: 500.00 },
+          { id: 2, name: 'Custom Tailoring (eg. Uniforms)', downpayment_amount: 500.00 },
+          { id: 3, name: 'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)', downpayment_amount: 100.00 },
+        ]);
+      }
+    };
+    fetchServiceTypes();
   }, [visible]);
 
   useEffect(() => {
@@ -117,6 +134,41 @@ export default function BookAppointment({ visible, onClose }) {
       fetchAvailableSlots();
     }
   }, [appointmentDateRaw]);
+
+  // Update downpayment when service type changes
+  useEffect(() => {
+    if (!serviceType) {
+      // Reset to default when no service type is selected
+      setDownpaymentAmount(500.00);
+      return;
+    }
+    
+    // Try to find in loaded serviceTypes first
+    if (serviceTypes.length > 0) {
+      const selectedService = serviceTypes.find(st => st.name === serviceType);
+      if (selectedService) {
+        const newAmount = parseFloat(selectedService.downpayment_amount);
+        console.log('✅ Updating downpayment amount from API:', {
+          serviceType: serviceType,
+          downpayment_amount: selectedService.downpayment_amount,
+          newAmount: newAmount
+        });
+        setDownpaymentAmount(newAmount);
+        return;
+      } else {
+        console.warn('⚠️ Service type not found in serviceTypes:', serviceType);
+      }
+    }
+    
+    // Fallback logic if serviceTypes haven't loaded yet or match not found
+    if (serviceType === 'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)') {
+      console.log('💰 Using fallback: Repairs/Alterations -> P100.00');
+      setDownpaymentAmount(100.00);
+    } else {
+      console.log('💰 Using fallback: Other services -> P500.00');
+      setDownpaymentAmount(500.00);
+    }
+  }, [serviceType, serviceTypes]);
 
   const fetchAvailableSlots = async () => {
     try {
@@ -453,19 +505,64 @@ export default function BookAppointment({ visible, onClose }) {
       
       console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
       
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
-          // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
-        },
-        body: formData,
-      });
+      // Add timeout using AbortController to prevent infinite loading
+      const timeoutDuration = 120000; // 120 seconds (2 minutes) for large file uploads
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Request timeout after', timeoutDuration, 'ms');
+        abortController.abort();
+      }, timeoutDuration);
+      
+      let response;
+      try {
+        response = await fetch(fullUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+            // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
+          },
+          body: formData,
+          signal: abortController.signal, // Add abort signal for timeout
+        });
+        
+        // Clear timeout if request completes
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        // Clear timeout if error occurs
+        clearTimeout(timeoutId);
+        
+        // Handle abort (timeout)
+        if (fetchError.name === 'AbortError' || abortController.signal.aborted) {
+          throw {
+            message: 'Request timeout. The server took too long to respond. Please check your connection and try again.',
+            code: 'TIMEOUT',
+            response: null,
+          };
+        }
+        
+        // Handle network errors
+        if (fetchError.message && (fetchError.message.includes('Network') || fetchError.message.includes('Failed to fetch'))) {
+          throw {
+            message: 'Network error. Please check your internet connection and try again.',
+            code: 'NETWORK_ERROR',
+            response: null,
+          };
+        }
+        
+        // Re-throw other errors
+        throw fetchError;
+      }
       
       // Check if response is OK
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
         throw {
           response: {
             status: response.status,
@@ -476,7 +573,18 @@ export default function BookAppointment({ visible, onClose }) {
         };
       }
       
-      const responseData = await response.json();
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse response JSON:', parseError);
+        throw {
+          message: 'Invalid response from server. Please try again.',
+          code: 'PARSE_ERROR',
+          response: null,
+        };
+      }
+      
       // Convert fetch response to axios-like response for compatibility
       const axiosLikeResponse = {
         data: responseData,
@@ -485,13 +593,17 @@ export default function BookAppointment({ visible, onClose }) {
         headers: response.headers,
       };
       
-      console.log("Booking response:", axiosLikeResponse.data);
+      console.log("✅ Booking response:", axiosLikeResponse.data);
+      
+      // Reset loading state before showing success
+      setIsLoading(false);
       showSuccess();
       
     } catch (error) {
       console.error('Booking failed:', error);
       console.error('Error details:', {
         message: error.message,
+        code: error.code,
         response: error.response,
         status: error.response?.status,
       });
@@ -499,18 +611,43 @@ export default function BookAppointment({ visible, onClose }) {
       let errorMessage = 'Failed to book appointment.';
       let errorTitle = 'Booking Failed';
       
-      // Handle fetch API errors
-      if (error.response) {
+      // Handle timeout errors
+      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
+        errorTitle = 'Request Timeout';
+        errorMessage = 'The request took too long to complete. Please try:\n\n' +
+                      '1. Check your internet connection\n' +
+                      '2. Try using smaller image files\n' +
+                      '3. Wait a moment and try again';
+      }
+      // Handle network errors
+      else if (error.code === 'NETWORK_ERROR' || (error.message && (error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
+        const serverURL = api.defaults.baseURL;
+        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        
+        errorTitle = 'Network Connection Failed';
+        errorMessage = 'Cannot upload appointment data. Please try:\n\n' +
+                      '1. Check your internet connection\n' +
+                      '2. Verify server is running on ' + serverHost + '\n' +
+                      '3. Try using smaller image files\n' +
+                      '4. Wait a moment and try again';
+      }
+      // Handle parse errors
+      else if (error.code === 'PARSE_ERROR') {
+        errorTitle = 'Server Response Error';
+        errorMessage = 'The server returned an invalid response. Please try again.';
+      }
+      // Handle server response errors
+      else if (error.response) {
         // Server responded with an error status
         const responseData = error.response.data;
-        if (responseData.errors) {
+        if (responseData?.errors) {
           // Validation errors from Laravel
           errorTitle = 'Validation Error';
           const errorMessages = Object.entries(responseData.errors)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
             .join('\n');
           errorMessage = responseData.message || 'Please check your input:\n\n' + errorMessages;
-        } else if (responseData.message) {
+        } else if (responseData?.message) {
           errorMessage = responseData.message;
           if (error.response.status === 422) {
             errorTitle = 'Validation Error';
@@ -525,25 +662,15 @@ export default function BookAppointment({ visible, onClose }) {
             errorMessage = 'Server encountered an error. Please try again later.';
           }
         }
-      } else if (error.message && (error.message.includes('Network') || error.message.includes('fetch'))) {
-        // Network error (fetch API doesn't have error.code like axios)
-        const serverURL = api.defaults.baseURL;
-        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-        
-        errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot upload appointment data. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Verify server is running on ' + serverHost + '\n' +
-                      '3. Try using smaller image files\n' +
-                      '4. Wait a moment and try again';
       } else {
-        // Unknown error
+        // Unknown error - use the error message if available
         console.error('Request error:', error.message);
         errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       
       Alert.alert(errorTitle, errorMessage);
     } finally {
+      // Always reset loading state, even if there's an error
       setIsLoading(false);
     }
   };
@@ -615,11 +742,32 @@ export default function BookAppointment({ visible, onClose }) {
 
               {serviceDropdown && (
                 <View style={styles.dropdownMenu}>
-                  {SERVICE_TYPES.map((type) => (
-                    <TouchableOpacity key={type} style={styles.dropdownItem} onPress={() => { setServiceType(type); setServiceDropdown(false); }}>
-                      <Text style={{ color: '#222', fontSize: 16 }}>{type}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {serviceTypes.length > 0 ? (
+                    serviceTypes.map((type) => (
+                      <TouchableOpacity key={type.id || type.name} style={styles.dropdownItem} onPress={() => { setServiceType(type.name); setServiceDropdown(false); }}>
+                        <Text style={{ color: '#222', fontSize: 16 }}>{type.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    // Fallback if service types haven't loaded yet
+                    [
+                      'Jersey Production',
+                      'Custom Tailoring (eg. Uniforms)',
+                      'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)',
+                    ].map((type) => (
+                      <TouchableOpacity key={type} style={styles.dropdownItem} onPress={() => { setServiceType(type); setServiceDropdown(false); }}>
+                        <Text style={{ color: '#222', fontSize: 16 }}>{type}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* Show downpayment amount when service type is selected */}
+              {serviceType && (
+                <View key={`downpayment-${serviceType}-${downpaymentAmount}`} style={[styles.gcashBox, { marginTop: 18, marginBottom: 0 }]}>
+                  <Text style={styles.gcashLabel}>💸 Required Downpayment</Text>
+                  <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold', color: '#3B82F6', fontSize: 18 }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 </View>
               )}
 
@@ -700,7 +848,7 @@ export default function BookAppointment({ visible, onClose }) {
 
               <View style={styles.gcashBox}>
                 <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
-                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P500.00</Text></Text>
+                <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>{adminPhoneNumber}</Text></Text>
               </View>
 
