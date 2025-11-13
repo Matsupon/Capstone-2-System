@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const showSuccessMessage = () => {
     setShowSuccessModal(true);
@@ -170,102 +171,18 @@ export default function ProfilePage() {
           },
         });
       } else {
-        // Use fetch API directly for FormData uploads (more reliable in React Native)
-        // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
-        // Using fetch API directly ensures FormData is handled correctly with multipart/form-data
-        const token = await AsyncStorage.getItem('authToken');
-        const apiBaseUrl = api.defaults.baseURL;
-        const fullUrl = `${apiBaseUrl}/profile`;
-        
-        console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
-        
-        // Add timeout using AbortController to prevent infinite loading
-        const timeoutDuration = 120000; // 120 seconds (2 minutes) for large file uploads
-        const abortController = new AbortController();
-        const timeoutId = setTimeout(() => {
-          console.error('⏱️ Request timeout after', timeoutDuration, 'ms');
-          abortController.abort();
-        }, timeoutDuration);
-        
-        let fetchResponse;
-        try {
-          fetchResponse = await fetch(fullUrl, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-              // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
-            },
-            body: formData,
-            signal: abortController.signal, // Add abort signal for timeout
-          });
-          
-          // Clear timeout if request completes
-          clearTimeout(timeoutId);
-        } catch (fetchError) {
-          // Clear timeout if error occurs
-          clearTimeout(timeoutId);
-          
-          // Handle abort (timeout)
-          if (fetchError.name === 'AbortError' || abortController.signal.aborted) {
-            throw {
-              message: 'Request timeout. The server took too long to respond. Please check your connection and try again.',
-              code: 'TIMEOUT',
-              response: null,
-            };
-          }
-          
-          // Handle network errors
-          if (fetchError.message && (fetchError.message.includes('Network') || fetchError.message.includes('Failed to fetch'))) {
-            throw {
-              message: 'Network error. Please check your internet connection and try again.',
-              code: 'NETWORK_ERROR',
-              response: null,
-            };
-          }
-          
-          // Re-throw other errors
-          throw fetchError;
-        }
-        
-        // Check if response is OK
-        if (!fetchResponse.ok) {
-          let errorData;
-          try {
-            errorData = await fetchResponse.json();
-          } catch (parseError) {
-            errorData = { message: `HTTP ${fetchResponse.status}: ${fetchResponse.statusText}` };
-          }
-          
-          throw {
-            response: {
-              status: fetchResponse.status,
-              statusText: fetchResponse.statusText,
-              data: errorData,
-            },
-            message: errorData.message || `HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`,
-          };
-        }
-        
-        let responseData;
-        try {
-          responseData = await fetchResponse.json();
-        } catch (parseError) {
-          console.error('Failed to parse response JSON:', parseError);
-          throw {
-            message: 'Invalid response from server. Please try again.',
-            code: 'PARSE_ERROR',
-            response: null,
-          };
-        }
-        
-        // Convert fetch response to axios-like response for compatibility
-        response = {
-          data: responseData,
-          status: fetchResponse.status,
-          statusText: fetchResponse.statusText,
-          headers: fetchResponse.headers,
-        };
+        // Use FormData when image is included
+        console.log('📤 Sending as FormData (with image)');
+        // Don't set Content-Type header - let axios automatically set it with boundary for FormData
+        // Increase timeout for profile updates with images and disable retries for FormData
+        response = await api.post('/profile', formData, {
+          timeout: 120000, // 120 seconds for file uploads (increased)
+          headers: {
+            'Accept': 'application/json',
+          },
+          // Disable retries for FormData uploads to avoid issues with FormData preservation
+          __disableRetry: true,
+        });
       }
 
       console.log('✅ Profile update successful:', response.data);
@@ -295,80 +212,46 @@ export default function ProfilePage() {
       }
       
       let errorMessage = 'Could not update profile.';
-      let errorTitle = 'Update Failed';
-      
-      // Handle timeout errors
-      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
-        errorTitle = 'Request Timeout';
-        errorMessage = 'The request took too long to complete. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Try using a smaller image file\n' +
-                      '3. Wait a moment and try again';
-      }
-      // Handle network errors
-      else if (error.code === 'NETWORK_ERROR' || (error.message && (error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join('\n');
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         const serverURL = api.defaults.baseURL?.replace('/api', '') || 'the server';
-        errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot update profile. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Verify server is running on ' + serverURL + '\n' +
-                      '3. Try using a smaller image file\n' +
-                      '4. Wait a moment and try again';
-      }
-      // Handle parse errors
-      else if (error.code === 'PARSE_ERROR') {
-        errorTitle = 'Server Response Error';
-        errorMessage = 'The server returned an invalid response. Please try again.';
-      }
-      // Handle server response errors
-      else if (error.response) {
-        // Server responded with an error status
-        const responseData = error.response.data;
-        if (responseData?.errors) {
-          // Validation errors from Laravel
-          errorTitle = 'Validation Error';
-          const errorMessages = Object.entries(responseData.errors)
-            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
-            .join('\n');
-          errorMessage = responseData.message || 'Please check your input:\n\n' + errorMessages;
-        } else if (responseData?.message) {
-          errorMessage = responseData.message;
-          if (error.response.status === 422) {
-            errorTitle = 'Validation Error';
-          } else if (error.response.status === 401) {
-            errorTitle = 'Authentication Error';
-            errorMessage = 'Please log in again.';
-          } else if (error.response.status === 413) {
-            errorTitle = 'File Too Large';
-            errorMessage = 'The uploaded image is too large. Please use a smaller image (max 5MB).';
-          } else if (error.response.status === 500) {
-            errorTitle = 'Server Error';
-            errorMessage = 'Server encountered an error. Please try again later.';
-          }
-        }
-      } else {
-        // Unknown error - use the error message if available
-        console.error('Request error:', error.message);
-        errorMessage = error.message || 'Unknown error occurred. Please try again.';
+        errorMessage = `Network error. Please check:\n\n1. Your internet connection\n2. Server is running at ${serverURL}\n3. Try again in a moment`;
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please check your connection and try again.';
       }
       
-      Alert.alert(errorTitle, errorMessage);
+      Alert.alert('Update Failed', errorMessage);
     }
   };
 
   const handleLogout = async () => {
+    // Prevent multiple simultaneous logout requests
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
     try {
       // Try to logout on server, but always clear local token and redirect
       try {
-        await api.post('/logout', {});
+        await api.post('/logout', {}, {
+          // Mark this request so the interceptor knows to suppress 401 errors
+          __isLogoutRequest: true,
+        });
       } catch (logoutError) {
-        // Even if logout fails on server, continue with local cleanup
-        console.log('Server logout failed (may already be logged out):', logoutError?.response?.status);
+        // 401 errors are expected if token was already invalidated or user already logged out
+        // Don't log these as errors - they're normal during logout
+        if (logoutError?.response?.status !== 401) {
+          console.log('Server logout failed:', logoutError?.response?.status);
+        }
       }
       await AsyncStorage.removeItem('authToken');
       router.replace('/auth/login');
     } catch (error) {
-      console.error('Logout error:', error);
       // Always clear token and redirect even if there's an error
       try {
         await AsyncStorage.removeItem('authToken');
@@ -376,6 +259,8 @@ export default function ProfilePage() {
         console.log('Error removing token:', storageError);
       }
       router.replace('/auth/login');
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -452,102 +337,16 @@ export default function ProfilePage() {
         serverURL: api.defaults.baseURL 
       });
   
-      // CRITICAL FIX: Use React Native's fetch API directly for FormData uploads
-      // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
-      // Using fetch API directly ensures FormData is handled correctly with multipart/form-data
-      const token = await AsyncStorage.getItem('authToken');
-      const apiBaseUrl = api.defaults.baseURL;
-      const fullUrl = `${apiBaseUrl}/profile`;
-      
-      console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
-      
-      // Add timeout using AbortController to prevent infinite loading
-      const timeoutDuration = 120000; // 120 seconds (2 minutes) for large file uploads
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.error('⏱️ Request timeout after', timeoutDuration, 'ms');
-        abortController.abort();
-      }, timeoutDuration);
-      
-      let fetchResponse;
-      try {
-        fetchResponse = await fetch(fullUrl, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : '',
-            // DO NOT set Content-Type - React Native fetch will set it automatically with boundary
-          },
-          body: formData,
-          signal: abortController.signal, // Add abort signal for timeout
-        });
-        
-        // Clear timeout if request completes
-        clearTimeout(timeoutId);
-      } catch (fetchError) {
-        // Clear timeout if error occurs
-        clearTimeout(timeoutId);
-        
-        // Handle abort (timeout)
-        if (fetchError.name === 'AbortError' || abortController.signal.aborted) {
-          throw {
-            message: 'Request timeout. The server took too long to respond. Please check your connection and try again.',
-            code: 'TIMEOUT',
-            response: null,
-          };
-        }
-        
-        // Handle network errors
-        if (fetchError.message && (fetchError.message.includes('Network') || fetchError.message.includes('Failed to fetch'))) {
-          throw {
-            message: 'Network error. Please check your internet connection and try again.',
-            code: 'NETWORK_ERROR',
-            response: null,
-          };
-        }
-        
-        // Re-throw other errors
-        throw fetchError;
-      }
-      
-      // Check if response is OK
-      if (!fetchResponse.ok) {
-        let errorData;
-        try {
-          errorData = await fetchResponse.json();
-        } catch (parseError) {
-          errorData = { message: `HTTP ${fetchResponse.status}: ${fetchResponse.statusText}` };
-        }
-        
-        throw {
-          response: {
-            status: fetchResponse.status,
-            statusText: fetchResponse.statusText,
-            data: errorData,
-          },
-          message: errorData.message || `HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`,
-        };
-      }
-      
-      let responseData;
-      try {
-        responseData = await fetchResponse.json();
-      } catch (parseError) {
-        console.error('Failed to parse response JSON:', parseError);
-        throw {
-          message: 'Invalid response from server. Please try again.',
-          code: 'PARSE_ERROR',
-          response: null,
-        };
-      }
-      
-      // Convert fetch response to axios-like response for compatibility
-      const response = {
-        data: responseData,
-        status: fetchResponse.status,
-        statusText: fetchResponse.statusText,
-        headers: fetchResponse.headers,
-      };
+      // Don't set Content-Type header - let axios automatically set it with boundary for FormData
+      // Increase timeout for file uploads and disable retries for FormData (handled in api.js)
+      const response = await api.post('/profile', formData, {
+        timeout: 120000, // 120 seconds for file uploads (increased)
+        headers: {
+          'Accept': 'application/json',
+        },
+        // Disable retries for FormData uploads to avoid issues with FormData preservation
+        __disableRetry: true,
+      });
   
       console.log('✅ Profile image upload successful:', response.data);
   
@@ -573,64 +372,19 @@ export default function ProfilePage() {
       setTempImage(null);
       
       let errorMessage = 'Could not update profile picture.';
-      let errorTitle = 'Upload Failed';
-      
-      // Handle timeout errors
-      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
-        errorTitle = 'Request Timeout';
-        errorMessage = 'The request took too long to complete. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Try using a smaller image file\n' +
-                      '3. Wait a moment and try again';
-      }
-      // Handle network errors
-      else if (error.code === 'NETWORK_ERROR' || (error.message && (error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join('\n');
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         const serverURL = api.defaults.baseURL?.replace('/api', '') || 'the server';
-        errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot upload profile picture. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Verify server is running on ' + serverURL + '\n' +
-                      '3. Try using a smaller image file\n' +
-                      '4. Wait a moment and try again';
-      }
-      // Handle parse errors
-      else if (error.code === 'PARSE_ERROR') {
-        errorTitle = 'Server Response Error';
-        errorMessage = 'The server returned an invalid response. Please try again.';
-      }
-      // Handle server response errors
-      else if (error.response) {
-        // Server responded with an error status
-        const responseData = error.response.data;
-        if (responseData?.errors) {
-          // Validation errors from Laravel
-          errorTitle = 'Validation Error';
-          const errorMessages = Object.entries(responseData.errors)
-            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
-            .join('\n');
-          errorMessage = responseData.message || 'Please check your input:\n\n' + errorMessages;
-        } else if (responseData?.message) {
-          errorMessage = responseData.message;
-          if (error.response.status === 422) {
-            errorTitle = 'Validation Error';
-          } else if (error.response.status === 401) {
-            errorTitle = 'Authentication Error';
-            errorMessage = 'Please log in again.';
-          } else if (error.response.status === 413) {
-            errorTitle = 'File Too Large';
-            errorMessage = 'The uploaded image is too large. Please use a smaller image (max 5MB).';
-          } else if (error.response.status === 500) {
-            errorTitle = 'Server Error';
-            errorMessage = 'Server encountered an error. Please try again later.';
-          }
-        }
-      } else {
-        // Unknown error - use the error message if available
-        console.error('Request error:', error.message);
-        errorMessage = error.message || 'Unknown error occurred. Please try again.';
+        errorMessage = `Network error. Please check:\n\n1. Your internet connection\n2. Server is running at ${serverURL}\n3. Try again in a moment`;
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Upload timed out. Please check your connection and try again.';
       }
       
-      Alert.alert(errorTitle, errorMessage);
+      Alert.alert('Upload Failed', errorMessage);
     } finally {
       setUploading(false);
     }
@@ -784,8 +538,12 @@ export default function ProfilePage() {
               <Text style={styles.buttonText}>EDIT PROFILE</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.buttonText}>LOGOUT</Text>
+          <TouchableOpacity 
+            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+          >
+            <Text style={styles.buttonText}>{isLoggingOut ? 'LOGGING OUT...' : 'LOGOUT'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -931,6 +689,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     marginTop: 40,
+  },
+  logoutButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',

@@ -787,7 +787,7 @@ export default function BookAppointment({ visible, onClose }) {
               />
 
               <View style={styles.gcashBox}>
-                <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
+                <Text style={styles.gcashLabel}>💸 GCash Downpayment</Text>
                 <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>{adminPhoneNumber}</Text></Text>
               </View>
@@ -1006,12 +1006,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
-  },
-  uploadedImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    marginLeft: 10,
   },
   nextBtn: {
     flexDirection: 'row',

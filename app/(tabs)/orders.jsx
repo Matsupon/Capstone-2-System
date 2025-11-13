@@ -14,6 +14,44 @@ import {
 import Header from '../../components/Header';
 import api from '../../utils/api';
 
+// Profanity filter function
+const filterProfanity = (text) => {
+  if (!text) return text;
+  const profanityWords = ['shit', 'fuck', 'die', 'kill', 'jawa', 'piste', 'yati', 'jati', 'motherfucker'];
+  let filteredText = text;
+  profanityWords.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    filteredText = filteredText.replace(regex, '*'.repeat(word.length));
+  });
+  return filteredText;
+};
+
+// Filter profanity from order data recursively
+const filterOrderData = (order) => {
+  if (!order) return order;
+  
+  const filtered = { ...order };
+  
+  // Filter appointment notes
+  if (filtered.appointment?.notes) {
+    filtered.appointment = {
+      ...filtered.appointment,
+      notes: filterProfanity(filtered.appointment.notes)
+    };
+  }
+  
+  // Filter feedback comment and admin response
+  if (filtered.feedback) {
+    filtered.feedback = {
+      ...filtered.feedback,
+      comment: filtered.feedback.comment ? filterProfanity(filtered.feedback.comment) : filtered.feedback.comment,
+      admin_response: filtered.feedback.admin_response ? filterProfanity(filtered.feedback.admin_response) : filtered.feedback.admin_response
+    };
+  }
+  
+  return filtered;
+};
+
 export default function OrdersPage() {
   const [expandedRecent, setExpandedRecent] = useState(null); // Changed to store order ID
   const [expandedHistory, setExpandedHistory] = useState({
@@ -110,9 +148,11 @@ export default function OrdersPage() {
       const res = await api.get('/me/orders');
       if (res.data?.success) {
         const ordersData = res.data.data || [];
-        setOrders(ordersData);
+        // Filter profanity from all orders
+        const filteredOrders = ordersData.map(order => filterOrderData(order));
+        setOrders(filteredOrders);
         // Set latestOrder to the first order for backward compatibility
-        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
+        setLatestOrder(filteredOrders.length > 0 ? filteredOrders[0] : null);
       }
     } catch (e) {
     } finally {
@@ -125,7 +165,10 @@ export default function OrdersPage() {
       setHistoryLoading(true);
       const res = await api.get('/me/orders/history');
       if (res.data?.success) {
-        setFinishedOrders(res.data.data || []);
+        const ordersData = res.data.data || [];
+        // Filter profanity from all finished orders
+        const filteredOrders = ordersData.map(order => filterOrderData(order));
+        setFinishedOrders(filteredOrders);
       }
     } catch (e) {
     } finally {

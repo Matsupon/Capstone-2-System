@@ -401,7 +401,7 @@ export default function AppointmentsPage() {
   };
 
   // Show edit success message
-  const showEditSuccessMessage = () => {
+  const displayEditSuccess = () => {
     setShowEditSuccess(true);
     Animated.timing(editSuccessFadeAnim, {
       toValue: 1,
@@ -486,7 +486,7 @@ export default function AppointmentsPage() {
           }, 1000);
         }
         // Show success message
-        showEditSuccessMessage();
+        displayEditSuccess();
       }
     } catch (error) {
       console.error('Failed to update appointment:', error);
@@ -554,7 +554,6 @@ export default function AppointmentsPage() {
       return false;
     }
 
-    const appointmentStatus = appointment.status || '';
     const displayStatus = normalizeStatus(appointment.display_status || appointment.status || 'Requesting');
     const appointmentState = appointment.state || 'active';
 
@@ -563,32 +562,8 @@ export default function AppointmentsPage() {
       return false;
     }
 
-    // Condition 1: When Filter is "Requesting" (appointment.status === 'pending')
-    // Allow editing even without an order (pending appointments waiting for admin approval)
-    const isRequesting = appointmentStatus === 'pending' || displayStatus === 'Requesting';
-    if (isRequesting) {
-      return true; // Always allow editing for pending/requesting appointments
-    }
-
-    // Condition 2: When Filter is "Accepted" (appointment.status === 'accepted')
-    // Must have an order to edit accepted appointments
-    if (!appointment.order) {
-      return false;
-    }
-
-    const orderStatus = appointment.order.status;
-    const handled = appointment.order.handled;
-
-    // Check if handled is not 1 (0, false, null, undefined means not triggered)
-    const isNotHandled = handled === 0 || handled === false || handled === null || handled === undefined;
-
-    // For accepted appointments: Order status must be 'Pending' AND Handled column is not 1
-    const isAcceptedWithPendingOrderNotHandled = 
-      (appointmentStatus === 'accepted' || displayStatus === 'Accepted') &&
-      orderStatus === 'Pending' &&
-      isNotHandled;
-
-    return isAcceptedWithPendingOrderNotHandled;
+    // Allow editing for all other statuses (Requesting, Accepted, Rejected)
+    return true;
   };
 
   // Check if cancel button should be visible
@@ -1064,22 +1039,6 @@ export default function AppointmentsPage() {
                             </Text>
                           </View>
                         )}
-                        {selectedAppointment.order.pickup_appointment_date && selectedAppointment.order.pickup_appointment_time && (
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Pickup Appointment:</Text>
-                            <Text style={styles.detailValue}>
-                              {formatDate(selectedAppointment.order.check_appointment_date)} at {formatTimeTo12Hour(selectedAppointment.order.pickup_appointment_time)}
-                            </Text>
-                          </View>
-                        )}
-                        {selectedAppointment.order.completed_at && (
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Completed At:</Text>
-                            <Text style={styles.detailValue}>
-                              {formatDate(selectedAppointment.order.completed_at)}
-                            </Text>
-                          </View>
-                        )}
                       </>
                     ) : (
                       <View style={styles.detailRow}>
@@ -1343,7 +1302,7 @@ export default function AppointmentsPage() {
         <Animated.View style={[styles.successOverlay, { opacity: editSuccessFadeAnim }]}>
           <View style={styles.successPopup}>
             <MaterialIcons name="check-circle" size={48} color="#22C55E" />
-            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center', color: '#000' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginTop: 8, textAlign: 'center' }}>
               You have successfully updated an appointment!
             </Text>
           </View>

@@ -25,7 +25,6 @@ export default function HomePage() {
   const { isOpen: modalVisible, closeModal } = useAppointmentModal();
   const [nextAppointment, setNextAppointment] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [latestOrder, setLatestOrder] = useState(null);
   const [orders, setOrders] = useState([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -87,8 +86,6 @@ export default function HomePage() {
       if (res.data?.success) {
         const ordersData = res.data.data || [];
         setOrders(ordersData);
-        // Set latestOrder to the first order for backward compatibility (if needed)
-        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
       }
     } catch (e) {
       // Only log if it's not a network error (network errors are expected if server is down)
@@ -592,10 +589,10 @@ export default function HomePage() {
                         style={{
                           color:
                             order?.status === 'Completed'
-                              ? '#4caf50'
+                              ? '#2e7d32'
                               : order?.status === 'Ready to Check'
-                              ? '#FFAB91'
-                              : '#FFE082',
+                              ? '#b23c17'
+                              : '#7a5f00',
                           fontSize: 12,
                           fontWeight: '500',
                         }}
