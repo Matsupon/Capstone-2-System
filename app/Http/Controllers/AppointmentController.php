@@ -659,17 +659,20 @@ public function dashboard()
                 \Log::info('Refund image uploaded', ['path' => $refundImagePath]);
             }
 
-            // Update appointment status to rejected, save refund image, and clear appointment date/time
-            // Clearing appointment_date and appointment_time makes those slots available again
+            // Update appointment status to rejected and save refund image
+            // Set state to 'cancelled' to make the time slot available again
+            // Note: We don't clear appointment_date and appointment_time because the columns are NOT NULL
+            // The filtering logic excludes appointments with state != 'active'
             $appointment->status = 'rejected';
+            $appointment->state = 'cancelled';
             $appointment->refund_image = $refundImagePath;
-            $appointment->appointment_date = null;
-            $appointment->appointment_time = null;
             $appointment->save();
 
-            // Delete the order if it exists (rejected appointments shouldn't have orders)
+            // If order exists, mark it as cancelled instead of deleting it
+            // This keeps the rejected appointment visible in the mobile app
             if ($order) {
-                $order->delete();
+                $order->status = 'Cancelled';
+                $order->save();
             }
 
             // Create a notification to inform the user their appointment was rejected by admin
@@ -1089,18 +1092,23 @@ public function dashboard()
                     $handled = $order ? (bool)($order->handled ?? false) : false;
                     
                     // Determine display status for filtering
-                    // cancelled -> Cancelled (if state is cancelled)
-                    // pending -> Requesting (whether or not order exists - pending appointments may not have orders yet)
-                    // accepted -> Accepted (when order exists)
-                    // rejected -> Rejected
+                    // Priority order:
+                    // 1. rejected (status) -> Rejected (admin rejected the appointment)
+                    // 2. cancelled (state) -> Cancelled (user cancelled the appointment)
+                    // 3. accepted (status) -> Accepted (admin accepted, order exists)
+                    // 4. pending (status) -> Requesting (waiting for admin approval)
                     $appointmentState = $appointment->state ?? 'active';
                     $displayStatus = 'Requesting'; // Default for pending appointments
-                    if ($appointmentState === 'cancelled') {
+                    
+                    if ($appointmentStatus === 'rejected') {
+                        // Admin rejected - show as Rejected regardless of state
+                        $displayStatus = 'Rejected';
+                    } elseif ($appointmentState === 'cancelled' && $appointmentStatus !== 'rejected') {
+                        // User cancelled - show as Cancelled (only if not rejected by admin)
                         $displayStatus = 'Cancelled';
                     } elseif ($appointmentStatus === 'accepted' && $order) {
+                        // Admin accepted and order exists - show as Accepted
                         $displayStatus = 'Accepted';
-                    } elseif ($appointmentStatus === 'rejected') {
-                        $displayStatus = 'Rejected';
                     }
                     // Note: pending appointments without orders should still show as "Requesting"
                     // because they're waiting for admin approval, not rejected

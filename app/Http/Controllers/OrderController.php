@@ -758,15 +758,10 @@ class OrderController extends Controller
     public function getOrderStats()
     {
         try {
-            // Try to query for 'Finished' status first
-            try {
-                $pendingOrders = Order::where('status', '!=', 'Finished')->count();
-                $finishedOrders = Order::where('status', 'Finished')->count();
-            } catch (\Exception $e) {
-                // If 'Finished' doesn't exist in enum, fallback to 'Completed'
-                $pendingOrders = Order::where('status', '!=', 'Completed')->count();
-                $finishedOrders = Order::where('status', 'Completed')->count();
-            }
+            // Count only Pending, Ready to Check, and Completed orders
+            // Exclude Finished and Cancelled orders
+            $pendingOrders = Order::whereIn('status', ['Pending', 'Ready to Check', 'Completed'])->count();
+            $finishedOrders = Order::where('status', 'Finished')->count();
 
             return response()->json([
                 'success' => true,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Notification;
+use App\Models\Appointment;
 use Illuminate\Support\Facades\Schema;
 
 class NotificationController extends Controller
@@ -68,46 +69,41 @@ class NotificationController extends Controller
     public function countUnviewedAppointments(): \Illuminate\Http\JsonResponse
     {
         try {
-            // Check if viewed_at column exists
-            $hasViewedAt = Schema::hasColumn('notifications', 'viewed_at');
+            // Count appointment_booked notifications with is_viewed = 0 (unviewed)
+            // Only count notifications for appointments that are still pending (status = 'pending')
+            // This matches what's shown in the Dashboard
+            $hasIsViewed = Schema::hasColumn('notifications', 'is_viewed');
             
-            // Only count appointments with status 'pending' AND viewed_at is NULL
-            // Step 1: Get appointment IDs from unviewed notifications
-            $query = Notification::where('type', 'appointment_book');
-            if ($hasViewedAt) {
-                $query->where(function ($q) {
-                    $q->whereNull('viewed_at')->orWhere('viewed_at', '0000-00-00 00:00:00');
-                });
-            }
-            
-            $notificationAppointmentIds = $query->get()
-                ->map(function ($notification) {
+            if ($hasIsViewed) {
+                // Get all unviewed appointment_booked notifications
+                $unviewedNotifications = Notification::where('type', 'appointment_booked')
+                    ->where('is_viewed', 0)
+                    ->get();
+                
+                // Filter to only count notifications for appointments that are still pending
+                $count = 0;
+                foreach ($unviewedNotifications as $notification) {
                     $data = $notification->data;
-                    return is_array($data) ? ($data['appointment_id'] ?? null) : null;
-                })
-                ->filter()
-                ->unique();
-
-            // Step 2: Check which of these appointment IDs have status 'pending'
-            $pendingAppointmentIds = \App\Models\Appointment::whereIn('id', $notificationAppointmentIds)
-                ->where('status', 'pending')
-                ->pluck('id');
-
-            // Step 3: Count notifications that match pending appointments
-            $countQuery = Notification::where('type', 'appointment_book');
-            if ($hasViewedAt) {
-                $countQuery->where(function ($q) {
-                    $q->whereNull('viewed_at')->orWhere('viewed_at', '0000-00-00 00:00:00');
-                });
+                    if (is_array($data) && isset($data['appointment_id'])) {
+                        $appointmentId = $data['appointment_id'];
+                        // Check if appointment exists and is still pending
+                        $appointment = Appointment::find($appointmentId);
+                        if ($appointment && $appointment->status === 'pending') {
+                            // Also check state - only count active appointments or cancelled without refund
+                            if ($appointment->state === 'active' || 
+                                ($appointment->state === 'cancelled' && is_null($appointment->refund_image))) {
+                                $count++;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback if is_viewed column doesn't exist - count all appointment_booked notifications
+                $count = Notification::where('type', 'appointment_booked')
+                    ->count();
             }
-            
-            $count = $countQuery->get()
-                ->filter(function ($notification) use ($pendingAppointmentIds) {
-                    $data = $notification->data;
-                    $appointmentId = is_array($data) ? ($data['appointment_id'] ?? null) : null;
-                    return $appointmentId && $pendingAppointmentIds->contains($appointmentId);
-                })
-                ->count();
+
+            \Log::info('Unviewed appointments count', ['count' => $count]);
 
             return response()->json([
                 'success' => true,
@@ -145,23 +141,26 @@ class NotificationController extends Controller
                 $updateData['viewed_at'] = now();
             }
             
-            // Find notifications for this appointment
-            $notifications = Notification::where('type', 'appointment_book')
-                ->where(function ($q) use ($appointmentId) {
-                    $q->whereJsonContains('data->appointment_id', (int)$appointmentId)
-                      ->orWhereJsonContains('data->appointment_id', (string)$appointmentId)
-                      ->orWhere('data->appointment_id', (int)$appointmentId)
-                      ->orWhere('data->appointment_id', (string)$appointmentId);
-                })
-                ->get();
+            // Find all appointment_booked notifications first, then filter in PHP
+            $allNotifications = Notification::where('type', 'appointment_booked')->get();
+            
+            $matchingNotifications = $allNotifications->filter(function ($notification) use ($appointmentId) {
+                $data = $notification->data;
+                if (!is_array($data)) {
+                    return false;
+                }
+                $notifAppointmentId = $data['appointment_id'] ?? null;
+                return $notifAppointmentId && (int)$notifAppointmentId === (int)$appointmentId;
+            });
             
             \Log::info('Found notifications', [
-                'count' => $notifications->count(),
-                'appointment_id' => $appointmentId
+                'count' => $matchingNotifications->count(),
+                'appointment_id' => $appointmentId,
+                'matching_ids' => $matchingNotifications->pluck('id')->toArray()
             ]);
             
             $affected = 0;
-            foreach ($notifications as $notification) {
+            foreach ($matchingNotifications as $notification) {
                 $notification->update($updateData);
                 $affected++;
             }
@@ -199,7 +198,7 @@ class NotificationController extends Controller
             }
             
             $items = Notification::select($selectFields)
-                ->where('type', 'appointment_book')
+                ->where('type', 'appointment_booked')
                 ->get()
                 ->map(function ($n) use ($hasIsViewed) {
                     $appointmentId = is_array($n->data) ? ($n->data['appointment_id'] ?? null) : null;
