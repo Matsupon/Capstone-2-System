@@ -335,25 +335,25 @@ input[type="checkbox"]:checked::before {
   display: none; /* Chrome, Safari and Opera */
 }
 
-/* Dashboard modal styles - EXTREMELY HIGH z-index to ensure it's above EVERYTHING */
+/* Dashboard modal styles (matching Customers modal) - MUST COVER EVERYTHING */
 .dashboard-modal-bg {
   position: fixed !important;
   top: 0 !important;
+  /* exclude the sidebar from being covered */
   left: clamp(200px, 20vw, 250px) !important;
   width: calc(100% - clamp(200px, 20vw, 250px)) !important;
   height: 100vh !important;
-  min-height: 100vh !important;
   background: rgba(128, 128, 128, 0.5) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 20px !important;
-  z-index: 999999 !important; /* Extremely high z-index to ensure it's above EVERYTHING (header: 1000, page-title: 1000) */
+  z-index: 10000000 !important; /* Above Header notification modal (9,999,999) */
   margin: 0 !important;
   border: none !important;
   box-sizing: border-box !important;
   overflow: visible !important;
-  isolation: isolate !important; /* Create new stacking context */
+  isolation: isolate !important;
   pointer-events: auto !important;
 }
 
@@ -369,17 +369,16 @@ input[type="checkbox"]:checked::before {
   max-height: 90vh !important;
   overflow-y: auto !important;
   transform: none !important;
-  z-index: 999999 !important; /* Extremely high z-index */
+  z-index: 10000001 !important; /* Keep panel above its own backdrop */
   margin: 0 !important;
   border: none !important;
   box-sizing: border-box !important;
-  isolation: isolate !important; /* Create new stacking context */
+  isolation: isolate !important;
   pointer-events: auto !important;
   /* Hide scrollbar */
   scrollbar-width: none !important; /* Firefox */
   -ms-overflow-style: none !important; /* IE and Edge */
 }
-
 .dashboard-modal-panel::-webkit-scrollbar {
   display: none !important; /* Chrome, Safari and Opera */
 }
@@ -405,7 +404,7 @@ input[type="checkbox"]:checked::before {
   font-size: 1.5rem !important;
   color: #444 !important;
   cursor: pointer !important;
-  z-index: 1000000 !important; /* Even higher than panel */
+  z-index: 10 !important;
   transition: transform 0.2s ease !important;
   background: transparent !important;
   border: none !important;
@@ -861,9 +860,9 @@ input[type="checkbox"]:checked::before {
 
 
 @media (max-width: 768px) {
-  .image-modal-bg { left: 0; width: 100%; }
-  .modal-bg { left: 0; width: 100%; }
-  .dashboard-modal-bg { left: 0; width: 100%; }
+  .image-modal-bg { left: 0 !important; width: 100% !important; }
+  .modal-bg { left: 0 !important; width: 100% !important; }
+  .dashboard-modal-bg { left: 0 !important; width: 100% !important; }
   .dashboard-modal-panel { width: 95%; padding: 18px 6px 12px 6px; }
   .details-container { flex-direction: column; gap: 20px; }
   .details-modal { max-width: 90vw !important; padding: 16px 20px; }
@@ -949,28 +948,45 @@ input[type="checkbox"]:checked::before {
 
 .pagination-meta { white-space: nowrap; }
 
-/* Table scrollbar styles - only visible when pagination is shown */
+/* Table scrollbar styles - always visible with internal scrolling */
 .table-scroll-container {
-  max-height: none !important; /* Remove max-height constraint */
+  max-height: calc(100vh - 250px) !important; /* Fixed height to enable internal scrolling */
   min-height: calc(100vh - 250px) !important; /* Force minimum height to be tall */
-  height: auto !important; /* Let it grow to fill parent */
+  height: calc(100vh - 250px) !important; /* Fixed height */
   flex: 1 1 auto !important; /* Fill available space in flex container */
-  overflow-y: hidden !important;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  overflow-y: scroll !important; /* Always show scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1);
   border-radius: 0 0 16px 16px; /* Rounded bottom corners */
+  padding-bottom: 20px; /* Extra padding at bottom so last row isn't covered */
 }
 
 .table-scroll-container::-webkit-scrollbar {
-  display: none;
+  display: block;
+  width: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.7);
 }
 
 .table-scroll-container.with-pagination {
-  max-height: none !important; /* Remove max-height constraint */
+  max-height: calc(100vh - 250px) !important; /* Fixed height to enable internal scrolling */
   min-height: calc(100vh - 250px) !important; /* Force minimum height */
-  height: auto !important; /* Let it grow to fill parent */
+  height: calc(100vh - 250px) !important; /* Fixed height */
   flex: 1 1 auto !important; /* Fill available space in flex container */
-  overflow-y: scroll !important;
+  overflow-y: scroll !important; /* Always show scrollbar */
   scrollbar-width: thin;
   scrollbar-color: rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.1);
   padding-bottom: 20px; /* Extra padding at bottom so last row isn't covered */

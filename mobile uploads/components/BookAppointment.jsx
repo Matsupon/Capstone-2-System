@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { Alert, Animated, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import api from '../utils/api';
-import testServerConnection from '../utils/testConnection';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -184,7 +183,9 @@ export default function BookAppointment({ visible, onClose }) {
         return;
       }
       
-      const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}`);
+      // Add timestamp to prevent caching and ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}&t=${timestamp}`);
       
       console.log("Available slots data:", response.data);
       setAvailableSlots(response.data.available_slots || []);
@@ -201,14 +202,14 @@ export default function BookAppointment({ visible, onClose }) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: crop, // crop when requested by caller
       // aspect removed to avoid forced cropping; user can free-crop when allowsEditing is true
-      quality: 0.8, // Reduced from 1.0 to reduce initial file size for weak networks
+      quality: 0.8,
       exif: true,
     });
 
     if (!result.canceled && result.assets?.[0]?.uri) {
       try {
         const asset = result.assets[0];
-        // More aggressive compression to reduce file size for weak networks
+        // Compress image to reduce file size
         const manip = await ImageManipulator.manipulateAsync(
           asset.uri,
           [{ resize: { width: 1024 } }], // Reduced from 1280 to 1024 for smaller files
@@ -308,28 +309,6 @@ export default function BookAppointment({ visible, onClose }) {
     setTimeDropdown(false);
   };
 
-  // Test server connection before booking
-  const testConnection = async () => {
-    try {
-      Alert.alert('Testing Connection', 'Please wait while we test the server connection...');
-      const results = await testServerConnection();
-      
-      let message = `Server: ${results.serverUrl}\n\n`;
-      results.tests.forEach((test, index) => {
-        message += `${index + 1}. ${test.name}: ${test.passed ? '✅ PASS' : '❌ FAIL'}\n`;
-        message += `   ${test.message}\n\n`;
-      });
-      
-      if (results.allPassed) {
-        Alert.alert('Connection Test - All Passed ✅', message);
-      } else {
-        Alert.alert('Connection Test - Issues Found ⚠️', message);
-      }
-    } catch (error) {
-      Alert.alert('Connection Test Failed', `Error: ${error.message}`);
-    }
-  };
-
   const handleBookAppointment = async () => {
     try {
       // Step 3 validations with specific messages
@@ -348,26 +327,12 @@ export default function BookAppointment({ visible, onClose }) {
 
       setIsLoading(true);
       
-      // Log connection info before attempting upload
-      const apiBaseURL = api.defaults.baseURL;
-      const serverHost = apiBaseURL ? apiBaseURL.replace('/api', '').replace(/\/$/, '') : 'unknown';
       console.log('📤 Starting appointment booking...', {
-        server: serverHost,
         hasDesignImage: !!designImage,
         hasGcashImage: !!gcashImage,
         appointmentDate: appointmentDateRaw,
         appointmentTime: appointmentTimeRaw,
       });
-      
-      // Quick connectivity check before attempting large upload
-      try {
-        console.log('🔍 Performing quick connectivity check...');
-        await api.get('/appointments/test', { timeout: 5000 });
-        console.log('✅ Connectivity check passed');
-      } catch (connectError) {
-        console.warn('⚠️ Connectivity check failed, but proceeding anyway:', connectError.message);
-        // Don't block the upload, but log the warning
-      }
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -535,7 +500,7 @@ export default function BookAppointment({ visible, onClose }) {
         // Handle abort (timeout)
         if (fetchError.name === 'AbortError' || abortController.signal.aborted) {
           throw {
-            message: 'Request timeout. The server took too long to respond. Please check your connection and try again.',
+            message: 'Request timeout. The server took too long to respond. Please try again.',
             code: 'TIMEOUT',
             response: null,
           };
@@ -544,7 +509,7 @@ export default function BookAppointment({ visible, onClose }) {
         // Handle network errors
         if (fetchError.message && (fetchError.message.includes('Network') || fetchError.message.includes('Failed to fetch'))) {
           throw {
-            message: 'Network error. Please check your internet connection and try again.',
+            message: 'Unable to connect to server. Please try again.',
             code: 'NETWORK_ERROR',
             response: null,
           };
@@ -614,22 +579,12 @@ export default function BookAppointment({ visible, onClose }) {
       // Handle timeout errors
       if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
         errorTitle = 'Request Timeout';
-        errorMessage = 'The request took too long to complete. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Try using smaller image files\n' +
-                      '3. Wait a moment and try again';
+        errorMessage = 'The request took too long to complete. Please try again later.';
       }
       // Handle network errors
       else if (error.code === 'NETWORK_ERROR' || (error.message && (error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
-        const serverURL = api.defaults.baseURL;
-        const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-        
-        errorTitle = 'Network Connection Failed';
-        errorMessage = 'Cannot upload appointment data. Please try:\n\n' +
-                      '1. Check your internet connection\n' +
-                      '2. Verify server is running on ' + serverHost + '\n' +
-                      '3. Try using smaller image files\n' +
-                      '4. Wait a moment and try again';
+        errorTitle = 'Connection Error';
+        errorMessage = 'Unable to connect to server. Please try again.';
       }
       // Handle parse errors
       else if (error.code === 'PARSE_ERROR') {
@@ -715,11 +670,6 @@ export default function BookAppointment({ visible, onClose }) {
             <Ionicons name="arrow-back" size={28} color="#222" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Book an Appointment</Text>
-          {step === 3 && (
-            <TouchableOpacity onPress={testConnection} style={styles.testBtn}>
-              <MaterialIcons name="network-check" size={20} color="#4682B4" />
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Progress Indicator */}
@@ -760,14 +710,6 @@ export default function BookAppointment({ visible, onClose }) {
                       </TouchableOpacity>
                     ))
                   )}
-                </View>
-              )}
-
-              {/* Show downpayment amount when service type is selected */}
-              {serviceType && (
-                <View key={`downpayment-${serviceType}-${downpaymentAmount}`} style={[styles.gcashBox, { marginTop: 18, marginBottom: 0 }]}>
-                  <Text style={styles.gcashLabel}>💸 Required Downpayment</Text>
-                  <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold', color: '#3B82F6', fontSize: 18 }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 </View>
               )}
 
@@ -847,7 +789,7 @@ export default function BookAppointment({ visible, onClose }) {
               />
 
               <View style={styles.gcashBox}>
-                <Text style={styles.gcashLabel}>💸 GCash Payment</Text>
+                <Text style={styles.gcashLabel}>💸 GCash Downpayment</Text>
                 <Text style={styles.gcashLabel}>Amount: <Text style={{ fontWeight: 'bold' }}>P{downpaymentAmount.toFixed(2)}</Text></Text>
                 <Text style={styles.gcashLabel}>Send to: <Text style={{ fontWeight: 'bold' }}>{adminPhoneNumber}</Text></Text>
               </View>
@@ -1003,17 +945,6 @@ const styles = StyleSheet.create({
     color: '#222',
     flex: 1,
   },
-  testButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  testBtn: {
-    padding: 8,
-    backgroundColor: '#f0f8ff',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#4682B4',
-  },
   label: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -1077,12 +1008,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
-  },
-  uploadedImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    marginLeft: 10,
   },
   nextBtn: {
     flexDirection: 'row',
@@ -1233,9 +1158,5 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     fontStyle: 'italic',
-  },
-  testBtn: {
-    padding: 8,
-    marginLeft: 8,
   },
 });

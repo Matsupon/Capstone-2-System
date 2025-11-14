@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.33.167.107:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.10.87:8000/api';
 
 // Log the API URL being used (for debugging)
 console.log('API Base URL:', API_URL);
@@ -194,15 +194,26 @@ api.interceptors.response.use(
         retriesAttempted: finalRetryCount,
       });
     } else {
-      console.error('API Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        message: error.message,
-        code: error.code,
-        fullUrl: fullUrl,
-        url: error.config?.url || config?.url,
-        responseData: error.response?.data,
-      });
+      // Suppress 401 errors for logout requests - they're expected after first logout succeeds
+      const isLogoutRequest = config?.__isLogoutRequest === true || 
+                              config?.url === '/logout' || 
+                              error.config?.url === '/logout';
+      const is401Error = error.response?.status === 401;
+      
+      if (isLogoutRequest && is401Error) {
+        // Don't log 401 errors for logout requests - they're normal when token is already invalidated
+        // This happens when user quickly presses logout multiple times
+      } else {
+        console.error('API Error:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          code: error.code,
+          fullUrl: fullUrl,
+          url: error.config?.url || config?.url,
+          responseData: error.response?.data,
+        });
+      }
     }
     
     return Promise.reject(error);

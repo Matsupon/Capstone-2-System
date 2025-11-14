@@ -427,8 +427,8 @@
 }
 
 /* Ensure Customers zoom modal appears above the profile modal */
-.customers-zoom {
-  z-index: 11050 !important; /* higher than .customers-modal-bg (10000) and Orders dashboard modal (2000) */
+.dashboard-modal-bg.customers-zoom {
+  z-index: 21000 !important; /* higher than .customers-modal-bg (20000) and .dashboard-modal-bg (20000) */
 }
 
 /* Pagination Panel Styles */

@@ -62,6 +62,18 @@ export default function FeedbackPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Profanity filter function
+  const filterProfanity = (text) => {
+    if (!text) return text;
+    const profanityWords = ['shit', 'fuck', 'die', 'kill', 'jawa', 'piste', 'yati', 'jati', 'motherfucker'];
+    let filteredText = text;
+    profanityWords.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      filteredText = filteredText.replace(regex, '*'.repeat(word.length));
+    });
+    return filteredText;
+  };
+
   useEffect(() => {
     // Create abort controller for request cancellation
     const abortController = new AbortController();
@@ -168,7 +180,6 @@ export default function FeedbackPage() {
   const handleSubmit = async (id) => {
     const payload = {};
     const r = responding[id] || {};
-    if (typeof r.admin_checked !== 'undefined') payload.admin_checked = r.admin_checked;
     if (typeof r.admin_response !== 'undefined') payload.admin_response = r.admin_response;
     try {
       const res = await api.patch(`/feedback/${id}/respond`, payload);
@@ -178,7 +189,6 @@ export default function FeedbackPage() {
           it.id === id
             ? {
                 ...it,
-                admin_checked: typeof payload.admin_checked !== 'undefined' ? payload.admin_checked : it.admin_checked,
                 admin_response: typeof payload.admin_response !== 'undefined' ? payload.admin_response : it.admin_response,
               }
             : it
@@ -326,23 +336,6 @@ export default function FeedbackPage() {
                           <StarRating value={fb.rating} />
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <button
-                              className={`check-pill ${responding[fb.id]?.admin_checked ?? fb.admin_checked ? 'on' : ''}`}
-                              title={(responding[fb.id]?.admin_checked ?? fb.admin_checked) ? 'Checked' : 'Mark as checked'}
-                              onClick={() => {
-                                const next = !(responding[fb.id]?.admin_checked ?? fb.admin_checked);
-                                setResp(fb.id, { admin_checked: next });
-                                handleSubmit(fb.id);
-                              }}
-                              style={{
-                                color: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
-                                borderColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#0f7a28' : undefined,
-                                backgroundColor: (responding[fb.id]?.admin_checked ?? fb.admin_checked) ? '#E8F5E9' : undefined,
-                                fontWeight: 700,
-                              }}
-                            >
-                              ✓
-                            </button>
-                            <button
                               className="delete-btn"
                               title="Delete feedback"
                               onClick={() => handleDelete(fb.id)}
@@ -367,7 +360,7 @@ export default function FeedbackPage() {
                       </header>
 
                       <div className="card-body">
-                        <p className="feedback-comment">{fb.comment || '(No comment provided.)'}</p>
+                        <p className="feedback-comment">{filterProfanity(fb.comment) || '(No comment provided.)'}</p>
                       </div>
 
                       <footer className="card-footer">

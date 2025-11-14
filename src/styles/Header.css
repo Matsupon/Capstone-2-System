@@ -31,7 +31,7 @@
   top: 0;
   left: clamp(-2px, 1vw, -1px); /* Start after sidebar */
   right: 0;
-  z-index: 1100;
+  z-index: 100;
 }
 
 .header-content {
@@ -56,6 +56,8 @@
   font-family: 'Poppins', sans-serif;
   display: flex;
   align-items: center;
+  position: relative;
+  z-index: 50;
 }
 
 /* More specific selector to override Welcome.css .header h1 and App.css h1 */
@@ -72,6 +74,8 @@
   display: flex;
   align-items: center;
   gap: clamp(10px, 2vw, 15px);
+  position: relative;
+  z-index: 50;
 }
 
 .profile-link {
@@ -94,6 +98,8 @@
   border: 2px solid var(--glass-border);
   box-shadow: var(--shadow-glow);
   outline: none;
+  position: relative;
+  z-index: 50;
 }
 
 .profile-picture:focus,
@@ -151,6 +157,8 @@
   font-size: clamp(12px, 1.9vw, 15px);
   letter-spacing: 0.01em;
   font-family: 'Poppins', sans-serif;
+  position: relative;
+  z-index: 50;
 }
 
 /* Responsive Design */
@@ -163,7 +171,7 @@
     top: 0;
     left: 0; /* Full width on mobile */
     right: 0;
-    z-index: 1100;
+    z-index: 100;
   }
   .main-content {
     padding-top: 50px;

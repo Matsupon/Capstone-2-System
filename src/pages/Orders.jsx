@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Orders.css';
@@ -80,6 +80,7 @@ const Orders = () => {
   const [bookedPickupTimes, setBookedPickupTimes] = useState([]);
   const [filterOption, setFilterOption] = useState('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const filterBtnRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [handledSuccess, setHandledSuccess] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -184,22 +185,26 @@ const Orders = () => {
     };
   }, [fetchOrders]);
 
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showUpdateDropdown && !event.target.closest('.update-dropdown') && !event.target.closest('.update-btn')) {
         setShowUpdateDropdown(null);
       }
-      if (showFilterDropdown && !event.target.closest('.filter-dropdown') && !event.target.closest('button')) {
+      if (showFilterDropdown && !event.target.closest('.filter-dropdown') && !event.target.closest('.filter-btn')) {
         setShowFilterDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    if (showFilterDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
   }, [showUpdateDropdown, showFilterDropdown]);
+
 
   const handleCalendarPrevMonth = () => {
     if (calendarMonth === 0) {
@@ -336,6 +341,42 @@ const Orders = () => {
     setCompletionSelectedTime('');
     setBookedPickupTimes([]);
   };
+
+  // Close modals when ESC key is pressed
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' || event.keyCode === 27) {
+        if (showDetails) {
+          setDetailsClosing(true);
+          setTimeout(() => {
+            setShowDetails(false);
+            setDetailsClosing(false);
+          }, 200);
+        } else if (showCalendarModal) {
+          closeCalendarModal();
+        } else if (showCompletionCalendar) {
+          closeCompletionCalendarModal();
+        } else if (showPaymentModal) {
+          setShowPaymentModal(false);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+          setRefundOrderId(null);
+          setRefundImageFile(null);
+          setRefundImagePreview(null);
+        } else if (showImageModal) {
+          setShowImageModal(false);
+        } else if (showFinishConfirmation) {
+          setShowFinishConfirmation(false);
+          setOrderToFinish(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetails, showCalendarModal, showCompletionCalendar, showPaymentModal, showRefundModal, showImageModal, showFinishConfirmation]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -842,6 +883,11 @@ const Orders = () => {
     fetch();
   }, [showCompletionCalendar, completionSelectedDay, completionCalendarMonth, completionCalendarYear, calendarOrderId]);
 
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterOption, searchQuery]);
+
   // Scroll to top whenever page changes
   useEffect(() => {
     // Use requestAnimationFrame to ensure scroll happens after DOM update
@@ -951,8 +997,8 @@ const Orders = () => {
 
   if (loading) {
     return (
-      <div className="page-wrap">
-        <div className="orders-content" style={{ marginTop: 8 }}>
+      <div className="page-wrap orders-page-unique">
+        <div className="orders-content orders-page-content" style={{ marginTop: 8 }}>
           <p>Loading orders...</p>
         </div>
       </div>
@@ -961,8 +1007,8 @@ const Orders = () => {
 
   if (error) {
     return (
-      <div className="page-wrap">
-        <div className="orders-content" style={{ marginTop: 8 }}>
+      <div className="page-wrap orders-page-unique">
+        <div className="orders-content orders-page-content" style={{ marginTop: 8 }}>
           <p>Error: {error}</p>
         </div>
       </div>
@@ -970,214 +1016,258 @@ const Orders = () => {
   }
 
   return (
-    <div className="page-wrap">
-      <div className="orders-content" style={{ marginTop: 8 }}>
+    <div className="page-wrap orders-page-unique">
+      <div className="orders-content orders-page-content" style={{ marginTop: 8 }}>
+          {/* Search and Filter Section - OUTSIDE the table container */}
+          <div className="orders-page-search-filter" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 16px 16px 16px', position: 'relative', zIndex: 10 }}>
+            {/* Search Bar */}
+            <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+              <FaSearch style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#9ca3af',
+                fontSize: 14
+              }} />
+              <input
+                type="text"
+                placeholder="Search orders by name or service"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 36px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+            
+            {/* Current Filter Display and Filter Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Display current filter */}
+              <div style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: filterOption === 'none' ? '#6b7280' : '#2563eb',
+                padding: '6px 12px',
+                background: filterOption === 'none' ? '#f3f4f6' : '#dbeafe',
+                borderRadius: 6,
+                border: filterOption === 'none' ? '1px solid #e5e7eb' : '1px solid #93c5fd',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
+              }}>
+                {getFilterDisplayName(filterOption)}
+              </div>
+              
+              <div style={{ position: 'relative' }}>
+                <button 
+                  ref={filterBtnRef}
+                  className="filter-btn"
+                  data-filter-btn="true"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    transition: 'background 0.2s',
+                    position: 'relative',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
+                >
+                  <FaFilter /> Filter Orders
+                </button>
+                {showFilterDropdown && ReactDOM.createPortal(
+                  <div 
+                    className="filter-dropdown"
+                    ref={(el) => {
+                      if (el) {
+                        const btn = filterBtnRef.current || document.querySelector('button[data-filter-btn="true"]');
+                        if (btn) {
+                          const rect = btn.getBoundingClientRect();
+                          const dropdownWidth = el.offsetWidth || 220; // Default width or actual width
+                          
+                          // Calculate sidebar width (matches CSS clamp(200px, 20vw, 250px))
+                          const sidebarWidth = Math.min(Math.max(200, window.innerWidth * 0.2), 250);
+                          const pageMargin = window.innerWidth <= 768 ? 8 : 16; // Responsive margin
+                          const contentLeft = sidebarWidth; // Content area starts after sidebar
+                          const maxRight = window.innerWidth - pageMargin;
+                          const minLeft = contentLeft + pageMargin; // Minimum left position (after sidebar + margin)
+                          
+                          // Position aligned to left edge of button
+                          let leftPos = rect.left;
+                          
+                          // Ensure dropdown doesn't go past right margin
+                          if (leftPos + dropdownWidth > maxRight) {
+                            leftPos = maxRight - dropdownWidth;
+                          }
+                          
+                          // Ensure dropdown doesn't go past left margin (after sidebar)
+                          if (leftPos < minLeft) {
+                            leftPos = minLeft;
+                          }
+                          
+                          el.style.top = (rect.bottom + 4) + 'px';
+                          el.style.left = leftPos + 'px';
+                        }
+                      }
+                    }}
+                  >
+                      <div style={{ padding: '8px 0' }}>
+                        <div 
+                          onClick={() => { setFilterOption('none'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'none' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'none' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'none' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 No Filter
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('deadline-nearest'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'deadline-nearest' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Nearest Deadline
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('oldest-newest'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'oldest-newest' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'oldest-newest' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'oldest-newest' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Oldest to Newest
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('newest-oldest'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'newest-oldest' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'newest-oldest' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'newest-oldest' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Newest to Oldest
+                        </div>
+                        <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                        <div 
+                          onClick={() => { setFilterOption('status-pending'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'status-pending' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'status-pending' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-pending' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Status: Pending
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('status-ready'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'status-ready' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'status-ready' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-ready' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Status: Ready to Check
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('status-completed'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'status-completed' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'status-completed' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-completed' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Status: Completed
+                        </div>
+                      </div>
+                  </div>,
+                  document.body
+                )}
+              </div>
+            </div>
+          </div>
+          
           <div
-            className="feedback-card-container"
+            className="feedback-card-container orders-page-table-container"
             style={{
               borderBottomLeftRadius: 16,
               borderBottomRightRadius: 16,
               marginBottom: 10,
               overflow: 'hidden',
-              padding: '24px 24px 8px 24px',
-              margin: '0 8px 10px 8px'
+              padding: '24px 16px 8px 16px',
+              margin: '0 16px 40px 16px',
+              maxWidth: 'none',
+              width: 'auto'
             }}
           >
-            {/* Search and Filter Section */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
-              {/* Search Bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, maxWidth: 400 }}>
-                <FaSearch style={{
-                  color: '#9ca3af',
-                  fontSize: 16,
-                  flexShrink: 0
-                }} />
-                <input
-                  type="text"
-                  placeholder="Search orders by name or service"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-                />
-              </div>
-              
-              {/* Current Filter Display and Filter Button */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* Display current filter */}
-                <div style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: filterOption === 'none' ? '#6b7280' : '#2563eb',
-                  padding: '6px 12px',
-                  background: filterOption === 'none' ? '#f3f4f6' : '#dbeafe',
-                  borderRadius: 6,
-                  border: filterOption === 'none' ? '1px solid #e5e7eb' : '1px solid #93c5fd',
-                  transition: 'all 0.2s'
-                }}>
-                  {getFilterDisplayName(filterOption)}
-                </div>
-                
-                <div style={{ position: 'relative' }}>
-                  <button 
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 16px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
-              >
-                    <FaFilter /> Filter Orders
-                  </button>
-                </div>
-              </div>
-              {showFilterDropdown && (
-                <div className="filter-dropdown" style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: 8,
-                  background: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  zIndex: 100,
-                  minWidth: 220
-                }}>
-                  <div style={{ padding: '8px 0' }}>
-                    <div 
-                      onClick={() => { setFilterOption('none'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'none' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'none' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'none' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 No Filter
-                    </div>
-                    <div 
-                      onClick={() => { setFilterOption('deadline-nearest'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'deadline-nearest' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Nearest Deadline
-                    </div>
-                    <div 
-                      onClick={() => { setFilterOption('oldest-newest'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'oldest-newest' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'oldest-newest' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'oldest-newest' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Oldest to Newest
-                    </div>
-                    <div 
-                      onClick={() => { setFilterOption('newest-oldest'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'newest-oldest' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'newest-oldest' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'newest-oldest' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Newest to Oldest
-                    </div>
-                    <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
-                    <div 
-                      onClick={() => { setFilterOption('status-pending'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'status-pending' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'status-pending' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-pending' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Status: Pending
-                    </div>
-                    <div 
-                      onClick={() => { setFilterOption('status-ready'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'status-ready' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'status-ready' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-ready' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Status: Ready to Check
-                    </div>
-                    <div 
-                      onClick={() => { setFilterOption('status-completed'); setShowFilterDropdown(false); }}
-                      style={{
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        background: filterOption === 'status-completed' ? '#f3f4f6' : 'white',
-                        fontWeight: filterOption === 'status-completed' ? 600 : 400
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'status-completed' ? '#f3f4f6' : 'white'}
-                    >
-                      🔹 Status: Completed
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
             {orders.length === 0 ? (
               <p style={{ textAlign: 'center', padding: '40px 0' }}>No orders found.</p>
             ) : (
-            <div className="table-scroll-container">
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className={`table-scroll-container with-pagination`}>
+           <table style={{ tableLayout: 'fixed', width: '100%' }}>
               <thead>
-                <tr style={{ background: '#e8f4fd' }}>
-                 <th style={{ width: '10%' }}>Order #</th>
-                 <th style={{ width: '14%' }}>Name</th>
-                 <th style={{ width: '17%' }}>Services</th>
-                 <th style={{ width: '14%' }}>Deadline</th>
-                 <th style={{ width: '14%' }}>Status</th>
-                 <th style={{ width: '2%' }}>Attended</th>
-                 <th style={{ width: '16%' }}>Next Appoint.</th>
-                 <th style={{ width: '9%' }}>Layout/Notes</th>
-                 <th style={{ width: '9%' }}>Actions</th>
-               </tr>
+               <tr style={{ background: '#e8f4fd' }}>
+   <th style={{ width: '75px', whiteSpace: 'normal', wordWrap: 'break-word' }}>Order #</th>
+   <th style={{ width: '105px' }}>Name</th>
+   <th style={{ width: '135px' }}>Services</th>
+   <th style={{ width: '105px' }}>Deadline</th>
+   <th style={{ width: '125px' }}>Status</th>
+   <th style={{ width: '100px' }}>Attended</th>
+   <th style={{ width: '110px' }}>Next Appoint.</th>
+   <th style={{ width: '115px' }}>Details</th>
+   <th style={{ width: '95px' }}>Actions</th>
+ </tr>
+
               </thead>
               <tbody>
                 {currentOrders.map((order) => (
@@ -1324,12 +1414,12 @@ const Orders = () => {
                           }
                         }
                         
-                        // For Completed: Show admin-set pickup appointment, otherwise fall back to original user appointment
+                        // For Completed: Show user's rescheduled appointment first, otherwise fall back to admin-set pickup appointment
                         if (order.status === 'Completed') {
-                          if (order.pickup_appointment_date && order.pickup_appointment_time) {
-                            return <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>;
-                          } else if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
+                          if (order.appointment?.appointment_date && order.appointment?.appointment_time) {
                             return <span>{formatDateAndTime(order.appointment.appointment_date, order.appointment.appointment_time)}</span>;
+                          } else if (order.pickup_appointment_date && order.pickup_appointment_time) {
+                            return <span>{formatDateAndTime(order.pickup_appointment_date, order.pickup_appointment_time)}</span>;
                           } else {
                             return <span style={{ color: '#999' }}>No next appointment for now</span>;
                           }
@@ -1459,7 +1549,7 @@ const Orders = () => {
           </div>
 
           {/* Pagination Panel - Fixed at bottom */}
-          {!loading && !error && filteredOrders.length > 0 && totalPages > 1 && (
+          {!loading && !error && filteredOrders.length > 0 && (
             <div className="pagination-panel">
               <div className="pagination-controls">
                 <button

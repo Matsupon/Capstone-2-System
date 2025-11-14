@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const showSuccessMessage = () => {
     setShowSuccessModal(true);
@@ -228,18 +229,29 @@ export default function ProfilePage() {
   };
 
   const handleLogout = async () => {
+    // Prevent multiple simultaneous logout requests
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
     try {
       // Try to logout on server, but always clear local token and redirect
       try {
-        await api.post('/logout', {});
+        await api.post('/logout', {}, {
+          // Mark this request so the interceptor knows to suppress 401 errors
+          __isLogoutRequest: true,
+        });
       } catch (logoutError) {
-        // Even if logout fails on server, continue with local cleanup
-        console.log('Server logout failed (may already be logged out):', logoutError?.response?.status);
+        // 401 errors are expected if token was already invalidated or user already logged out
+        // Don't log these as errors - they're normal during logout
+        if (logoutError?.response?.status !== 401) {
+          console.log('Server logout failed:', logoutError?.response?.status);
+        }
       }
       await AsyncStorage.removeItem('authToken');
       router.replace('/auth/login');
     } catch (error) {
-      console.error('Logout error:', error);
       // Always clear token and redirect even if there's an error
       try {
         await AsyncStorage.removeItem('authToken');
@@ -247,6 +259,8 @@ export default function ProfilePage() {
         console.log('Error removing token:', storageError);
       }
       router.replace('/auth/login');
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -524,8 +538,12 @@ export default function ProfilePage() {
               <Text style={styles.buttonText}>EDIT PROFILE</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.buttonText}>LOGOUT</Text>
+          <TouchableOpacity 
+            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+          >
+            <Text style={styles.buttonText}>{isLoggingOut ? 'LOGGING OUT...' : 'LOGOUT'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -671,6 +689,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     marginTop: 40,
+  },
+  logoutButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',

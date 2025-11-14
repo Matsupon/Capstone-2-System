@@ -37,6 +37,12 @@ export default function Login() {
       return;
     }
 
+    // Log the server URL being used for debugging
+    const serverURL = api.defaults.baseURL;
+    const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'Unknown';
+    console.log('Attempting login to:', serverHost);
+    console.log('Full API URL:', serverURL);
+
     setLoading(true); 
     try {
       const response = await api.post('/login', {
@@ -58,6 +64,13 @@ export default function Login() {
   
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        baseURL: error.config?.baseURL || api.defaults.baseURL,
+        url: error.config?.url,
+        fullUrl: error.config ? `${error.config.baseURL || ''}${error.config.url || ''}` : 'Unknown',
+      });
       
       // Handle specific error cases
       if (error.response?.status === 401) {
@@ -69,13 +82,14 @@ export default function Login() {
       } else if (error.response?.data?.message) {
         alert(error.response.data.message);
       } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.code === 'ECONNABORTED') {
-        // Get the server URL from the API instance
-        const serverURL = api.defaults.baseURL;
+        // Get the server URL from the error config or API defaults
+        const serverURL = error.config?.baseURL || api.defaults.baseURL;
         const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
+        const fullUrl = error.config ? `${error.config.baseURL || ''}${error.config.url || ''}` : 'Unknown';
         
-        alert(`Cannot connect to the server at ${serverHost}.\n\nPlease check:\n1. Backend server is running\n2. Both devices are on the same network\n3. No firewall blocking the connection`);
+        alert(`Cannot connect to the server!\n\nServer: ${serverHost}\nEndpoint: ${fullUrl}\n\nPlease check:\n1. Backend server is running\n2. Server is listening on 0.0.0.0 (not just localhost)\n3. Both devices are on the same network\n4. Firewall is not blocking port 8000\n5. IP address is correct: ${serverHost}\n\nTo fix:\n- Run: php artisan serve --host=0.0.0.0 --port=8000`);
       } else {
-        alert('Login failed. Please try again.');
+        alert(`Login failed: ${error.message || 'Unknown error'}\n\nPlease try again.`);
       }
     } finally {
       setLoading(false);

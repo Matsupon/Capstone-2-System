@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import '../styles/Orders.css';
 import '../styles/Feedback.css';
+import '../styles/Dashboard.css';
 import { AiOutlineClose } from 'react-icons/ai';
+import { FaFilter } from 'react-icons/fa';
 import api from '../api';
 
 const OrdersHistory = () => {
   const [orders, setOrders] = useState([]);
+  const filterBtnRef = useRef(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [detailsClosing, setDetailsClosing] = useState(false);
@@ -15,6 +19,15 @@ const OrdersHistory = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
+  const [dateFilter, setDateFilter] = useState({ type: 'all', startDate: '', endDate: '' }); // 'all', 'range', or 'specific'
+  const [animateStats, setAnimateStats] = useState(false);
+  const [displayStats, setDisplayStats] = useState({
+    totalFinished: 0,
+    thisMonth: 0,
+    totalRevenue: 0
+  });
 
   useEffect(() => {
     // Create abort controller for request cancellation
@@ -97,6 +110,29 @@ const OrdersHistory = () => {
     }
   };
 
+  // Close modals when ESC key is pressed
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' || event.keyCode === 27) {
+        if (showDetails) {
+          setDetailsClosing(true);
+          setTimeout(() => {
+            setShowDetails(false);
+            setDetailsClosing(false);
+          }, 200);
+        } else if (showImageModal) {
+          setShowImageModal(false);
+          setSelectedImage(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetails, showImageModal]);
+
   // Open modal for order details
   const handleViewFile = (order) => {
     setSelectedOrder(order);
@@ -109,17 +145,146 @@ const OrdersHistory = () => {
     setShowImageModal(true);
   };
 
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const finishedOrders = orders.filter(o => 
+      o.status?.toLowerCase() === 'completed' || o.status?.toLowerCase() === 'finished'
+    );
+    
+    // Total finished orders
+    const totalFinished = finishedOrders.length;
+    
+    // This month's orders
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const thisMonth = finishedOrders.filter(o => {
+      if (!o.completed_at) return false;
+      const date = new Date(o.completed_at);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    }).length;
+    
+    // Total revenue
+    const totalRevenue = finishedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    
+    // Top service
+    const serviceCounts = {};
+    finishedOrders.forEach(o => {
+      const service = o.appointment?.service_type || 'N/A';
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
+    });
+    const topService = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    
+    return { totalFinished, thisMonth, totalRevenue, topService };
+  }, [orders]);
+
+  // Animate stats when they change
+  useEffect(() => {
+    if (!loading && !error && orders.length > 0) {
+      setAnimateStats(false);
+      setDisplayStats({ totalFinished: 0, thisMonth: 0, totalRevenue: 0 });
+      
+      const start = performance.now();
+      const dur = 1000;
+      
+      const tick = (t) => {
+        const p = Math.min(1, (t - start) / dur);
+        setDisplayStats({
+          totalFinished: Math.round(stats.totalFinished * p),
+          thisMonth: Math.round(stats.thisMonth * p),
+          totalRevenue: Math.round(stats.totalRevenue * p)
+        });
+        
+        if (p < 1) {
+          requestAnimationFrame(tick);
+        } else {
+          setAnimateStats(true);
+        }
+      };
+      requestAnimationFrame(tick);
+    } else if (!loading && !error && orders.length === 0) {
+      setDisplayStats({ totalFinished: 0, thisMonth: 0, totalRevenue: 0 });
+    }
+  }, [loading, error, orders.length, stats.totalFinished, stats.thisMonth, stats.totalRevenue]);
+
+  // Filter and sort orders
+  const filteredAndSortedOrders = useMemo(() => {
+    let filtered = [...orders];
+    
+    // Apply date filter
+    if (dateFilter.type === 'specific' && dateFilter.startDate) {
+      const targetDate = new Date(dateFilter.startDate);
+      filtered = filtered.filter(o => {
+        if (!o.completed_at) return false;
+        const orderDate = new Date(o.completed_at);
+        return orderDate.toDateString() === targetDate.toDateString();
+      });
+    } else if (dateFilter.type === 'range' && dateFilter.startDate && dateFilter.endDate) {
+      const startDate = new Date(dateFilter.startDate);
+      const endDate = new Date(dateFilter.endDate);
+      filtered = filtered.filter(o => {
+        if (!o.completed_at) return false;
+        const orderDate = new Date(o.completed_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    }
+    
+    // Apply sort order
+    filtered.sort((a, b) => {
+      const dateA = a.completed_at ? new Date(a.completed_at) : new Date(0);
+      const dateB = b.completed_at ? new Date(b.completed_at) : new Date(0);
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    return filtered;
+  }, [orders, dateFilter, sortOrder]);
+
   // Pagination calculations - memoized for performance
   const { totalPages, currentOrders } = useMemo(() => {
-    const total = Math.ceil(orders.length / itemsPerPage);
+    const total = Math.ceil(filteredAndSortedOrders.length / itemsPerPage);
     const start = (currentPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
-    const current = orders.slice(start, end);
+    const current = filteredAndSortedOrders.slice(start, end);
     return { totalPages: total, currentOrders: current };
-  }, [orders, currentPage, itemsPerPage]);
+  }, [filteredAndSortedOrders, currentPage, itemsPerPage]);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
+  };
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFilter, sortOrder]);
+
+  // Close filter menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showFilterMenu && !e.target.closest('.filter-dropdown') && !e.target.closest('.filter-btn')) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterMenu]);
+
+  // Get filter display name
+  const getFilterDisplayName = () => {
+    if (dateFilter.type === 'all' && sortOrder === 'newest') {
+      return 'No Filter';
+    }
+    const parts = [];
+    if (sortOrder === 'oldest') {
+      parts.push('Oldest to Latest');
+    } else {
+      parts.push('Latest to Oldest');
+    }
+    if (dateFilter.type === 'specific') {
+      parts.push('Specific Date');
+    } else if (dateFilter.type === 'range') {
+      parts.push('Date Range');
+    }
+    return parts.join(' • ');
   };
 
   // Scroll to top whenever page changes
@@ -155,8 +320,261 @@ const OrdersHistory = () => {
   }
 
   return (
-    <div className="page-wrap">
-      <div className="orders-content" style={{ marginTop: 8 }}>
+    <div className="page-wrap orders-history-page">
+      <div className="orders-content orders-history-content" style={{ marginTop: 8 }}>
+        {/* Statistics Cards - Dashboard Style */}
+        <div className="panel quick-stats" style={{ margin: '0 16px 16px 16px' }}>
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="stat-card blue">
+              <span className="stat-value">{displayStats.totalFinished}</span>
+              <span className="stat-title">Total Finished Orders</span>
+            </div>
+            <div className="stat-card yellow">
+              <span className="stat-value">{displayStats.thisMonth}</span>
+              <span className="stat-title">This Month's Orders</span>
+            </div>
+            <div className="stat-card green">
+              <span className="stat-value">₱{displayStats.totalRevenue.toLocaleString()}</span>
+              <span className="stat-title">Total Revenue</span>
+            </div>
+            <div className="stat-card teal">
+              <span className="stat-value">{stats.topService}</span>
+              <span className="stat-title">Top Service</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filter Section - OUTSIDE the table container */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 16px 16px 16px', position: 'relative', zIndex: 10 }}>
+          <div style={{ flex: 1 }} />
+          {/* Current Filter Display and Filter Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Display current filter */}
+            <div style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: (dateFilter.type === 'all' && sortOrder === 'newest') ? '#6b7280' : '#2563eb',
+              padding: '6px 12px',
+              background: (dateFilter.type === 'all' && sortOrder === 'newest') ? '#f3f4f6' : '#dbeafe',
+              borderRadius: 6,
+              border: (dateFilter.type === 'all' && sortOrder === 'newest') ? '1px solid #e5e7eb' : '1px solid #93c5fd',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}>
+              {getFilterDisplayName()}
+            </div>
+            
+            <div style={{ position: 'relative' }}>
+              <button
+                ref={filterBtnRef}
+                className="filter-btn"
+                data-filter-btn-history="true"
+                onClick={() => setShowFilterMenu(!showFilterMenu)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 16px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  transition: 'background 0.2s',
+                  position: 'relative',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
+              >
+                <FaFilter /> Filter Orders
+              </button>
+              
+              {/* Filter Dropdown */}
+              {showFilterMenu && ReactDOM.createPortal(
+                <div 
+                  className="filter-dropdown"
+                  ref={(el) => {
+                    if (el) {
+                      const btn = filterBtnRef.current || document.querySelector('button[data-filter-btn-history="true"]');
+                      if (btn) {
+                        const rect = btn.getBoundingClientRect();
+                        const dropdownWidth = el.offsetWidth || 280;
+                        
+                        // Calculate sidebar width (matches CSS clamp(200px, 20vw, 250px))
+                        const sidebarWidth = Math.min(Math.max(200, window.innerWidth * 0.2), 250);
+                        const pageMargin = window.innerWidth <= 768 ? 8 : 16;
+                        const contentLeft = sidebarWidth;
+                        const maxRight = window.innerWidth - pageMargin;
+                        const minLeft = contentLeft + pageMargin;
+                        
+                        // Position aligned to right edge of button
+                        let leftPos = rect.right - dropdownWidth;
+                        
+                        // Ensure dropdown doesn't go past right margin
+                        if (leftPos + dropdownWidth > maxRight) {
+                          leftPos = maxRight - dropdownWidth;
+                        }
+                        
+                        // Ensure dropdown doesn't go past left margin (after sidebar)
+                        if (leftPos < minLeft) {
+                          leftPos = minLeft;
+                        }
+                        
+                        el.style.top = (rect.bottom + 4) + 'px';
+                        el.style.left = leftPos + 'px';
+                      }
+                    }
+                  }}
+                >
+                  <div 
+                    onClick={() => { 
+                      setSortOrder('newest'); 
+                      setDateFilter({ type: 'all', startDate: '', endDate: '' }); 
+                      setShowFilterMenu(false); 
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: (sortOrder === 'newest' && dateFilter.type === 'all') ? '#f3f4f6' : 'white',
+                      fontWeight: (sortOrder === 'newest' && dateFilter.type === 'all') ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = (sortOrder === 'newest' && dateFilter.type === 'all') ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 No Filter
+                  </div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                  <div 
+                    onClick={() => { setSortOrder('newest'); setShowFilterMenu(false); }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: sortOrder === 'newest' ? '#f3f4f6' : 'white',
+                      fontWeight: sortOrder === 'newest' ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = sortOrder === 'newest' ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 Latest Order to Oldest
+                  </div>
+                  <div 
+                    onClick={() => { setSortOrder('oldest'); setShowFilterMenu(false); }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: sortOrder === 'oldest' ? '#f3f4f6' : 'white',
+                      fontWeight: sortOrder === 'oldest' ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = sortOrder === 'oldest' ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 Oldest Order to Latest
+                  </div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                  <div 
+                    onClick={() => { setDateFilter({ type: 'all', startDate: '', endDate: '' }); setShowFilterMenu(false); }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: dateFilter.type === 'all' ? '#f3f4f6' : 'white',
+                      fontWeight: dateFilter.type === 'all' ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = dateFilter.type === 'all' ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 All Dates
+                  </div>
+                  <div 
+                    onClick={() => { setDateFilter({ ...dateFilter, type: 'specific' }); }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: dateFilter.type === 'specific' ? '#f3f4f6' : 'white',
+                      fontWeight: dateFilter.type === 'specific' ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = dateFilter.type === 'specific' ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 Specific Date
+                  </div>
+                  <div 
+                    onClick={() => { setDateFilter({ ...dateFilter, type: 'range' }); }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      background: dateFilter.type === 'range' ? '#f3f4f6' : 'white',
+                      fontWeight: dateFilter.type === 'range' ? 600 : 400,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = dateFilter.type === 'range' ? '#f3f4f6' : 'white'}
+                  >
+                    🔹 Date Range
+                  </div>
+                  {dateFilter.type === 'specific' && (
+                    <div style={{ padding: '8px 16px', borderTop: '1px solid #e5e7eb' }}>
+                      <input
+                        type="date"
+                        value={dateFilter.startDate}
+                        onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 4,
+                          fontSize: 14
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+                  {dateFilter.type === 'range' && (
+                    <div style={{ padding: '8px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <input
+                        type="date"
+                        placeholder="Start Date"
+                        value={dateFilter.startDate}
+                        onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 4,
+                          fontSize: 14
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <input
+                        type="date"
+                        placeholder="End Date"
+                        value={dateFilter.endDate}
+                        onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 4,
+                          fontSize: 14
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
+          </div>
+        </div>
+
         <div
           className="feedback-card-container"
           style={{
@@ -168,7 +586,7 @@ const OrdersHistory = () => {
             margin: '0 16px 10px 16px'
           }}
         >
-          <div className={`table-scroll-container ${orders.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
+          <div className={`table-scroll-container ${filteredAndSortedOrders.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#e8f4fd' }}>
@@ -176,11 +594,12 @@ const OrdersHistory = () => {
                 <th>Name</th>
                 <th>Services</th>
                 <th>Status</th>
+                <th>Completion Date</th>
                 <th>Layout/Notes</th>
               </tr>
             </thead>
             <tbody>
-              {orders.length > 0 ? (
+              {filteredAndSortedOrders.length > 0 ? (
                 currentOrders.map((order) => (
                   <tr key={order.id}>
                     <td>{order.id}</td>
@@ -217,6 +636,15 @@ const OrdersHistory = () => {
                       </div>
                     </td>
                     <td>
+                      {order.completed_at ? (
+                        <span style={{ fontSize: '14px', color: '#333' }}>
+                          {formatDateForDisplay(order.completed_at)}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '14px', color: '#999' }}>N/A</span>
+                      )}
+                    </td>
+                    <td>
                       <span
                         className="action-link"
                         onClick={() => handleViewFile(order)}
@@ -229,8 +657,8 @@ const OrdersHistory = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: 20 }}>
-                    No order history found.
+                  <td colSpan="6" style={{ textAlign: 'center', padding: 20 }}>
+                    {dateFilter.type !== 'all' || sortOrder !== 'newest' ? 'No orders match the current filters.' : 'No order history found.'}
                   </td>
                 </tr>
               )}
@@ -241,7 +669,7 @@ const OrdersHistory = () => {
       </div>
 
       {/* Pagination Panel - Fixed at bottom */}
-      {orders.length > 0 && totalPages > 1 && (
+      {filteredAndSortedOrders.length > 0 && totalPages > 1 && (
         <div className="pagination-panel">
           <div className="pagination-controls">
             <button
@@ -270,7 +698,7 @@ const OrdersHistory = () => {
               Next
             </button>
             <span className="pagination-meta" style={{ marginLeft: 12, color: '#475569', fontSize: 13 }}>
-              Showing {currentOrders.length} of {orders.length} results
+              Showing {currentOrders.length} of {filteredAndSortedOrders.length} results
             </span>
           </div>
         </div>
@@ -375,12 +803,6 @@ const OrdersHistory = () => {
                       <div className="detail-label" style={{ fontWeight: 600 }}>Due Date</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.preferred_due_date ? new Date(selectedOrder.appointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                     </div>
-                    {(selectedOrder.status === 'Finished' || selectedOrder.status === 'Completed') && selectedOrder.completed_at && (
-                      <div className="detail-group">
-                        <div className="detail-label" style={{ fontWeight: 600 }}>Completion Date</div>
-                        <div className="detail-value" style={{ fontWeight: 400 }}>{formatDateForDisplay(selectedOrder.completed_at)}</div>
-                      </div>
-                    )}
                     <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Current Status</div>
                       <div className="detail-value" style={{ color: getStatusColor(selectedOrder.status), fontWeight: 400 }}>

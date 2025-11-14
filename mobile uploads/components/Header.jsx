@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSegments } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppState, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import api from '../utils/api';
@@ -207,7 +207,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
 
   const getNotificationBody = (notification) => {
     if (notification.type === 'appointment_booked') {
-      return notification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.';
+      return notification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved. In the meantime, you can check your submitted appointment at the "My Profile" page under the "My Appointments" section.';
     } else if (notification.type === 'ready_to_check') {
       return 'Your order is now ready to check. Please visit us to review your order.';
     } else if (notification.type === 'order_completed') {
@@ -233,7 +233,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
     } else if (notification.type === 'order_cancelled') {
       return notification.body || '';
     } else if (notification.type === 'refund_processed') {
-      return 'Your refund has been processed. Please check the refund proof image.';
+      return 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin. Please go to the "Appointments" page to check your refund status.';
     }
     return notification.body || '';
   };
@@ -337,18 +337,18 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
                 <MaterialIcons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
+            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={true}>
               {selectedNotification && selectedNotification.type === 'appointment_booked' && (
                 <View>
-                  <Text style={styles.modalBody}>
-                    {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved.'}
+                  <Text style={[styles.modalBody, { lineHeight: 22 }]}>
+                    {selectedNotification.body || 'Please wait while the admin reviews your appointment request. Your order will be processed once it has been approved. In the meantime, you can check your submitted appointment at the "My Profile" page under the "My Appointments" section.'}
                   </Text>
                 </View>
               )}
               {selectedNotification && selectedNotification.type === 'refund_processed' && (
                 <View>
-                  <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600', marginBottom: 12 }]}>
-                    {selectedNotification.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.'}
+                  <Text style={[styles.modalBody, { fontSize: 15, color: '#16A34A', fontWeight: '600', marginBottom: 12, lineHeight: 22 }]}>
+                    {selectedNotification.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin. Please go to the "Appointments" page to check your refund status.'}
                   </Text>
                   {selectedNotification.data?.refund_image && (
                     <View style={{ marginTop: 12 }}>
@@ -522,7 +522,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    marginLeft: 0, // Account for sidebar if needed
   },
   modalCard: {
     backgroundColor: '#fff',
@@ -535,10 +534,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 10,
-    alignSelf: 'center',
-  },
-  modalScrollView: {
-    maxHeight: 400,
   },
   modalHeader: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import BookAppointment from '../../components/BookAppointment';
 import { useAppointmentModal } from '../../contexts/AppointmentModalContext';
 
 const CustomTabBarButton = (props) => {
@@ -58,10 +59,11 @@ const TabIcon = ({ focused, iconName, label }) => {
 };
 
 export default function TabsLayout() {
-  const { openModal } = useAppointmentModal();
+  const { isOpen: modalVisible, openModal, closeModal } = useAppointmentModal();
 
   return (
     <View style={{ flex: 1 }}>
+      <BookAppointment visible={modalVisible} onClose={closeModal} />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -102,9 +104,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="appointments"
         options={{
-          title: 'Appointments',
+          title: 'Appooint.',
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} iconName="event" label="Appointments" />
+            <TabIcon focused={focused} iconName="event" label="Appoint." />
           ),
           tabBarButton: (props) => <CustomTabBarButton {...props} accessibilityLabel="Appointments" />,
         }}
@@ -201,7 +203,8 @@ const styles = StyleSheet.create({
     height: 100,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    pointerEvents: 'box-none',
+    zIndex: 10,
+    pointerEvents: 'box-none', // Allow touches to pass through container to tabs below
   },
   centeredButton: {
     width: 64,
@@ -218,8 +221,10 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
-    elevation: 8,
+    elevation: 10,
     borderWidth: 4,
     borderColor: '#E6F2F8',
+    zIndex: 11,
+    pointerEvents: 'auto', // Button itself should receive touches
   },
 });

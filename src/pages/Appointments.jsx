@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Appointments.css';
 import '../styles/Feedback.css';
@@ -232,6 +233,39 @@ const Appointments = () => {
     setShowImageModal(true);
   };
 
+  // Close modals when ESC key is pressed
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' || event.keyCode === 27) {
+        if (showDetails) {
+          setDetailsClosing(true);
+          setTimeout(() => {
+            setShowDetails(false);
+            setDetailsClosing(false);
+          }, 200);
+        } else if (showImageModal) {
+          setShowImageModal(false);
+          setSelectedImage(null);
+        } else if (showRejectModal) {
+          setShowRejectModal(false);
+          setRejectAppointmentId(null);
+          setRefundImage(null);
+          setRefundImagePreview(null);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+          setRefundAppointmentId(null);
+          setRefundImageFile(null);
+          setRefundImagePreviewFile(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetails, showImageModal, showRejectModal, showRefundModal]);
+
   const handleAddToQueue = (id) => {
     setQueueConfirmId(id);
   };
@@ -279,11 +313,8 @@ const Appointments = () => {
       const formData = new FormData();
       formData.append('refund_image', refundImage);
 
-      await api.post(`/admin/appointments/${rejectAppointmentId}/reject`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Don't manually set Content-Type - let axios set it with proper boundary
+      await api.post(`/admin/appointments/${rejectAppointmentId}/reject`, formData);
 
       setAppointments(appointments.filter(a => a.id !== rejectAppointmentId));
       setShowRejectModal(false);
@@ -328,11 +359,8 @@ const Appointments = () => {
       const formData = new FormData();
       formData.append('refund_image', refundImageFile);
 
-      await api.post(`/admin/appointments/${refundAppointmentId}/refund`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Don't manually set Content-Type - let axios set it with proper boundary
+      await api.post(`/admin/appointments/${refundAppointmentId}/refund`, formData);
 
       // Remove appointment from list after refund is processed
       setAppointments(appointments.filter(a => a.id !== refundAppointmentId));
@@ -394,7 +422,7 @@ const Appointments = () => {
             ) : appointments.length === 0 ? (
               <p>No appointments found.</p>
             ) : (
-              <div className={`table-scroll-container ${!isLoading && !error && appointments.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
+              <div className="table-scroll-container with-pagination">
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
   <thead>
     <tr style={{ background: '#e8f4fd' }}>
@@ -486,7 +514,7 @@ const Appointments = () => {
           </div>
 
           {/* Pagination Panel - Fixed at bottom */}
-          {!isLoading && !error && appointments.length > 0 && totalPages > 1 && (
+          {!isLoading && !error && appointments.length > 0 && (
             <div className="pagination-panel">
               <div className="pagination-controls">
                 <button
@@ -521,157 +549,116 @@ const Appointments = () => {
             </div>
           )}
 
-          {/* View Details Modal (match Orders dashboard modal design) - MAXIMUM z-index to ensure it's above everything */}
-          {showDetails && selectedAppointment && (
-            <div
-              className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
-              style={{
-                zIndex: 999999,
-                isolation: 'isolate'
-              }}
-              onClick={() => {
-                setDetailsClosing(true);
-                setTimeout(() => {
-                  setShowDetails(false);
-                  setDetailsClosing(false);
-                }, 200);
-              }}
-            >
+          {/* View Details Modal (Dashboard style) */}
+          {showDetails && selectedAppointment && createPortal(
+            (
               <div
-                className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
-                style={{
-                  zIndex: 999999,
-                  isolation: 'isolate'
+                className={`dashboard-modal-bg animate-fade${detailsClosing ? ' closing' : ''}`}
+                onClick={() => {
+                  setDetailsClosing(true);
+                  setTimeout(() => {
+                    setShowDetails(false);
+                    setDetailsClosing(false);
+                  }, 200);
                 }}
-                onClick={(e) => e.stopPropagation()}
               >
-                <AiOutlineClose
-                  className="dashboard-modal-exit-icon"
-                  style={{
-                    zIndex: 1000000
-                  }}
-                  onClick={() => {
-                    setDetailsClosing(true);
-                    setTimeout(() => {
-                      setShowDetails(false);
-                      setDetailsClosing(false);
-                    }, 200);
-                  }}
-                />
-                <h2 className="dashboard-modal-title" style={{ marginTop: 0, paddingTop: 0 }}>Appointment Details</h2>
-                <div className="details-container" style={{ flexWrap: 'wrap', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
-                  <div className="details-left">
-                    <div className="detail-group">
-                      <div className="detail-label">Service Type</div>
-                      <div className="detail-value">{selectedAppointment.service_type || 'N/A'}</div>
-                    </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Appointment Date</div>
-                      <div className="detail-value">{formatDateTime(selectedAppointment.appointment_date, selectedAppointment.appointment_time)}</div>
-                    </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Full Name</div>
-                      <div className="detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
-                    </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Phone Number</div>
-                      <div className="detail-value">{selectedAppointment.user?.phone || 'N/A'}</div>
-                    </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Size</div>
-                      <div className="detail-value">
-                        {(() => {
-                          const rawSizes = selectedAppointment.sizes;
-                          if (!rawSizes) return 'N/A';
-                          try {
-                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
-                            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-                              return (
-                                <>
-                                  {Object.entries(parsed).map(([size, qty]) => (
-                                    <div key={size}>{size} - {qty}</div>
-                                  ))}
-                                </>
-                              );
+                <div
+                  className={`dashboard-modal-panel animate-pop${detailsClosing ? ' closing' : ''}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
+                    onClick={() => {
+                      setDetailsClosing(true);
+                      setTimeout(() => {
+                        setShowDetails(false);
+                        setDetailsClosing(false);
+                      }, 200);
+                    }}
+                  />
+                  <h2 className="dashboard-modal-title">Appointment Details</h2>
+                  <div className="dashboard-details-container" style={{ flexWrap: 'wrap' }}>
+                    <div className="dashboard-details-left">
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Full Name</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.user?.name || 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Appointment Date</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.appointment_date ? new Date(selectedAppointment.appointment_date).toLocaleDateString() : 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Service Type</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.service_type || 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Phone Number</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.user?.phone || selectedAppointment.user?.phone_number || 'N/A'}</div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Size</div>
+                        <div className="dashboard-detail-value">
+                          {(() => {
+                            const rawSizes = selectedAppointment.sizes;
+                            if (!rawSizes) return 'N/A';
+                            try {
+                              const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
+                              if (parsed && typeof parsed === 'object') {
+                                return (
+                                  <>
+                                    {Object.entries(parsed).map(([size, qty]) => (
+                                      <div key={size}>{size} - {qty} pcs.</div>
+                                    ))}
+                                  </>
+                                );
+                              }
+                              return String(rawSizes);
+                            } catch (_) {
+                              return String(rawSizes);
                             }
-                            return 'N/A';
-                          } catch (_) {
-                            return 'N/A';
-                          }
-                        })()}
+                          })()}
+                        </div>
+                      </div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Quantity</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.total_quantity ? `${selectedAppointment.total_quantity} pcs.` : 'N/A'}</div>
                       </div>
                     </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Quantity</div>
-                      <div className="detail-value">
-                        {selectedAppointment.total_quantity || (() => {
-                          const rawSizes = selectedAppointment.sizes;
-                          if (!rawSizes) return 0;
-                          try {
-                            const parsed = typeof rawSizes === 'string' ? JSON.parse(rawSizes) : rawSizes;
-                            if (parsed && typeof parsed === 'object') {
-                              return Object.values(parsed).reduce((a, b) => Number(a) + Number(b), 0);
-                            }
-                            return 0;
-                          } catch (_) {
-                            return 0;
-                          }
-                        })()}
+                    <div className="dashboard-details-right">
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Due Date</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.preferred_due_date ? new Date(selectedAppointment.preferred_due_date).toLocaleDateString() : 'N/A'}</div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="details-right">
-                    <div className="detail-group">
-                      <div className="detail-label">Due Date</div>
-                      <div className="detail-value">
-                        {selectedAppointment.preferred_due_date ? formatDate(selectedAppointment.preferred_due_date) : 'N/A'}
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-detail-label">Notes</div>
+                        <div className="dashboard-detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
                       </div>
-                    </div>
-                    <div className="detail-group">
-                      <div className="detail-label">Notes</div>
-                      <div className="detail-value">{selectedAppointment.notes || 'No notes provided.'}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '4px' }}>
-                      <div>
-                        <div className="image-label">Design Image</div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-image-label">Design Image</div>
                         {selectedAppointment.design_image ? (
                           <img 
                             src={selectedAppointment.design_image} 
-                            alt="Jersey Design"
-                            className="modal-image"
-                            onClick={() => handleImageClick(
-                              selectedAppointment.design_image,
-                              'Design Image'
-                            )}
-                            onError={(e) => {
-                              console.error('Failed to load design image:', e.target.src);
-                              e.target.style.display = 'none';
-                            }}
+                            alt="Design" 
+                            className="dashboard-modal-image"
+                            onClick={() => handleImageClick(selectedAppointment.design_image, 'Design Image')}
                           />
                         ) : (
-                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', borderRadius: '4px', marginBottom: '8px' }}>
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', marginTop: 8 }}>
                             No design image uploaded
                           </div>
                         )}
                       </div>
-                      <div>
-                        <div className="image-label">GCash Proof</div>
+                      <div className="dashboard-detail-group">
+                        <div className="dashboard-image-label">GCash Proof</div>
                         {selectedAppointment.gcash_proof ? (
                           <img 
                             src={selectedAppointment.gcash_proof} 
-                            alt="GCash Payment"
-                            className="modal-image"
-                            onClick={() => handleImageClick(
-                              selectedAppointment.gcash_proof,
-                              'GCash Payment Proof'
-                            )}
-                            onError={(e) => {
-                              console.error('Failed to load GCash proof image:', e.target.src);
-                              e.target.style.display = 'none';
-                            }}
+                            alt="GCash Payment" 
+                            className="dashboard-modal-image"
+                            onClick={() => handleImageClick(selectedAppointment.gcash_proof, 'GCash Payment Proof')}
                           />
                         ) : (
-                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', borderRadius: '4px', marginBottom: '8px' }}>
+                          <div style={{ padding: '20px', border: '1px solid #ddd', textAlign: 'center', marginTop: 8 }}>
                             No GCash proof uploaded
                           </div>
                         )}
@@ -680,32 +667,36 @@ const Appointments = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            ),
+            document.body
           )}
 
           {/* Queue Confirmation Modal */}
-          {queueConfirmId !== null && (
-            <div className="dashboard-modal-bg animate-fade" onClick={() => setQueueConfirmId(null)}>
-              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Add this appointment to the queue?</h3>
-                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
-                    onClick={() => setQueueConfirmId(null)}
-                  >
-                    No
-                  </button>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
-                    onClick={confirmAddToQueue}
-                  >
-                    Yes
-                  </button>
+          {queueConfirmId !== null && createPortal(
+            (
+              <div className="dashboard-modal-bg animate-fade" onClick={() => setQueueConfirmId(null)}>
+                <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Add this appointment to the queue?</h3>
+                  <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                      onClick={() => setQueueConfirmId(null)}
+                    >
+                      No
+                    </button>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                      onClick={confirmAddToQueue}
+                    >
+                      Yes
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            ),
+            document.body
           )}
 
           {/* Add to Queue Success Popup */}
@@ -717,73 +708,76 @@ const Appointments = () => {
           )}
 
           {/* Reject Appointment Modal with Refund Image Upload */}
-          {showRejectModal && (
-            <div className="dashboard-modal-bg animate-fade" onClick={() => {
-              setShowRejectModal(false);
-              setRefundImage(null);
-              setRefundImagePreview(null);
-            }}>
-              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
-                <AiOutlineClose
-                  className="dashboard-modal-exit-icon"
-                  onClick={() => {
-                    setShowRejectModal(false);
-                    setRefundImage(null);
-                    setRefundImagePreview(null);
-                  }}
-                  style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
-                />
-                <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Reject Appointment</h3>
-                <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
-                  Please upload a GCash refund image before rejecting this appointment.
-                </p>
-                
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
-                    GCash Refund Image *
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleRefundImageChange}
-                    style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
-                  />
-                  {refundImagePreview && (
-                    <div style={{ marginTop: 12 }}>
-                      <img
-                        src={refundImagePreview}
-                        alt="Refund preview"
-                        style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
-                        onClick={() => handleImageClick(refundImagePreview, 'Refund Preview')}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+          {showRejectModal && createPortal(
+            (
+              <div className="dashboard-modal-bg animate-fade" onClick={() => {
+                setShowRejectModal(false);
+                setRefundImage(null);
+                setRefundImagePreview(null);
+              }}>
+                <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
                     onClick={() => {
                       setShowRejectModal(false);
                       setRefundImage(null);
                       setRefundImagePreview(null);
                     }}
-                    disabled={rejecting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: rejecting || !refundImage ? 'not-allowed' : 'pointer', opacity: rejecting || !refundImage ? 0.6 : 1 }}
-                    onClick={handleRejectAppointment}
-                    disabled={rejecting || !refundImage}
-                  >
-                    {rejecting ? 'Rejecting...' : 'Reject Order'}
-                  </button>
+                    style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
+                  />
+                  <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Reject Appointment</h3>
+                  <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
+                    Please upload a GCash refund image before rejecting this appointment.
+                  </p>
+                  
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
+                      GCash Refund Image *
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleRefundImageChange}
+                      style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                    />
+                    {refundImagePreview && (
+                      <div style={{ marginTop: 12 }}>
+                        <img
+                          src={refundImagePreview}
+                          alt="Refund preview"
+                          style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                          onClick={() => handleImageClick(refundImagePreview, 'Refund Preview')}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                      onClick={() => {
+                        setShowRejectModal(false);
+                        setRefundImage(null);
+                        setRefundImagePreview(null);
+                      }}
+                      disabled={rejecting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: rejecting || !refundImage ? 'not-allowed' : 'pointer', opacity: rejecting || !refundImage ? 0.6 : 1 }}
+                      onClick={handleRejectAppointment}
+                      disabled={rejecting || !refundImage}
+                    >
+                      {rejecting ? 'Rejecting...' : 'Reject Order'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            ),
+            document.body
           )}
 
           {/* Reject Success Popup */}
@@ -794,73 +788,76 @@ const Appointments = () => {
           )}
 
           {/* Refund Modal */}
-          {showRefundModal && (
-            <div className="dashboard-modal-bg animate-fade" onClick={() => {
-              setShowRefundModal(false);
-              setRefundImageFile(null);
-              setRefundImagePreviewFile(null);
-            }}>
-              <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
-                <AiOutlineClose
-                  className="dashboard-modal-exit-icon"
-                  onClick={() => {
-                    setShowRefundModal(false);
-                    setRefundImageFile(null);
-                    setRefundImagePreviewFile(null);
-                  }}
-                  style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
-                />
-                <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Process Refund</h3>
-                <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
-                  Please upload a GCash refund image to process the refund for this cancelled appointment.
-                </p>
-                
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
-                    GCash Refund Image *
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleRefundImageFileChange}
-                    style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
-                  />
-                  {refundImagePreviewFile && (
-                    <div style={{ marginTop: 12 }}>
-                      <img
-                        src={refundImagePreviewFile}
-                        alt="Refund preview"
-                        style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
-                        onClick={() => handleImageClick(refundImagePreviewFile, 'Refund Preview')}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: 16, width: '100%' }}>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+          {showRefundModal && createPortal(
+            (
+              <div className="dashboard-modal-bg animate-fade" onClick={() => {
+                setShowRefundModal(false);
+                setRefundImageFile(null);
+                setRefundImagePreviewFile(null);
+              }}>
+                <div className="dashboard-modal-panel animate-pop" style={{ maxWidth: 500, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+                  <AiOutlineClose
+                    className="dashboard-modal-exit-icon"
                     onClick={() => {
                       setShowRefundModal(false);
                       setRefundImageFile(null);
                       setRefundImagePreviewFile(null);
                     }}
-                    disabled={refunding}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="modal-button"
-                    style={{ flex: 1, fontSize: 16, background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: refunding || !refundImageFile ? 'not-allowed' : 'pointer', opacity: refunding || !refundImageFile ? 0.6 : 1 }}
-                    onClick={handleProcessRefund}
-                    disabled={refunding || !refundImageFile}
-                  >
-                    {refunding ? 'Processing...' : 'Process Refund'}
-                  </button>
+                    style={{ position: 'absolute', top: 16, right: 16, cursor: 'pointer' }}
+                  />
+                  <h3 style={{ marginBottom: 20, textAlign: 'center', marginTop: 10 }}>Process Refund</h3>
+                  <p style={{ marginBottom: 20, textAlign: 'center', color: '#666' }}>
+                    Please upload a GCash refund image to process the refund for this cancelled appointment.
+                  </p>
+                  
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: '600', color: '#333' }}>
+                      GCash Refund Image *
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleRefundImageFileChange}
+                      style={{ marginBottom: 12, width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                    />
+                    {refundImagePreviewFile && (
+                      <div style={{ marginTop: 12 }}>
+                        <img
+                          src={refundImagePreviewFile}
+                          alt="Refund preview"
+                          style={{ maxWidth: '100%', maxHeight: 200, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                          onClick={() => handleImageClick(refundImagePreviewFile, 'Refund Preview')}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 16, width: '100%' }}>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#6c757d', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: 'pointer' }}
+                      onClick={() => {
+                        setShowRefundModal(false);
+                        setRefundImageFile(null);
+                        setRefundImagePreviewFile(null);
+                      }}
+                      disabled={refunding}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="modal-button"
+                      style={{ flex: 1, fontSize: 16, background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: 12, cursor: refunding || !refundImageFile ? 'not-allowed' : 'pointer', opacity: refunding || !refundImageFile ? 0.6 : 1 }}
+                      onClick={handleProcessRefund}
+                      disabled={refunding || !refundImageFile}
+                    >
+                      {refunding ? 'Processing...' : 'Process Refund'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            ),
+            document.body
           )}
 
           {/* Refund Success Popup */}
@@ -871,17 +868,20 @@ const Appointments = () => {
           )}
 
           {/* Image Modal for Zoom */}
-          {showImageModal && selectedImage && (
-            <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
-              <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
-                <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
-                <img
-                  src={selectedImage.src}
-                  alt={selectedImage.alt}
-                  style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
-                />
+          {showImageModal && selectedImage && createPortal(
+            (
+              <div className="dashboard-modal-bg animate-fade" onClick={() => setShowImageModal(false)}>
+                <div className="dashboard-modal-panel animate-pop" onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
+                  <AiOutlineClose className="dashboard-modal-exit-icon" onClick={() => setShowImageModal(false)} />
+                  <img
+                    src={selectedImage.src}
+                    alt={selectedImage.alt}
+                    style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
+                  />
+                </div>
               </div>
-            </div>
+            ),
+            document.body
           )}
       </div>
     </>

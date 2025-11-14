@@ -110,6 +110,26 @@ const Customers = () => {
     setShowImageModal(true);
   };
 
+  // Close modals when ESC key is pressed
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' || event.keyCode === 27) {
+        if (profileModal.open) {
+          setProfileModal({ open: false, customer: null });
+          setExpandedOrder(null);
+        } else if (showImageModal) {
+          setShowImageModal(false);
+          setSelectedImage(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [profileModal.open, showImageModal]);
+
   // Pagination calculations - memoized for performance
   const { totalPages, currentCustomers, filteredCount } = useMemo(() => {
     // Apply search filter by name (case-insensitive)
@@ -164,6 +184,38 @@ const Customers = () => {
   return (
     <div className="page-wrap">
       <div className="customers-table-content" style={{ marginTop: 8 }}>
+        {/* Search Bar - OUTSIDE the table container */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 8px 16px 8px', position: 'relative', zIndex: 10 }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+            <FaSearch style={{
+              position: 'absolute',
+              left: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#9ca3af',
+              fontSize: 14
+            }} />
+            <input
+              type="text"
+              placeholder="Search customers by name"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              style={{
+                width: '100%',
+                padding: '8px 12px 8px 36px',
+                border: '1px solid #e5e7eb',
+                borderRadius: 6,
+                fontSize: 14,
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+          </div>
+          <div />
+        </div>
+
         <div
           className="feedback-card-container"
           style={{
@@ -175,37 +227,6 @@ const Customers = () => {
             margin: '0 8px 10px 8px'
           }}
         >
-          {/* Search Bar moved inside the container above the table */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
-              <FaSearch style={{
-                position: 'absolute',
-                left: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af',
-                fontSize: 14
-              }} />
-              <input
-                type="text"
-                placeholder="Search customers by name"
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px 8px 36px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-            <div />
-          </div>
           <div className={`table-scroll-container ${customersData.length > 0 && totalPages > 1 ? 'with-pagination' : ''}`}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>

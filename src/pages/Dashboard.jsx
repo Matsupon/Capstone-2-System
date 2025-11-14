@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AiOutlineClose } from 'react-icons/ai';
 import { FaUser, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
@@ -24,6 +24,22 @@ const Dashboard = () => {
       navigate('/login');
     }
   }, [navigate]);
+
+  const fetchUnviewedAppointmentsCount = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications/appointments/unviewed-count');
+      if (res.data?.success) {
+        const count = res.data.data?.unviewed_count || 0;
+        setUnviewedNewAppointments(count);
+        // Persist to localStorage for persistence across page refreshes
+        if (count > 0) {
+          localStorage.setItem('adminUnviewedAppointmentsCount', count.toString());
+        } else {
+          localStorage.removeItem('adminUnviewedAppointmentsCount');
+        }
+      }
+    } catch (_) {}
+  }, []);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -122,43 +138,33 @@ const Dashboard = () => {
           const data = response.data.data;
           const allOrders = data?.all_orders || [];
           
-          // Backend already filters to only Pending, Ready to Check, and Completed orders
-          // with today's appointments, so we can use the data directly
-          // But we'll do a safety filter just in case
-          const allowedStatuses = ['Pending', 'Ready to Check', 'Completed'];
-          const filteredOrders = allOrders.filter(order => {
-            const status = order.status;
-            return status && allowedStatuses.includes(status);
+          // Show all orders for today regardless of status
+          const todayOrders = allOrders.filter(order => {
+            if (!order.appointment_date) return false;
+            const orderDate = new Date(order.appointment_date);
+            const today = new Date();
+            return orderDate.toDateString() === today.toDateString();
           });
           
-          // Filter current_customer and next_customer if they have invalid status
-          let currentCustomer = data.current_customer;
-          let nextCustomer = data.next_customer;
+          // Sort by appointment time
+          todayOrders.sort((a, b) => {
+            if (!a.appointment_time || !b.appointment_time) return 0;
+            return a.appointment_time.localeCompare(b.appointment_time);
+          });
           
-          if (currentCustomer && !allowedStatuses.includes(currentCustomer.status)) {
-            currentCustomer = null;
-          }
-          if (nextCustomer && !allowedStatuses.includes(nextCustomer.status)) {
-            nextCustomer = null;
-          }
-          
-          // Update queueData with filtered data
+          // Update queueData with all today's orders
           setQueueData({
             ...data,
-            all_orders: filteredOrders,
-            current_customer: currentCustomer,
-            next_customer: nextCustomer,
-            has_queue: filteredOrders.length > 0
+            all_orders: todayOrders,
+            has_queue: todayOrders.length > 0
           });
           
-          // Count matches the filtered orders count (should match backend count)
-          setTodaysAppointmentsCount(filteredOrders.length);
+          // Count matches all today's orders
+          setTodaysAppointmentsCount(todayOrders.length);
           
           console.log('Queue data updated:', {
-            filteredCount: filteredOrders.length,
-            hasQueue: filteredOrders.length > 0,
-            currentCustomer: currentCustomer?.name,
-            nextCustomer: nextCustomer?.name
+            todayOrdersCount: todayOrders.length,
+            hasQueue: todayOrders.length > 0
           });
         }
       } catch (err) {
@@ -166,8 +172,6 @@ const Dashboard = () => {
         // Set default empty state on error
         setQueueData({ 
           has_queue: false, 
-          current_customer: null, 
-          next_customer: null, 
           message: 'Failed to load queue data',
           all_orders: []
         });
@@ -175,14 +179,6 @@ const Dashboard = () => {
       }
     };
 
-    const fetchUnviewedAppointmentsCount = async () => {
-      try {
-        const res = await api.get('/notifications/appointments/unviewed-count');
-        if (res.data?.success) {
-          setUnviewedNewAppointments(res.data.data?.unviewed_count || 0);
-        }
-      } catch (_) {}
-    };
 
     const fetchAppointmentViewStates = async () => {
       try {
@@ -191,6 +187,8 @@ const Dashboard = () => {
           const items = res.data.data || [];
           const unviewed = new Set(items.filter(i => !i.is_viewed).map(i => i.appointment_id));
           setUnviewedAppointmentIds(unviewed);
+          // Persist unviewed IDs to localStorage
+          localStorage.setItem('adminUnviewedAppointmentIds', JSON.stringify(Array.from(unviewed)));
         }
       } catch (_) {}
     };
@@ -218,7 +216,7 @@ const Dashboard = () => {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [navigate]);
+  }, [navigate, fetchUnviewedAppointmentsCount]);
   
 
   const currentDate = new Date();
@@ -296,30 +294,6 @@ const Dashboard = () => {
     return `${formattedHour}:${minutes} ${period}`;
   };
 
-  // Helper: check if a date string refers to "today"
-  const isSameDayAsToday = (dateString) => {
-    if (!dateString) return false;
-    const d = new Date(dateString);
-    const today = new Date();
-    return (
-      d.getFullYear() === today.getFullYear() &&
-      d.getMonth() === today.getMonth() &&
-      d.getDate() === today.getDate()
-    );
-  };
-
-  // Helper to determine if a date (YYYY-MM-DD) is today and its time (HH:mm or HH:mm:ss) is still upcoming
-  const isUpcomingToday = (dateString, timeString) => {
-    if (!timeString) return false;
-    // If date is provided and it's not today, return false. If no date provided, assume today (queue API already filters for today).
-    if (dateString && !isSameDayAsToday(dateString)) return false;
-    const [h, m] = timeString.split(':');
-    const now = new Date();
-    const t = new Date();
-    t.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    return t.getTime() >= now.getTime();
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     
@@ -387,6 +361,7 @@ const Dashboard = () => {
     { title: "Completed Orders", value: orderStats.finished_orders, color: "green" }
   ];
 
+  // Initialize from localStorage for persistence
   const [showDetails, setShowDetails] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -397,6 +372,22 @@ const Dashboard = () => {
   const [detailsClosing, setDetailsClosing] = useState(false);
   const [queueClosing, setQueueClosing] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
+  
+  // Initialize unviewed count from localStorage on mount
+  useEffect(() => {
+    const savedCount = localStorage.getItem('adminUnviewedAppointmentsCount');
+    if (savedCount) {
+      setUnviewedNewAppointments(parseInt(savedCount, 10));
+    }
+    
+    const savedIds = localStorage.getItem('adminUnviewedAppointmentIds');
+    if (savedIds) {
+      try {
+        const ids = JSON.parse(savedIds);
+        setUnviewedAppointmentIds(new Set(ids));
+      } catch (_) {}
+    }
+  }, []);
 
   useEffect(() => {
     const loadOrderForDetails = async () => {
@@ -432,6 +423,34 @@ const Dashboard = () => {
     };
     loadOrderForDetails();
   }, [showDetails, selectedAppointment]);
+
+  // Close modals when ESC key is pressed
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' || event.keyCode === 27) {
+        if (showDetails) {
+          setDetailsClosing(true);
+          setTimeout(() => {
+            setShowDetails(false);
+            setDetailsClosing(false);
+          }, 200);
+        } else if (showQueueModal) {
+          setQueueClosing(true);
+          setTimeout(() => {
+            setShowQueueModal(false);
+            setQueueClosing(false);
+          }, 200);
+        } else if (previewImageUrl) {
+          setPreviewImageUrl(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetails, showQueueModal, previewImageUrl]);
 
   return (
       <div className="dashboard-content">
@@ -502,15 +521,21 @@ const Dashboard = () => {
                                 setSelectedAppointment(appointment);
                                 setOpenedFromDueDates(false);
                                 setShowDetails(true);
-                                api.patch(`/notifications/appointments/${appointment.id}/viewed`).then(() => {
-                                  setUnviewedNewAppointments((c) => Math.max(0, c - 1));
-                                  setUnviewedAppointmentIds(prev => {
-                                    if (!prev.has(appointment.id)) return prev;
-                                    const next = new Set(prev);
-                                    next.delete(appointment.id);
-                                    return next;
-                                  });
-                                }).catch(() => {});
+                                // Only mark as viewed if it's currently unviewed
+                                if (unviewedAppointmentIds.has(appointment.id)) {
+                                  api.patch(`/notifications/appointments/${appointment.id}/viewed`).then(() => {
+                                    // Refresh the unviewed count from server to ensure accuracy
+                                    fetchUnviewedAppointmentsCount();
+                                    setUnviewedAppointmentIds(prev => {
+                                      if (!prev.has(appointment.id)) return prev;
+                                      const next = new Set(prev);
+                                      next.delete(appointment.id);
+                                      // Persist to localStorage
+                                      localStorage.setItem('adminUnviewedAppointmentIds', JSON.stringify(Array.from(next)));
+                                      return next;
+                                    });
+                                  }).catch(() => {});
+                                }
                               }}
                             >
                               View Details
@@ -538,69 +563,27 @@ const Dashboard = () => {
                 </button>
               </div>
               <div className="queue-info">
-                {queueData.has_queue ? (
+                {queueData.has_queue && queueData.all_orders && queueData.all_orders.length > 0 ? (
                   <>
-                    {/* Current Customer */}
-                    {queueData.current_customer && isUpcomingToday(
-                      queueData.current_customer?.appointment_date,
-                      queueData.current_customer?.appointment_time
-                    ) && (
-                      <div className="current-customer">
-                        <strong>Upcoming Customer:</strong>{' '}
-                        <span className="queue-number">
-                          #{queueData.current_customer?.queue_number || 'N/A'}
-                        </span>{' '}
-                        {queueData.current_customer?.name || 'N/A'}
+                    {queueData.all_orders.slice(0, 2).map((customer, index) => (
+                      <div key={customer.id || index} className={index === 0 ? "current-customer" : "next-customer"}>
+                        <strong>{index === 0 ? 'Customer 1:' : 'Customer 2:'}</strong>{' '}
+                        {customer.queue_number && (
+                          <span className="queue-number">
+                            #{customer.queue_number}
+                          </span>
+                        )}{' '}
+                        {customer.name || 'N/A'}
                         <span className="queue-time">
-                          ({formatTime(queueData.current_customer?.appointment_time)})
+                          ({formatTime(customer.appointment_time)})
                         </span>
-                        {queueData.current_customer?.status && (
-                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.current_customer.status) }}>
-                            [{queueData.current_customer.status}]
+                        {customer.status && (
+                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(customer.status) }}>
+                            [{customer.status}]
                           </span>
                         )}
                       </div>
-                    )}
-
-                    {/* Next Customer */}
-                    {queueData.next_customer && isUpcomingToday(
-                      queueData.next_customer?.appointment_date,
-                      queueData.next_customer?.appointment_time
-                    ) && (
-                      <div className="next-customer">
-                        <strong>Next Customer:</strong>{' '}
-                        <span className="queue-number">
-                          #{queueData.next_customer?.queue_number || 'N/A'}
-                        </span>{' '}
-                        {queueData.next_customer?.name || 'N/A'}
-                        <span className="queue-time">
-                          ({formatTime(queueData.next_customer?.appointment_time)})
-                        </span>
-                        {queueData.next_customer?.status && (
-                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(queueData.next_customer.status) }}>
-                            [{queueData.next_customer.status}]
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* If neither upcoming, show message */}
-                    {!(queueData.current_customer && isUpcomingToday(
-                      queueData.current_customer?.appointment_date,
-                      queueData.current_customer?.appointment_time
-                    )) &&
-                     !(queueData.next_customer && isUpcomingToday(
-                      queueData.next_customer?.appointment_date,
-                      queueData.next_customer?.appointment_time
-                    )) && (
-                      <div className="no-queue-message">
-                        <div className="queue-status">
-                          <span className="status-indicator inactive"></span>
-                          <span>{queueData.message || 'No queued customers at the moment'}</span>
-                        </div>
-                      </div>
-                    )}
-
+                    ))}
                   </>
                 ) : (
                   <div className="no-queue-message">
@@ -825,24 +808,17 @@ const Dashboard = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {(queueData.all_orders || [])
-                            .filter(o => isUpcomingToday(
-                              o.appointment_date,
-                              o.appointment_time
-                            ))
-                            .slice()
-                            .sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0))
-                            .map((o, i) => (
-                              <tr key={o.id || i}>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
-                                <td style={{ padding: '8px' }}>{o.name || 'N/A'}</td>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time)}</td>
-                                <td style={{ padding: '8px' }}>{o.service_type || 'N/A'}</td>
-                                <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
-                                  {o.status || 'N/A'}
-                                </td>
-                              </tr>
-                            ))}
+                          {(queueData.all_orders || []).map((o, i) => (
+                            <tr key={o.id || i}>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
+                              <td style={{ padding: '8px' }}>{o.name || 'N/A'}</td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time)}</td>
+                              <td style={{ padding: '8px' }}>{o.service_type || 'N/A'}</td>
+                              <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
+                                {o.status || 'N/A'}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     )}

@@ -16,8 +16,8 @@ import {
 } from 'react-native';
 import BookAppointment from '../../components/BookAppointment';
 import Header from '../../components/Header';
-import api from '../../utils/api';
 import { useAppointmentModal } from '../../contexts/AppointmentModalContext';
+import api from '../../utils/api';
 
 export default function HomePage() {
   const [userFirstName, setUserFirstName] = useState('User');
@@ -25,7 +25,6 @@ export default function HomePage() {
   const { isOpen: modalVisible, closeModal } = useAppointmentModal();
   const [nextAppointment, setNextAppointment] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [latestOrder, setLatestOrder] = useState(null);
   const [orders, setOrders] = useState([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -87,8 +86,6 @@ export default function HomePage() {
       if (res.data?.success) {
         const ordersData = res.data.data || [];
         setOrders(ordersData);
-        // Set latestOrder to the first order for backward compatibility (if needed)
-        setLatestOrder(ordersData.length > 0 ? ordersData[0] : null);
       }
     } catch (e) {
       // Only log if it's not a network error (network errors are expected if server is down)
@@ -327,8 +324,8 @@ export default function HomePage() {
     if (n.type === 'order_details_updated') {
       setDetails({
         type: 'order_details_updated',
-        title: 'You have successfully updated your Order Details!',
-        message: 'Your order details have been successfully updated.',
+        title: 'You have successfully rescheduled your appointment!',
+        message: '',
       });
       setDetailsVisible(true);
       return;
@@ -338,7 +335,7 @@ export default function HomePage() {
       setDetails({
         type: 'order_cancelled',
         title: 'You have successfully cancelled an order!',
-        message: '',
+        message: 'Please wait while the admin processes your refund.',
       });
       setDetailsVisible(true);
       return;
@@ -347,8 +344,7 @@ export default function HomePage() {
     if (n.type === 'refund_processed') {
       setDetails({
         type: 'refund_processed',
-        title: n.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin.',
-        refund_image: n.data?.refund_image || null,
+        title: n.title || 'Your down payment for the cancelled appointment/order has been successfully refunded by the admin. Please go to the "Appointments" page to check your refund status.',
       });
       setDetailsVisible(true);
       return;
@@ -670,12 +666,13 @@ export default function HomePage() {
                 <MaterialIcons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
+            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={true}>
             {(() => {
               if (!details) return <Text style={styles.modalBody}>Please check the "My Orders" page under the History section to review your feedback and check for admin response!</Text>;
               if (details.type === 'appointment_booked') {
                 return (
                   <View>
-                    <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600' }]}>{details.message}</Text>
+                    <Text style={[styles.modalBody, { fontSize: 15, color: '#16A34A', fontWeight: '600', lineHeight: 22 }]}>{details.message}</Text>
                   </View>
                 );
               }
@@ -718,7 +715,7 @@ export default function HomePage() {
               if (details.type === 'refund_processed') {
                 return (
                   <View>
-                    <Text style={[styles.modalBody, { fontSize: 16, color: '#16A34A', fontWeight: '600', marginBottom: 12 }]}>
+                    <Text style={[styles.modalBody, { fontSize: 15, color: '#16A34A', fontWeight: '600', marginBottom: 12, lineHeight: 22 }]}>
                       {details.title}
                     </Text>
                     {details.refund_image && (
@@ -751,6 +748,7 @@ export default function HomePage() {
               }
               return <Text style={styles.modalBody}>No additional information.</Text>;
             })()}
+            </ScrollView>
           </View>
         </View>
       </Modal>

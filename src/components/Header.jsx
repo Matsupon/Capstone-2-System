@@ -251,16 +251,15 @@ const Header = () => {
           onClick={() => setShowNotificationModal(false)}
           style={{
             position: 'fixed',
-            top: 0,
-            left: 'clamp(200px, 20vw, 250px)',
-            width: 'calc(100% - clamp(200px, 20vw, 250px))',
+            inset: 0,
+            width: '100vw',
             height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'rgba(128, 128, 128, 0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '20px',
-            zIndex: 10000,
+            zIndex: 9999999,
           }}
         >
           <div
