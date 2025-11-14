@@ -4,7 +4,7 @@ import '../styles/Orders.css';
 import '../styles/Feedback.css';
 import '../styles/Dashboard.css';
 import { AiOutlineClose } from 'react-icons/ai';
-import { FaFilter } from 'react-icons/fa';
+import { FaFilter, FaChevronLeft, FaChevronRight, FaTimes } from 'react-icons/fa';
 import api from '../api';
 
 const OrdersHistory = () => {
@@ -28,6 +28,11 @@ const OrdersHistory = () => {
     thisMonth: 0,
     totalRevenue: 0
   });
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [datePickerMonth, setDatePickerMonth] = useState(new Date().getMonth());
+  const [datePickerYear, setDatePickerYear] = useState(new Date().getFullYear());
+  const [datePickerType, setDatePickerType] = useState('start'); // 'start', 'end', or 'single'
+  const [tempSelectedDate, setTempSelectedDate] = useState(null);
 
   useEffect(() => {
     // Create abort controller for request cancellation
@@ -69,6 +74,75 @@ const OrdersHistory = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
+
+  // Calendar helper variables
+  const today = new Date();
+  const todayDate = today.getDate();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
+  
+  // Calendar functions
+  const handleDatePickerPrevMonth = () => {
+    if (datePickerMonth === 0) {
+      setDatePickerMonth(11);
+      setDatePickerYear(datePickerYear - 1);
+    } else {
+      setDatePickerMonth(datePickerMonth - 1);
+    }
+  };
+
+  const handleDatePickerNextMonth = () => {
+    if (datePickerMonth === 11) {
+      setDatePickerMonth(0);
+      setDatePickerYear(datePickerYear + 1);
+    } else {
+      setDatePickerMonth(datePickerMonth + 1);
+    }
+  };
+
+  const openDatePicker = (type) => {
+    setDatePickerType(type);
+    setShowDatePickerModal(true);
+    setDatePickerMonth(currentMonth);
+    setDatePickerYear(currentYear);
+    setTempSelectedDate(null);
+    setShowFilterMenu(false); // Close filter dropdown when calendar opens
+  };
+
+  const closeDatePicker = () => {
+    setShowDatePickerModal(false);
+    setTempSelectedDate(null);
+  };
+
+  const handleDateSelect = (day) => {
+    const selectedDate = `${datePickerYear}-${String(datePickerMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setTempSelectedDate(selectedDate);
+  };
+
+  const confirmDateSelection = () => {
+    if (!tempSelectedDate) return;
+    
+    if (datePickerType === 'single') {
+      setDateFilter({ ...dateFilter, startDate: tempSelectedDate });
+    } else if (datePickerType === 'start') {
+      setDateFilter({ ...dateFilter, startDate: tempSelectedDate });
+    } else if (datePickerType === 'end') {
+      setDateFilter({ ...dateFilter, endDate: tempSelectedDate });
+    }
+    
+    closeDatePicker();
+  };
+
+  const getCalendarDays = () => {
+    const daysInMonth = new Date(datePickerYear, datePickerMonth + 1, 0).getDate();
+    const firstDayOfMonth = new Date(datePickerYear, datePickerMonth, 1).getDay();
+    return [
+      ...Array(firstDayOfMonth).fill(null),
+      ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+      ...Array((7 - (firstDayOfMonth + daysInMonth) % 7) % 7).fill(null)
+    ];
+  };
 
   // Color for order status
   const getStatusColor = (status) => {
@@ -122,6 +196,8 @@ const OrdersHistory = () => {
         } else if (showImageModal) {
           setShowImageModal(false);
           setSelectedImage(null);
+        } else if (showDatePickerModal) {
+          closeDatePicker();
         }
       }
     };
@@ -130,7 +206,7 @@ const OrdersHistory = () => {
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showDetails, showImageModal]);
+  }, [showDetails, showImageModal, showDatePickerModal]);
 
   // Open modal for order details
   const handleViewFile = (order) => {
@@ -435,10 +511,11 @@ const OrdersHistory = () => {
                       setShowFilterMenu(false); 
                     }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: (sortOrder === 'newest' && dateFilter.type === 'all') ? '#f3f4f6' : 'white',
                       fontWeight: (sortOrder === 'newest' && dateFilter.type === 'all') ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -446,14 +523,15 @@ const OrdersHistory = () => {
                   >
                     🔹 No Filter
                   </div>
-                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '3px 0' }}></div>
                   <div 
                     onClick={() => { setSortOrder('newest'); setShowFilterMenu(false); }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: sortOrder === 'newest' ? '#f3f4f6' : 'white',
                       fontWeight: sortOrder === 'newest' ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -464,10 +542,11 @@ const OrdersHistory = () => {
                   <div 
                     onClick={() => { setSortOrder('oldest'); setShowFilterMenu(false); }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: sortOrder === 'oldest' ? '#f3f4f6' : 'white',
                       fontWeight: sortOrder === 'oldest' ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -475,14 +554,15 @@ const OrdersHistory = () => {
                   >
                     🔹 Oldest Order to Latest
                   </div>
-                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '3px 0' }}></div>
                   <div 
                     onClick={() => { setDateFilter({ type: 'all', startDate: '', endDate: '' }); setShowFilterMenu(false); }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: dateFilter.type === 'all' ? '#f3f4f6' : 'white',
                       fontWeight: dateFilter.type === 'all' ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -493,10 +573,11 @@ const OrdersHistory = () => {
                   <div 
                     onClick={() => { setDateFilter({ ...dateFilter, type: 'specific' }); }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: dateFilter.type === 'specific' ? '#f3f4f6' : 'white',
                       fontWeight: dateFilter.type === 'specific' ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -507,10 +588,11 @@ const OrdersHistory = () => {
                   <div 
                     onClick={() => { setDateFilter({ ...dateFilter, type: 'range' }); }}
                     style={{
-                      padding: '10px 16px',
+                      padding: '8px 14px',
                       cursor: 'pointer',
                       background: dateFilter.type === 'range' ? '#f3f4f6' : 'white',
                       fontWeight: dateFilter.type === 'range' ? 600 : 400,
+                      fontSize: '13px',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
@@ -519,52 +601,139 @@ const OrdersHistory = () => {
                     🔹 Date Range
                   </div>
                   {dateFilter.type === 'specific' && (
-                    <div style={{ padding: '8px 16px', borderTop: '1px solid #e5e7eb' }}>
-                      <input
-                        type="date"
-                        value={dateFilter.startDate}
-                        onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <label style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#374151',
+                        marginBottom: '6px',
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'center'
+                      }}>
+                        📅 Select Date
+                      </label>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDatePicker('single');
+                        }}
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 4,
-                          fontSize: 14
+                          border: '2px solid #3b82f6',
+                          borderRadius: 6,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: '#1f2937',
+                          backgroundColor: '#f9fafb',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          textAlign: 'center'
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = '#ffffff';
+                          e.target.style.borderColor = '#2563eb';
+                          e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = '#f9fafb';
+                          e.target.style.borderColor = '#3b82f6';
+                          e.target.style.boxShadow = 'none';
+                        }}
+                      >
+                        {dateFilter.startDate ? new Date(dateFilter.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Click to select date'}
+                      </button>
                     </div>
                   )}
                   {dateFilter.type === 'range' && (
-                    <div style={{ padding: '8px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <input
-                        type="date"
-                        placeholder="Start Date"
-                        value={dateFilter.startDate}
-                        onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 4,
-                          fontSize: 14
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <input
-                        type="date"
-                        placeholder="End Date"
-                        value={dateFilter.endDate}
-                        onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 4,
-                          fontSize: 14
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: '100%' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDatePicker('start');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '2px solid #3b82f6',
+                            borderRadius: 6,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: '#1f2937',
+                            backgroundColor: '#f9fafb',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textAlign: 'center'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#ffffff';
+                            e.target.style.borderColor = '#2563eb';
+                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = '#f9fafb';
+                            e.target.style.borderColor = '#3b82f6';
+                            e.target.style.boxShadow = 'none';
+                          }}
+                        >
+                          {dateFilter.startDate ? new Date(dateFilter.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Click to select start date'}
+                        </button>
+                      </div>
+                      <div style={{ 
+                        width: '30px', 
+                        height: '1px', 
+                        backgroundColor: '#d1d5db',
+                        position: 'relative'
+                      }}>
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          fontSize: '11px',
+                          color: '#6b7280',
+                          fontWeight: 600,
+                          backgroundColor: 'white',
+                          padding: '0 6px'
+                        }}>
+                          to
+                        </div>
+                      </div>
+                      <div style={{ width: '100%' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDatePicker('end');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '2px solid #3b82f6',
+                            borderRadius: 6,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: '#1f2937',
+                            backgroundColor: '#f9fafb',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textAlign: 'center'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#ffffff';
+                            e.target.style.borderColor = '#2563eb';
+                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = '#f9fafb';
+                            e.target.style.borderColor = '#3b82f6';
+                            e.target.style.boxShadow = 'none';
+                          }}
+                        >
+                          {dateFilter.endDate ? new Date(dateFilter.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Click to select end date'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>,
@@ -745,10 +914,6 @@ const OrdersHistory = () => {
                       <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.service_type || 'N/A'}</div>
                     </div>
                     <div className="detail-group">
-                      <div className="detail-label" style={{ fontWeight: 600 }}>Phone Number</div>
-                      <div className="detail-value" style={{ fontWeight: 400 }}>{selectedOrder.appointment?.user?.phone || selectedOrder.appointment?.user?.phone_number || 'N/A'}</div>
-                    </div>
-                    <div className="detail-group">
                       <div className="detail-label" style={{ fontWeight: 600 }}>Size</div>
                       <div className="detail-value" style={{ fontWeight: 400 }}>
                         {(() => {
@@ -849,6 +1014,59 @@ const OrdersHistory = () => {
               alt={selectedImage.alt}
               style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 6, border: '1px solid #ddd' }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Date Picker Calendar Modal */}
+      {showDatePickerModal && (
+        <div className="orders-calendar-modal-bg" onClick={closeDatePicker}>
+          <div className="orders-calendar-modal-panel" onClick={e => e.stopPropagation()}>
+            <div className="orders-calendar-modal-header">
+              <FaTimes className="orders-calendar-modal-exit" onClick={closeDatePicker} />
+              <h2>
+                {datePickerType === 'single' && 'Select Date'}
+                {datePickerType === 'start' && 'Select Start Date'}
+                {datePickerType === 'end' && 'Select End Date'}
+              </h2>
+            </div>
+            <div className="orders-calendar-section">
+              <div className="orders-calendar-header">
+                <button className="orders-nav-btn" onClick={handleDatePickerPrevMonth}><FaChevronLeft /></button>
+                <span>{monthNames[datePickerMonth]} {datePickerYear}</span>
+                <button className="orders-nav-btn" onClick={handleDatePickerNextMonth}><FaChevronRight /></button>
+              </div>
+              <div className="orders-calendar-grid">
+                <div className="orders-calendar-days">
+                  <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                </div>
+                <div className="orders-calendar-dates">
+                  {getCalendarDays().map((day, idx) => {
+                    const isCurrentMonth = datePickerMonth === currentMonth && datePickerYear === currentYear;
+                    const isToday = isCurrentMonth && day === todayDate;
+                    const isSelected = tempSelectedDate && 
+                      tempSelectedDate === `${datePickerYear}-${String(datePickerMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className={`orders-calendar-date${!day ? ' empty' : ''}${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}
+                        onClick={() => day && handleDateSelect(day)}
+                      >
+                        {day && <span className="orders-date-number">{day}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <button
+              className="orders-set-date-btn"
+              onClick={confirmDateSelection}
+              disabled={!tempSelectedDate}
+            >
+              Confirm Date
+            </button>
           </div>
         </div>
       )}

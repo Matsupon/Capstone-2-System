@@ -381,6 +381,9 @@ const Customers = () => {
                           <div className="customers-modal-detail-label">Appointment Date Accepted</div>
                           <div className="customers-modal-detail-value">{order.appointmentDate}</div>
 
+                          <div className="customers-modal-detail-label">Due Date</div>
+                          <div className="customers-modal-detail-value">{order.dueDate || 'N/A'}</div>
+
                           <div className="customers-modal-detail-label">Service Type</div>
                           <div className="customers-modal-detail-value">{order.service}</div>
 

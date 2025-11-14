@@ -558,7 +558,7 @@ const Dashboard = () => {
                     <>
                       {upcomingOrders.slice(0, 2).map((customer, index) => (
                         <div key={customer.id || index} className={index === 0 ? "current-customer" : "next-customer"}>
-                          <strong>{index === 0 ? 'Customer 1:' : 'Customer 2:'}</strong>{' '}
+                          <strong>{index === 0 ? 'Queue' : 'Queue'}</strong>{' '}
                           {customer.queue_number && (
                             <span className="queue-number">
                               #{customer.queue_number}

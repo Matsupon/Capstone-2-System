@@ -465,15 +465,9 @@ export default function HomePage() {
                   <View style={styles.dateSection}>
                     <Text style={styles.dateLabel}>Due Date</Text>
                     <Text style={styles.date}>
-                      {(() => {
-                        const status = order?.status;
-                        const pref = order?.appointment?.preferred_due_date;
-                        const sched = order?.scheduled_at;
-                        const apptDate = order?.appointment?.appointment_date;
-                        const dateSrc =
-                          status === 'Ready to Check' && sched ? sched : pref || apptDate;
-                        return dateSrc ? new Date(dateSrc).toLocaleDateString() : 'N/A';
-                      })()}
+                      {order?.appointment?.preferred_due_date
+                        ? new Date(order.appointment.preferred_due_date).toLocaleDateString()
+                        : 'N/A'}
                     </Text>
                   </View>
                 </View>
@@ -526,75 +520,99 @@ export default function HomePage() {
         <Text style={styles.sectionTitle}>Announcements</Text>
 
         {orders.length > 0 ? (
-          orders.map((order) => (
-            <View key={order.id}>
-              <Text style={[styles.sectionTitle, { fontSize: 16, marginTop: orders.indexOf(order) === 0 ? 0 : 20, marginBottom: 10 }]}>
-                Order #{order.id}
-              </Text>
-              <View style={styles.announcementCard}>
-                <View style={[styles.indicator, styles.indicatorGreen]} />
-                <MaterialIcons
-                  name="access-time"
-                  size={24}
-                  color="#16A34A"
-                  style={styles.announcementIcon}
-                />
-                <View>
-                  <Text style={styles.announcementTitle}>Next Appointment</Text>
-                  <Text style={styles.announcementDate}>
-                    {order.status !== 'Finished' && nextAppointment 
-                      ? nextAppointment 
-                      : 'No recent appointment for now'}
-                  </Text>
-                </View>
-              </View>
+          orders.map((order) => {
+            // Determine next appointment based on order status
+            let nextAppt = null;
+            if (order.status !== 'Finished') {
+              if (order.status === 'Ready to Check' && order.check_appointment_date && order.check_appointment_time) {
+                // For Ready to Check: use check appointment
+                const checkDateTime = new Date(`${order.check_appointment_date}T${order.check_appointment_time}`);
+                if (!isNaN(checkDateTime.getTime())) {
+                  nextAppt = formatDateTime12(checkDateTime);
+                }
+              } else if (order.status === 'Completed' && order.pickup_appointment_date && order.pickup_appointment_time) {
+                // For Completed: use pickup appointment
+                const pickupDateTime = new Date(`${order.pickup_appointment_date}T${order.pickup_appointment_time}`);
+                if (!isNaN(pickupDateTime.getTime())) {
+                  nextAppt = formatDateTime12(pickupDateTime);
+                }
+              } else if (order?.appointment?.appointment_date && order?.appointment?.appointment_time) {
+                // For Pending or fallback: use initial appointment
+                const apptDateTime = new Date(`${order.appointment.appointment_date}T${order.appointment.appointment_time}`);
+                if (!isNaN(apptDateTime.getTime())) {
+                  nextAppt = formatDateTime12(apptDateTime);
+                }
+              }
+            }
 
-              <View style={styles.announcementCard}>
-                <View style={[styles.indicator, styles.indicatorYellow]} />
-                <MaterialCommunityIcons
-                  name="file-document-outline"
-                  size={24}
-                  color="#FFA500"
-                  style={styles.announcementIcon}
-                />
-                <View>
-                  <Text style={styles.announcementTitle}>Order Status</Text>
-                  {order.status !== 'Finished' && order?.status ? (
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor:
-                            order?.status === 'Completed'
-                              ? '#E8F5E9'
-                              : order?.status === 'Ready to Check'
-                              ? '#FFE3D6'
-                              : '#FFF5CC',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color:
-                            order?.status === 'Completed'
-                              ? '#2e7d32'
-                              : order?.status === 'Ready to Check'
-                              ? '#b23c17'
-                              : '#7a5f00',
-                          fontSize: 12,
-                          fontWeight: '500',
-                        }}
+            return (
+              <View key={order.id}>
+                <Text style={[styles.sectionTitle, { fontSize: 16, marginTop: orders.indexOf(order) === 0 ? 0 : 20, marginBottom: 10 }]}>
+                  Order #{order.id}
+                </Text>
+                <View style={styles.announcementCard}>
+                  <View style={[styles.indicator, styles.indicatorGreen]} />
+                  <MaterialIcons
+                    name="access-time"
+                    size={24}
+                    color="#16A34A"
+                    style={styles.announcementIcon}
+                  />
+                  <View>
+                    <Text style={styles.announcementTitle}>Next Appointment</Text>
+                    <Text style={styles.announcementDate}>
+                      {nextAppt || 'No recent appointment for now'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.announcementCard}>
+                  <View style={[styles.indicator, styles.indicatorYellow]} />
+                  <MaterialCommunityIcons
+                    name="file-document-outline"
+                    size={24}
+                    color="#FFA500"
+                    style={styles.announcementIcon}
+                  />
+                  <View>
+                    <Text style={styles.announcementTitle}>Order Status</Text>
+                    {order.status !== 'Finished' && order?.status ? (
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor:
+                              order?.status === 'Completed'
+                                ? '#E8F5E9'
+                                : order?.status === 'Ready to Check'
+                                ? '#FFE3D6'
+                                : '#FFF5CC',
+                          },
+                        ]}
                       >
-                        {order?.status}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.announcementDate}>No recent status for now</Text>
-                  )}
+                        <Text
+                          style={{
+                            color:
+                              order?.status === 'Completed'
+                                ? '#2e7d32'
+                                : order?.status === 'Ready to Check'
+                                ? '#b23c17'
+                                : '#7a5f00',
+                            fontSize: 12,
+                            fontWeight: '500',
+                          }}
+                        >
+                          {order?.status}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.announcementDate}>No recent status for now</Text>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
+            );
+          })
         ) : (
           <>
             <View style={styles.announcementCard}>

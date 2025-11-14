@@ -896,7 +896,7 @@ const Orders = () => {
       case 'none':
         return 'No Filter';
       case 'deadline-nearest':
-        return 'Nearest Deadline';
+        return 'Nearest Due Date';
       case 'oldest-newest':
         return 'Oldest to Newest';
       case 'newest-oldest':
@@ -907,6 +907,10 @@ const Orders = () => {
         return 'Status: Ready to Check';
       case 'status-completed':
         return 'Status: Completed';
+      case 'attended':
+        return 'Attended';
+      case 'not-attended':
+        return 'Not Attended';
       default:
         return 'No Filter';
     }
@@ -952,6 +956,12 @@ const Orders = () => {
         break;
       case 'status-completed':
         filtered = filtered.filter(order => order.status === 'Completed');
+        break;
+      case 'attended':
+        filtered = filtered.filter(order => order.handled === true);
+        break;
+      case 'not-attended':
+        filtered = filtered.filter(order => order.handled === false);
         break;
       default:
         // No filter applied
@@ -1132,7 +1142,7 @@ const Orders = () => {
                           onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
                           onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'deadline-nearest' ? '#f3f4f6' : 'white'}
                         >
-                          🔹 Nearest Deadline
+                          🔹 Nearest Due Date
                         </div>
                         <div 
                           onClick={() => { setFilterOption('oldest-newest'); setShowFilterDropdown(false); }}
@@ -1205,6 +1215,35 @@ const Orders = () => {
                         >
                           🔹 Status: Completed
                         </div>
+                        <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+                        <div 
+                          onClick={() => { setFilterOption('attended'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'attended' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'attended' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'attended' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Attended
+                        </div>
+                        <div 
+                          onClick={() => { setFilterOption('not-attended'); setShowFilterDropdown(false); }}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: filterOption === 'not-attended' ? '#f3f4f6' : 'white',
+                            fontWeight: filterOption === 'not-attended' ? 600 : 400,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = filterOption === 'not-attended' ? '#f3f4f6' : 'white'}
+                        >
+                          🔹 Not Attended
+                        </div>
                       </div>
                   </div>,
                   document.body
@@ -1236,7 +1275,7 @@ const Orders = () => {
    <th style={{ width: '75px', whiteSpace: 'normal', wordWrap: 'break-word' }}>Order #</th>
    <th style={{ width: '105px' }}>Name</th>
    <th style={{ width: '135px' }}>Services</th>
-   <th style={{ width: '105px' }}>Deadline</th>
+   <th style={{ width: '105px' }}>Due Date</th>
    <th style={{ width: '125px' }}>Status</th>
    <th style={{ width: '100px' }}>Attended</th>
    <th style={{ width: '110px' }}>Next Appoint.</th>
