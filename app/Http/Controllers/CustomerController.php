@@ -97,6 +97,9 @@ class CustomerController extends Controller
                 return [
                     'id' => $order->id,
                     'appointmentDate' => Carbon::parse($order->appointment->appointment_date)->format('F j, Y'),
+                    'dueDate' => $order->appointment->preferred_due_date 
+                        ? Carbon::parse($order->appointment->preferred_due_date)->format('F j, Y')
+                        : null,
                     'service' => $order->appointment->service_type,
                     'sizes' => json_decode($order->appointment->sizes, true),
                     'total_quantity' => $order->appointment->total_quantity,
@@ -126,6 +129,9 @@ class CustomerController extends Controller
                     $formattedOrders = collect([[
                         'id' => 'appointment_' . $latestAppointment->id,
                         'appointmentDate' => Carbon::parse($latestAppointment->appointment_date)->format('F j, Y'),
+                        'dueDate' => $latestAppointment->preferred_due_date 
+                            ? Carbon::parse($latestAppointment->preferred_due_date)->format('F j, Y')
+                            : null,
                         'service' => $latestAppointment->service_type,
                         'sizes' => json_decode($latestAppointment->sizes, true),
                         'total_quantity' => $latestAppointment->total_quantity,

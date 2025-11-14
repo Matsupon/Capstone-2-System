@@ -133,7 +133,9 @@ class OrderController extends Controller
                         'gcash_proof' => $order->appointment->gcash_proof 
                             ? asset('storage/' . $order->appointment->gcash_proof) 
                             : null,
-                        'preferred_due_date' => $order->appointment->preferred_due_date,
+                        'preferred_due_date' => $order->appointment->preferred_due_date
+                            ? \Carbon\Carbon::parse($order->appointment->preferred_due_date)->format('Y-m-d')
+                            : null,
                         'appointment_date' => $order->appointment->appointment_date 
                             ? \Carbon\Carbon::parse($order->appointment->appointment_date)->format('Y-m-d')
                             : null,
@@ -206,7 +208,9 @@ class OrderController extends Controller
                         'gcash_proof' => $order->appointment->gcash_proof 
                             ? asset('storage/' . $order->appointment->gcash_proof) 
                             : null,
-                        'preferred_due_date' => $order->appointment->preferred_due_date,
+                        'preferred_due_date' => $order->appointment->preferred_due_date
+                            ? \Carbon\Carbon::parse($order->appointment->preferred_due_date)->format('Y-m-d')
+                            : null,
                         'appointment_date' => $order->appointment->appointment_date 
                             ? \Carbon\Carbon::parse($order->appointment->appointment_date)->format('Y-m-d')
                             : null,
@@ -539,7 +543,9 @@ class OrderController extends Controller
                         'service_type'     => $order->appointment->service_type,
                         'sizes'            => json_decode($order->appointment->sizes, true),
                         'total_quantity'   => $order->appointment->total_quantity,
-                        'preferred_due_date' => $order->appointment->preferred_due_date,
+                        'preferred_due_date' => $order->appointment->preferred_due_date
+                            ? \Carbon\Carbon::parse($order->appointment->preferred_due_date)->format('Y-m-d')
+                            : null,
                         'notes'            => $order->appointment->notes,
                         'status'           => $order->appointment->status ?? 'pending',
                         'design_image'     => $order->appointment->design_image
@@ -616,7 +622,9 @@ class OrderController extends Controller
                             'service_type'     => $order->appointment->service_type,
                             'sizes'            => json_decode($order->appointment->sizes, true),
                             'total_quantity'   => $order->appointment->total_quantity,
-                            'preferred_due_date' => $order->appointment->preferred_due_date,
+                            'preferred_due_date' => $order->appointment->preferred_due_date
+                                ? \Carbon\Carbon::parse($order->appointment->preferred_due_date)->format('Y-m-d')
+                                : null,
                             'notes'            => $order->appointment->notes,
                             'status'           => $order->appointment->status ?? 'pending',
                             'design_image'     => $order->appointment->design_image
@@ -702,7 +710,9 @@ class OrderController extends Controller
                             'service_type'     => $order->appointment->service_type,
                             'sizes'            => json_decode($order->appointment->sizes, true),
                             'total_quantity'   => $order->appointment->total_quantity,
-                            'preferred_due_date' => $order->appointment->preferred_due_date,
+                            'preferred_due_date' => $order->appointment->preferred_due_date
+                                ? \Carbon\Carbon::parse($order->appointment->preferred_due_date)->format('Y-m-d')
+                                : null,
                             'notes'            => $order->appointment->notes,
                             'status'           => $order->appointment->status ?? 'pending',
                             'design_image'     => $order->appointment->design_image
