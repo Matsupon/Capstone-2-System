@@ -26,8 +26,6 @@ export default function SignUp() {
         address,
       });
 
-      console.log('Registration successful:', response.data);
-
       const token = response.data?.access_token;
       if (token) {
         await AsyncStorage.setItem('authToken', token);
@@ -44,8 +42,6 @@ export default function SignUp() {
         router.replace('/auth/login');
       }
     } catch (error) {
-      console.error('Registration failed:', error.response?.data || error.message);
-      
       // Handle specific error cases
       if (error.response?.status === 422) {
         // Check if it's a duplicate email error

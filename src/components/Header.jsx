@@ -52,7 +52,7 @@ const Header = () => {
           setUnviewedCount(countRes.data.data?.unviewed_count || 0);
         }
       } catch (e) {
-        console.error('Failed to fetch admin notifications', e);
+        // Error fetching admin notifications
       }
     };
 
@@ -73,7 +73,7 @@ const Header = () => {
         ));
         setUnviewedCount(prev => Math.max(0, prev - 1));
       } catch (e) {
-        console.error('Failed to mark notification as viewed', e);
+        // Error marking notification as viewed
       }
     }
   };
@@ -165,8 +165,9 @@ const Header = () => {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 minWidth: '300px',
                 maxWidth: '400px',
-                maxHeight: showAllNotifications ? '320px' : 'auto',
-                overflowY: showAllNotifications ? 'auto' : 'visible',
+                maxHeight: showAllNotifications ? '400px' : 'auto',
+                display: 'flex',
+                flexDirection: 'column',
                 zIndex: 1100,
               }}>
                 {adminNotifications.length === 0 ? (
@@ -175,25 +176,34 @@ const Header = () => {
                   </div>
                 ) : (
                   <>
-                    {(showAllNotifications ? adminNotifications : adminNotifications.slice(0, 3)).map(notif => (
-                      <div
-                        key={notif.id}
-                        onClick={() => handleNotificationClick(notif)}
-                        style={{
-                          padding: '16px',
-                          borderBottom: '1px solid #f0f0f0',
-                          cursor: 'pointer',
-                          background: !notif.is_viewed ? '#e6f0ff' : 'white',
-                        }}
-                      >
-                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>
-                          {notif.title}
+                    <div style={{
+                      overflowY: showAllNotifications ? 'auto' : 'visible',
+                      maxHeight: showAllNotifications ? '100%' : 'none',
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#cbd5e1 #f1f5f9',
+                    }}
+                    className="notifications-scroll-container"
+                    >
+                      {(showAllNotifications ? adminNotifications : adminNotifications.slice(0, 3)).map(notif => (
+                        <div
+                          key={notif.id}
+                          onClick={() => handleNotificationClick(notif)}
+                          style={{
+                            padding: '16px',
+                            borderBottom: '1px solid #f0f0f0',
+                            cursor: 'pointer',
+                            background: !notif.is_viewed ? '#e6f0ff' : 'white',
+                          }}
+                        >
+                          <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                            {notif.title}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#687076' }}>
+                            {new Date(notif.created_at).toLocaleString()}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#687076' }}>
-                          {new Date(notif.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                     {!showAllNotifications && adminNotifications.length > 3 && (
                       <button
                         onClick={(e) => {

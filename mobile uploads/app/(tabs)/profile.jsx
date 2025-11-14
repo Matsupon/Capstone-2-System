@@ -69,7 +69,7 @@ export default function ProfilePage() {
         password: '',
       });
     } catch (error) {
-      console.error('Failed to fetch user:', error.response?.data || error.message);
+      // Failed to fetch user
     } finally {
       setLoading(false);
     }
@@ -107,16 +107,13 @@ export default function ProfilePage() {
         // Compress image before including in FormData
         let finalImageUri = tempImage;
         try {
-          console.log('📦 Compressing profile image for save...');
           const compressed = await ImageManipulator.manipulateAsync(
             tempImage,
             [{ resize: { width: 512 } }],
             { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
           );
           finalImageUri = compressed.uri;
-          console.log('✅ Profile image compressed for save');
         } catch (compressError) {
-          console.warn('⚠️ Failed to compress profile image, using original:', compressError);
           finalImageUri = tempImage;
         }
 
@@ -128,7 +125,6 @@ export default function ProfilePage() {
           type: fileType,
         });
         hasChanges = true;
-        console.log('📦 Including profile image in FormData:', { uri: finalImageUri, name: fileName, type: fileType });
       }
 
       // Check if there are any changes to save
@@ -136,19 +132,6 @@ export default function ProfilePage() {
         Alert.alert('No Changes', 'No changes detected. Please modify at least one field before saving.');
         return;
       }
-
-      console.log('📤 Sending profile update request...', {
-        hasImage: !!tempImage,
-        fields: {
-          name: form.name !== user?.name,
-          email: form.email !== user?.email,
-          phone: form.phone !== user?.phone,
-          address: form.address !== user?.address,
-          password: form.password && form.password.trim() !== '',
-        },
-        serverURL: api.defaults.baseURL,
-        formDataKeys: tempImage ? 'Has FormData with image' : 'FormData without image',
-      });
       
       // If no image, try sending as JSON first (more reliable on weak networks)
       // If image exists, must use FormData
@@ -162,7 +145,6 @@ export default function ProfilePage() {
         if (form.address && form.address !== user?.address) jsonData.address = form.address;
         if (form.password && form.password.trim() !== '') jsonData.password = form.password;
         
-        console.log('📤 Sending as JSON (no image):', jsonData);
         response = await api.post('/profile', jsonData, {
           timeout: 30000,
           headers: {
@@ -172,7 +154,6 @@ export default function ProfilePage() {
         });
       } else {
         // Use FormData when image is included
-        console.log('📤 Sending as FormData (with image)');
         // Don't set Content-Type header - let axios automatically set it with boundary for FormData
         // Increase timeout for profile updates with images and disable retries for FormData
         response = await api.post('/profile', formData, {
@@ -184,8 +165,6 @@ export default function ProfilePage() {
           __disableRetry: true,
         });
       }
-
-      console.log('✅ Profile update successful:', response.data);
       
       setUser(response.data.user);
       setProfileImageUrl(response.data.image_url);
@@ -199,12 +178,6 @@ export default function ProfilePage() {
         }, 500);
       }
     } catch (error) {
-      console.error('❌ Profile save failed:', {
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
       
       // Reset temp image on error so user can try again
       if (tempImage) {
@@ -244,10 +217,6 @@ export default function ProfilePage() {
         });
       } catch (logoutError) {
         // 401 errors are expected if token was already invalidated or user already logged out
-        // Don't log these as errors - they're normal during logout
-        if (logoutError?.response?.status !== 401) {
-          console.log('Server logout failed:', logoutError?.response?.status);
-        }
       }
       await AsyncStorage.removeItem('authToken');
       router.replace('/auth/login');
@@ -256,7 +225,7 @@ export default function ProfilePage() {
       try {
         await AsyncStorage.removeItem('authToken');
       } catch (storageError) {
-        console.log('Error removing token:', storageError);
+        // Error removing token
       }
       router.replace('/auth/login');
     } finally {
@@ -269,7 +238,6 @@ export default function ProfilePage() {
   }, []);
 
   const pickImage = async () => {
-    console.log('Edit icon pressed');
     if (uploading) return;
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -298,25 +266,20 @@ export default function ProfilePage() {
       // Compress and optimize image before upload to reduce payload size and improve reliability
       let finalImageUri = uri;
       try {
-        console.log('📦 Compressing profile image...');
         const compressed = await ImageManipulator.manipulateAsync(
           uri,
           [{ resize: { width: 512 } }], // Resize to max 512px width for profile images (smaller than design images)
           { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG } // Good compression while maintaining quality
         );
         finalImageUri = compressed.uri;
-        console.log('✅ Profile image compressed');
       } catch (compressError) {
-        console.warn('⚠️ Failed to compress profile image, using original:', compressError);
         finalImageUri = uri;
       }
 
       // Quick connectivity check before attempting upload
       try {
         await api.get('/user', { timeout: 5000 });
-        console.log('✅ Connectivity check passed');
       } catch (connectError) {
-        console.warn('⚠️ Connectivity check failed:', connectError.message);
         // Continue anyway, but user will see error if server is truly unreachable
       }
 
@@ -330,13 +293,6 @@ export default function ProfilePage() {
         type: fileType,
       });
   
-      console.log('📦 Uploading profile image:', { 
-        uri: finalImageUri, 
-        name: fileName, 
-        type: fileType, 
-        serverURL: api.defaults.baseURL 
-      });
-  
       // Don't set Content-Type header - let axios automatically set it with boundary for FormData
       // Increase timeout for file uploads and disable retries for FormData (handled in api.js)
       const response = await api.post('/profile', formData, {
@@ -347,8 +303,6 @@ export default function ProfilePage() {
         // Disable retries for FormData uploads to avoid issues with FormData preservation
         __disableRetry: true,
       });
-  
-      console.log('✅ Profile image upload successful:', response.data);
   
       setUser(response.data.user);
       setProfileImageUrl(response.data.image_url); 
@@ -361,12 +315,6 @@ export default function ProfilePage() {
         }, 500);
       }
     } catch (error) {
-      console.error('❌ Profile image upload failed:', {
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
       
       // Reset temp image on error so user can try again
       setTempImage(null);
@@ -415,7 +363,7 @@ export default function ProfilePage() {
         headerRefreshFn.current?.refreshNotifications();
       }
     } catch (error) {
-      console.error('Error refreshing profile:', error);
+      // Error refreshing profile
     } finally {
       setRefreshing(false);
     }
@@ -455,7 +403,6 @@ export default function ProfilePage() {
               <Image 
               source={{ uri: getProfileImageUrl() }} 
               style={styles.profileImage}
-              onError={(error) => console.log('Image loading error:', error)}
             />
             ) : (
               <View style={styles.profileImagePlaceholder}>

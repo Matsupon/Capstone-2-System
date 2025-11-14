@@ -69,16 +69,7 @@ export default function AppointmentsPage() {
   const fetchAppointments = async () => {
     try {
       setAppointmentsLoading(true);
-      console.log('🔍 Fetching appointments from /me/appointments...');
       const response = await api.get('/me/appointments');
-      
-      console.log('✅ Appointments API Response:', {
-        success: response.data?.success,
-        hasData: !!response.data?.data,
-        dataType: Array.isArray(response.data?.data) ? 'array' : typeof response.data?.data,
-        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'N/A',
-        firstItem: response.data?.data?.[0],
-      });
       
       // Handle different response formats
       let appointmentsData = [];
@@ -89,37 +80,11 @@ export default function AppointmentsPage() {
         appointmentsData = response.data;
       }
       
-      console.log('📋 Processed appointments:', {
-        count: appointmentsData.length,
-        items: appointmentsData.map(apt => ({
-          id: apt.id,
-          service_type: apt.service_type,
-          status: apt.display_status || apt.status,
-          hasOrder: !!apt.order,
-          orderStatus: apt.order?.status,
-          orderHandled: apt.order?.handled,
-          canCancel: apt.order ? (apt.order.handled === 0 || apt.order.handled === false || apt.order.handled === null || apt.order.handled === undefined) : false,
-          hasRefundImage: !!apt.refund_image,
-          refundImageUrl: apt.refund_image,
-        })),
-      });
-      
       setAppointments(appointmentsData);
     } catch (error) {
-      console.error('❌ Failed to fetch appointments:', {
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        fullUrl: error.config ? `${error.config.baseURL}${error.config.url}` : 'Unknown',
-      });
-      
       // Only show alert for non-network errors
       if (error.response && error.response.status !== 401) {
         Alert.alert('Error', error.response?.data?.message || 'Failed to load appointments');
-      } else if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
-        console.warn('⚠️ Network error - appointments may not be available. Check if server is running.');
       }
       setAppointments([]);
     } finally {
@@ -137,7 +102,7 @@ export default function AppointmentsPage() {
       }
       await fetchAppointments();
     } catch (error) {
-      console.error('Error refreshing appointments:', error);
+      // Error refreshing appointments
     } finally {
       setRefreshing(false);
     }
@@ -162,7 +127,6 @@ export default function AppointmentsPage() {
   // Filter appointments
   const getFilteredAppointments = () => {
     if (!appointments || appointments.length === 0) {
-      console.log('📊 No appointments to filter');
       return [];
     }
 
@@ -184,13 +148,6 @@ export default function AppointmentsPage() {
         return serviceType.toLowerCase().includes(query);
       });
     }
-
-    console.log('📊 Filtered appointments:', {
-      total: appointments.length,
-      filtered: filtered.length,
-      filterStatus,
-      searchQuery,
-    });
 
     return filtered;
   };
@@ -243,16 +200,6 @@ export default function AppointmentsPage() {
 
   // Open order details modal
   const openOrderDetails = (appointment) => {
-    console.log('🔍 Opening order details for appointment:', {
-      id: appointment?.id,
-      hasRefundImage: !!appointment?.refund_image,
-      refundImage: appointment?.refund_image,
-      hasGcashProof: !!appointment?.gcash_proof,
-      gcashProof: appointment?.gcash_proof,
-      status: appointment?.status,
-      displayStatus: appointment?.display_status,
-      fullAppointment: appointment,
-    });
     setSelectedAppointment(appointment);
     setShowOrderDetailsModal(true);
   };
@@ -337,7 +284,6 @@ export default function AppointmentsPage() {
       today.setHours(0, 0, 0, 0);
       
       if (selectedDate < today) {
-        console.log("Selected date is in the past, clearing available slots");
         setAvailableSlots([]);
         return;
       }
@@ -359,7 +305,6 @@ export default function AppointmentsPage() {
         setAvailableSlots([]);
       }
     } catch (error) {
-      console.error('Failed to load available slots:', error);
       setAvailableSlots([]);
     } finally {
       setLoadingAvailableSlots(false);
@@ -489,7 +434,6 @@ export default function AppointmentsPage() {
         displayEditSuccess();
       }
     } catch (error) {
-      console.error('Failed to update appointment:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to update appointment');
     } finally {
       setEditSubmitting(false);
@@ -499,20 +443,11 @@ export default function AppointmentsPage() {
   // Handle cancel appointment
   const handleCancelAppointment = async () => {
     if (!appointmentToCancel) {
-      console.log('❌ No appointment to cancel');
       return;
     }
 
-    console.log('🗑️ Cancelling appointment:', {
-      appointmentId: appointmentToCancel.id,
-      orderId: appointmentToCancel.order?.id,
-      orderStatus: appointmentToCancel.order?.status,
-      handled: appointmentToCancel.order?.handled,
-    });
-
     try {
       const response = await api.delete(`/appointments/${appointmentToCancel.id}/cancel`);
-      console.log('✅ Cancel response:', response.data);
       
       if (response.data?.success) {
         setShowCancelConfirmation(false);
@@ -537,11 +472,6 @@ export default function AppointmentsPage() {
         setAppointmentToCancel(null);
       }
     } catch (error) {
-      console.error('❌ Failed to cancel appointment:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
       Alert.alert('Error', error.response?.data?.message || 'Failed to cancel appointment');
       setShowCancelConfirmation(false);
       setAppointmentToCancel(null);
@@ -884,26 +814,10 @@ export default function AppointmentsPage() {
                     const isCancelled = normalizeStatus(selectedAppointment.display_status || selectedAppointment.status || 'Requesting') === 'Cancelled';
                     const isRejected = selectedAppointment.status === 'rejected' || selectedAppointment.display_status === 'Rejected';
                     
-                    console.log('🖼️ Rendering refund image section:', {
-                      hasRefundImage,
-                      refundImage: refundImage,
-                      refundImageType: typeof refundImage,
-                      status: selectedAppointment.status,
-                      displayStatus: selectedAppointment.display_status,
-                      isCancelled: isCancelled,
-                      isRejected: isRejected,
-                      selectedAppointmentKeys: Object.keys(selectedAppointment),
-                    });
-                    
                     // Display refund image if it exists (for both rejected and cancelled appointments)
                     if (hasRefundImage) {
                       // Backend returns full URL via asset(), so use it directly (same as gcash_proof)
                       const imageUrl = refundImage;
-                      
-                      console.log('🖼️ Displaying refund image:', {
-                        imageUrl: imageUrl,
-                        isFullUrl: imageUrl.startsWith('http'),
-                      });
                       
                       return (
                         <View style={styles.detailSection}>
@@ -921,18 +835,6 @@ export default function AppointmentsPage() {
                                 source={{ uri: imageUrl }}
                                 style={styles.thumbnailImage}
                                 resizeMode="cover"
-                                onLoad={() => {
-                                  console.log('✅ Refund image loaded successfully:', imageUrl);
-                                }}
-                                onLoadStart={() => {
-                                  console.log('🔄 Refund image loading started:', imageUrl);
-                                }}
-                                onError={(error) => {
-                                  console.error('❌ Failed to load refund image:', {
-                                    error: error.nativeEvent?.error || error,
-                                    imageUrl: imageUrl,
-                                  });
-                                }}
                               />
                               <View style={styles.imageOverlay}>
                                 <MaterialIcons name="zoom-in" size={24} color="#fff" />
@@ -942,16 +844,6 @@ export default function AppointmentsPage() {
                           </View>
                         </View>
                       );
-                    } else {
-                      // Show debug info if refund should exist but doesn't
-                      if (isRejected || isCancelled) {
-                        console.warn('⚠️ Rejected/Cancelled appointment but no refund_image found:', {
-                          appointmentId: selectedAppointment.id,
-                          status: selectedAppointment.status,
-                          displayStatus: selectedAppointment.display_status,
-                          refundImage: selectedAppointment.refund_image,
-                        });
-                      }
                     }
                     return null;
                   })()}

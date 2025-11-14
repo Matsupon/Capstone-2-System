@@ -38,12 +38,8 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
       if (e?.code === 'ERR_NETWORK' || e?.message === 'Network Error') {
         // Silently fail - server is not accessible
         // This is expected if backend is not running
-        console.log('⚠️ Notifications: Server not accessible. Backend may not be running.');
         return;
       }
-      
-      // Other errors
-      console.log('Failed to load notifications', e?.message || e);
     } finally {
       setLoading(false);
     }
@@ -57,7 +53,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
         setLastSeenAt(saved);
       }
     } catch (error) {
-      console.log('Error refreshing lastSeenAt:', error);
+      // Error refreshing lastSeenAt
     }
   }, []);
 
@@ -160,10 +156,7 @@ export default function Header({ userName = 'User', onNotificationsViewed, onRef
         await loadNotifications();
         await refreshLastSeenAt();
       } catch (error) {
-        // Errors are already handled in loadNotifications, just log here if needed
-        if (error?.code !== 'ERR_NETWORK' && error?.message !== 'Network Error') {
-          console.log('Notification refresh error:', error?.message);
-        }
+        // Errors are already handled in loadNotifications
       }
     }, 30000); // 30 seconds - full refresh from server
 

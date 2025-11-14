@@ -9,8 +9,6 @@ import api from '../api';
 
 const formatTimeToAMPM = (timeString) => {
   if (!timeString) return '';
-
-  console.log('formatTimeToAMPM input:', timeString);
   
   try {
     // Handle different time formats
@@ -25,7 +23,6 @@ const formatTimeToAMPM = (timeString) => {
       // Just time string (HH:MM)
       const [hours, minutes] = timeString.split(':').map(Number);
       if (isNaN(hours) || isNaN(minutes)) {
-        console.warn('Invalid time format:', timeString);
         return '';
       }
       timeObj = new Date();
@@ -33,16 +30,13 @@ const formatTimeToAMPM = (timeString) => {
     }
 
     if (isNaN(timeObj.getTime())) {
-      console.warn('Invalid time object created from:', timeString);
       return '';
     }
 
     const result = timeObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-    console.log('formatTimeToAMPM result:', result);
     
     return result;
   } catch (error) {
-    console.warn('Error formatting time:', timeString, error);
     return '';
   }
 };
@@ -164,7 +158,6 @@ const Orders = () => {
         navigate('/login');
       } else {
         setError(err.response?.data?.error || 'Error fetching orders');
-        console.error('Error fetching orders:', err);
       }
       setLoading(false);
     }
@@ -246,7 +239,6 @@ const Orders = () => {
           setTimeout(() => setCalendarSuccess(false), 3000);
         }
       } catch (err) {
-        console.error('Error updating order status:', err);
         setError('Failed to update order status');
       }
     }
@@ -273,7 +265,6 @@ const Orders = () => {
         setShowCompletionCalendar(false);
         setShowPaymentModal(true);
       } catch (err) {
-        console.error('Error setting completion date:', err);
         setError('Failed to set completion date');
       }
     }
@@ -445,7 +436,6 @@ const Orders = () => {
         setTimeout(() => setHandledSuccess(false), 3000);
       }
     } catch (err) {
-      console.error('Error toggling handled status:', err);
       if (err.response?.status === 401) {
         setError('Unauthorized. Please login again.');
         localStorage.removeItem('adminToken');
@@ -491,7 +481,6 @@ const Orders = () => {
         setTimeout(() => setUpdateSuccess(false), 3000);
       }
     } catch (err) {
-      console.error('Error updating order status:', err);
       setError('Failed to update order status');
     }
   };
@@ -512,7 +501,6 @@ const Orders = () => {
         setTimeout(() => setUpdateSuccess(false), 3000);
       }
     } catch (err) {
-      console.error('Error finishing order:', err);
       setError('Failed to finish order');
     }
   };
@@ -545,7 +533,6 @@ const Orders = () => {
         setTimeout(() => setCalendarSuccess(false), 3000);
       }
     } catch (err) {
-      console.error('Error submitting payment:', err);
       setError('Failed to submit payment');
     }
   };
@@ -609,7 +596,6 @@ const Orders = () => {
         setTimeout(() => setUpdateSuccess(false), 3000);
       }
     } catch (err) {
-      console.error('Error updating sizes:', err);
       setError('Failed to update sizes and quantity');
     } finally {
       setSavingSizes(false);
@@ -678,7 +664,6 @@ const Orders = () => {
       setRefundSuccess(true);
       setTimeout(() => setRefundSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to process refund:', err);
       setError(err.response?.data?.message || 'Failed to process refund. Please try again.');
     } finally {
       setRefunding(false);
@@ -696,8 +681,6 @@ const Orders = () => {
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return '';
     
-    console.log('formatDateForDisplay input:', dateString);
-    
     try {
       // Handle YYYY-MM-DD format (date-only) without timezone conversion issues
       const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -710,7 +693,6 @@ const Orders = () => {
         const utcDate = new Date(Date.UTC(year, month, day));
         
         if (isNaN(utcDate.getTime())) {
-          console.warn('Invalid date:', dateString);
           return '';
         }
         
@@ -737,7 +719,6 @@ const Orders = () => {
           const utcDate = new Date(Date.UTC(year, month, day, hours, minutes, 0));
           
           if (isNaN(utcDate.getTime())) {
-            console.warn('Invalid datetime:', dateString);
             return '';
           }
           
@@ -759,7 +740,6 @@ const Orders = () => {
       // Fallback to Date parsing if format doesn't match
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
-        console.warn('Invalid date:', dateString);
         return '';
       }
       
@@ -774,7 +754,6 @@ const Orders = () => {
         return `${month} ${day}`;
       }
     } catch (error) {
-      console.warn('Error parsing date string:', dateString, error);
       return '';
     }
   };
@@ -803,7 +782,6 @@ const Orders = () => {
 
       return `${monthName} ${day} - ${timeStr}`;
     } catch (error) {
-      console.warn('Error formatting date and time:', dateString, timeString, error);
       return '';
     }
   };
@@ -828,7 +806,6 @@ const Orders = () => {
         today.setHours(0, 0, 0, 0);
         
         if (selectedDate < today) {
-          console.log("Selected date is in the past, clearing booked times");
           setBookedCheckTimes([]);
           return;
         }
@@ -861,7 +838,6 @@ const Orders = () => {
         today.setHours(0, 0, 0, 0);
         
         if (selectedDate < today) {
-          console.log("Selected completion date is in the past, clearing booked times");
           setBookedPickupTimes([]);
           return;
         }
@@ -1844,7 +1820,6 @@ const Orders = () => {
                               'Design Image'
                             )}
                             onError={(e) => {
-                              console.error('Failed to load image:', e.target.src);
                               e.target.style.display = 'none';
                             }}
                           />
@@ -1864,7 +1839,6 @@ const Orders = () => {
                               'GCash Proof'
                             )}
                             onError={(e) => {
-                              console.error('Failed to load GCash proof image:', e.target.src);
                               e.target.style.display = 'none';
                             }}
                           />

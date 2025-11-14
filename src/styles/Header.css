@@ -218,4 +218,29 @@
   .user-role {
     font-size: 11px;
   }
+}
+
+/* Custom scrollbar for notifications */
+.notifications-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.notifications-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notifications-scroll-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.notifications-scroll-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.notifications-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 } 

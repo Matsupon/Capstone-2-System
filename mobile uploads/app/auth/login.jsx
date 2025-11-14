@@ -37,12 +37,6 @@ export default function Login() {
       return;
     }
 
-    // Log the server URL being used for debugging
-    const serverURL = api.defaults.baseURL;
-    const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'Unknown';
-    console.log('Attempting login to:', serverHost);
-    console.log('Full API URL:', serverURL);
-
     setLoading(true); 
     try {
       const response = await api.post('/login', {
@@ -54,24 +48,13 @@ export default function Login() {
   
       if (token) {
         await AsyncStorage.setItem('authToken', token);
-        console.log('Login successful, token saved:', token);
   
         router.replace('/(tabs)'); 
       } else {
-        console.error('Token not received from backend:', response.data);
         alert('Login failed. No token received from server.');
       }
   
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        baseURL: error.config?.baseURL || api.defaults.baseURL,
-        url: error.config?.url,
-        fullUrl: error.config ? `${error.config.baseURL || ''}${error.config.url || ''}` : 'Unknown',
-      });
-      
       // Handle specific error cases
       if (error.response?.status === 401) {
         alert('Invalid email or password. Please check your credentials and try again.');

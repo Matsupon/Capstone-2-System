@@ -100,7 +100,6 @@ const Appointments = () => {
           } catch (originalError) {
             if (signal.aborted || originalError.name === 'CanceledError' || originalError.name === 'AbortError') return;
             clearTimeout(showLoadingTimeout);
-            console.error('Failed to fetch appointments from both endpoints:', originalError);
             setError(originalError.response?.data?.message || 'Failed to fetch appointments');
             setIsLoading(false);
           }
@@ -109,7 +108,6 @@ const Appointments = () => {
       } catch (err) {
         if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
         clearTimeout(showLoadingTimeout);
-        console.error('Final error in fetchAppointments:', err);
         setError(err.response?.data?.message || err.message || 'Failed to fetch appointments');
         setIsLoading(false);
       }
@@ -218,7 +216,6 @@ const Appointments = () => {
         setUnviewedAppointmentIds(unviewed);
       }
     } catch (err) {
-      console.error('Failed to mark appointment as viewed:', err);
       // Revert optimistic update on error
       setUnviewedAppointmentIds(prev => {
         const next = new Set(prev);
@@ -278,7 +275,6 @@ const Appointments = () => {
       setQueueSuccess(true);
       setTimeout(() => setQueueSuccess(false), 5000);
     } catch (err) {
-      console.error("Failed to accept appointment:", err);
       setQueueConfirmId(null);
       setError("Failed to add appointment to queue. Please try again.");
     }
@@ -324,7 +320,6 @@ const Appointments = () => {
       setRejectSuccess(true);
       setTimeout(() => setRejectSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to reject appointment:', err);
       setError(err.response?.data?.message || 'Failed to reject appointment. Please try again.');
     } finally {
       setRejecting(false);
@@ -371,7 +366,6 @@ const Appointments = () => {
       setRefundSuccess(true);
       setTimeout(() => setRefundSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to process refund:', err);
       setError(err.response?.data?.message || 'Failed to process refund. Please try again.');
     } finally {
       setRefunding(false);

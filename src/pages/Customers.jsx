@@ -65,7 +65,6 @@ const Customers = () => {
         if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
         clearTimeout(showLoadingTimeout);
         setError(err.response?.data?.message || err.message || 'Failed to fetch customers');
-        console.error('Error fetching customers:', err);
         setLoading(false);
       }
     };
@@ -91,7 +90,6 @@ const Customers = () => {
       }
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-      console.error('Error fetching customer profile:', err);
       alert('Failed to load customer profile');
     }
   }, []);

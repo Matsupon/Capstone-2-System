@@ -53,15 +53,11 @@ const Dashboard = () => {
         
         let response;
         try {
-          console.log('Trying admin endpoint...');
           response = await api.get('/admin/appointments');
-          console.log('Admin endpoint raw response:', response);
   
           const data = response.data.data || response.data;
-          console.log('Appointments array:', data);
   
           if (Array.isArray(data)) {
-            data.forEach(item => console.log('Single appointment item:', item));
             setAppointments(data);
           } else {
             throw new Error('Invalid response format from admin endpoint');
@@ -72,19 +68,12 @@ const Dashboard = () => {
           return;
   
         } catch (adminError) {
-          console.log('Admin endpoint failed:', adminError);
-          console.log('Admin error response:', adminError.response);
-  
           try {
-            console.log('Trying original endpoint...');
             response = await api.get('/appointments');
-            console.log('Original endpoint raw response:', response);
   
             const data = response.data.data || response.data;
-            console.log('Appointments array:', data);
   
             if (Array.isArray(data)) {
-              data.forEach(item => console.log('Single appointment item:', item));
               setAppointments(data);
             } else {
               throw new Error('Invalid response format from original endpoint');
@@ -95,14 +84,11 @@ const Dashboard = () => {
             return;
   
           } catch (originalError) {
-            console.error('Both endpoints failed:', { adminError, originalError });
-            console.log('Original error response:', originalError.response);
             throw new Error('Failed to fetch appointments from both endpoints');
           }
         }
   
       } catch (err) {
-        console.error('Final error in fetchAppointments:', err);
         setError(err.message);
         setIsLoading(false);
       }
@@ -115,7 +101,7 @@ const Dashboard = () => {
           setAcceptedAppointments(response.data.data);
         }
       } catch (err) {
-        console.error('Failed to fetch accepted appointments:', err);
+        // Error fetching accepted appointments
       }
     };
 
@@ -126,14 +112,13 @@ const Dashboard = () => {
           setOrderStats(response.data.data);
         }
       } catch (err) {
-        console.error('Failed to fetch order stats:', err);
+        // Error fetching order stats
       }
     };
 
     const fetchTodayQueue = async () => {
       try {
         const response = await api.get('/orders/today-queue');
-        console.log('Today queue response:', response.data);
         if (response.data?.success) {
           const data = response.data.data;
           const allOrders = data?.all_orders || [];
@@ -161,14 +146,8 @@ const Dashboard = () => {
           
           // Count matches all today's orders
           setTodaysAppointmentsCount(todayOrders.length);
-          
-          console.log('Queue data updated:', {
-            todayOrdersCount: todayOrders.length,
-            hasQueue: todayOrders.length > 0
-          });
         }
       } catch (err) {
-        console.error('Failed to fetch today\'s queue:', err);
         // Set default empty state on error
         setQueueData({ 
           has_queue: false, 
@@ -563,36 +542,49 @@ const Dashboard = () => {
                 </button>
               </div>
               <div className="queue-info">
-                {queueData.has_queue && queueData.all_orders && queueData.all_orders.length > 0 ? (
-                  <>
-                    {queueData.all_orders.slice(0, 2).map((customer, index) => (
-                      <div key={customer.id || index} className={index === 0 ? "current-customer" : "next-customer"}>
-                        <strong>{index === 0 ? 'Customer 1:' : 'Customer 2:'}</strong>{' '}
-                        {customer.queue_number && (
-                          <span className="queue-number">
-                            #{customer.queue_number}
+                {(() => {
+                  // Filter out appointments with past times
+                  const now = new Date();
+                  const currentTime = now.getHours() * 60 + now.getMinutes();
+                  
+                  const upcomingOrders = (queueData.all_orders || []).filter(customer => {
+                    if (!customer.appointment_time) return true;
+                    const [hours, minutes] = customer.appointment_time.split(':').map(Number);
+                    const appointmentTime = hours * 60 + minutes;
+                    return appointmentTime >= currentTime;
+                  });
+                  
+                  return queueData.has_queue && upcomingOrders.length > 0 ? (
+                    <>
+                      {upcomingOrders.slice(0, 2).map((customer, index) => (
+                        <div key={customer.id || index} className={index === 0 ? "current-customer" : "next-customer"}>
+                          <strong>{index === 0 ? 'Customer 1:' : 'Customer 2:'}</strong>{' '}
+                          {customer.queue_number && (
+                            <span className="queue-number">
+                              #{customer.queue_number}
+                            </span>
+                          )}{' '}
+                          {customer.name || 'N/A'}
+                          <span className="queue-time">
+                            ({formatTime(customer.appointment_time)})
                           </span>
-                        )}{' '}
-                        {customer.name || 'N/A'}
-                        <span className="queue-time">
-                          ({formatTime(customer.appointment_time)})
-                        </span>
-                        {customer.status && (
-                          <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(customer.status) }}>
-                            [{customer.status}]
-                          </span>
-                        )}
+                          {customer.status && (
+                            <span style={{ marginLeft: 8, fontSize: 12, color: getStatusColor(customer.status) }}>
+                              [{customer.status}]
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="no-queue-message">
+                      <div className="queue-status">
+                        <span className="status-indicator inactive"></span>
+                        <span>{queueData.message || 'No appointments scheduled for today'}</span>
                       </div>
-                    ))}
-                  </>
-                ) : (
-                  <div className="no-queue-message">
-                    <div className="queue-status">
-                      <span className="status-indicator inactive"></span>
-                      <span>{queueData.message || 'No appointments scheduled for today'}</span>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
 
@@ -794,34 +786,47 @@ const Dashboard = () => {
                   />
                   <h2 className="dashboard-modal-title">Today's Queue</h2>
                   <div className="table-container" style={{ overflowY: 'auto' }}>
-                    {!(queueData?.all_orders || []).length ? (
-                      <p style={{ padding: '8px 4px', color: '#687076' }}>{queueData?.message || 'No queued customers for today.'}</p>
-                    ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: '#e8f4fd' }}>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Queue #</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Name</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Time</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '30%' }}>Service</th>
-                            <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(queueData.all_orders || []).map((o, i) => (
-                            <tr key={o.id || i}>
-                              <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
-                              <td style={{ padding: '8px' }}>{o.name || 'N/A'}</td>
-                              <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time)}</td>
-                              <td style={{ padding: '8px' }}>{o.service_type || 'N/A'}</td>
-                              <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
-                                {o.status || 'N/A'}
-                              </td>
+                    {(() => {
+                      // Filter out appointments with past times
+                      const now = new Date();
+                      const currentTime = now.getHours() * 60 + now.getMinutes();
+                      
+                      const upcomingOrders = (queueData?.all_orders || []).filter(o => {
+                        if (!o.appointment_time) return true;
+                        const [hours, minutes] = o.appointment_time.split(':').map(Number);
+                        const appointmentTime = hours * 60 + minutes;
+                        return appointmentTime >= currentTime;
+                      });
+                      
+                      return !upcomingOrders.length ? (
+                        <p style={{ padding: '8px 4px', color: '#687076' }}>{queueData?.message || 'No queued customers for today.'}</p>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: '#e8f4fd' }}>
+                              <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Queue #</th>
+                              <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Name</th>
+                              <th style={{ textAlign: 'center', padding: '8px', width: '15%' }}>Time</th>
+                              <th style={{ textAlign: 'center', padding: '8px', width: '30%' }}>Service</th>
+                              <th style={{ textAlign: 'center', padding: '8px', width: '20%' }}>Status</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                          </thead>
+                          <tbody>
+                            {upcomingOrders.map((o, i) => (
+                              <tr key={o.id || i}>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{o.queue_number ?? 'N/A'}</td>
+                                <td style={{ padding: '8px' }}>{o.name || 'N/A'}</td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{formatTime(o.appointment_time)}</td>
+                                <td style={{ padding: '8px' }}>{o.service_type || 'N/A'}</td>
+                                <td style={{ padding: '8px', textAlign: 'center', color: getStatusColor(o.status), fontWeight: 600 }}>
+                                  {o.status || 'N/A'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

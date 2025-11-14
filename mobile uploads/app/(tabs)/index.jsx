@@ -71,10 +71,8 @@ export default function HomePage() {
           await AsyncStorage.removeItem('authToken');
           router.replace('/auth/login');
         } catch (storageError) {
-          console.log('Error during logout:', storageError);
+          // Error during logout
         }
-      } else {
-        console.log('Failed to load notifications', e?.message || e);
       }
     }
   }, [router]);
@@ -88,12 +86,6 @@ export default function HomePage() {
         setOrders(ordersData);
       }
     } catch (e) {
-      // Only log if it's not a network error (network errors are expected if server is down)
-      if (e.response) {
-        console.log('Failed to load orders', e?.response?.status, e?.message);
-      } else if (e.code !== 'NETWORK_ERROR' && e.message !== 'Network Error') {
-        console.log('Failed to load orders', e?.message || e);
-      }
       // Don't set orders to empty on error, keep previous value
     } finally {
       setOrderLoading(false);
@@ -134,7 +126,6 @@ export default function HomePage() {
         if (!isNaN(dateTime.getTime())) {
           setNextAppointment(formatDateTime12(dateTime));
         } else {
-          console.log("Invalid date from API:", iso);
           setNextAppointment(null);
         }
       } else {
@@ -147,11 +138,9 @@ export default function HomePage() {
         setNextAppointment(null);
       } else if (err.response) {
         // Server responded with an error
-        console.log('Error fetching appointment', err?.response?.status, err?.message);
         setNextAppointment(null);
       } else if (err.code !== 'NETWORK_ERROR' && err.message !== 'Network Error') {
         // Other errors (but not network errors)
-        console.log('Error fetching appointment', err);
         setNextAppointment(null);
       }
       // Don't set to null on network errors, keep previous value if available

@@ -57,7 +57,6 @@ const OrdersHistory = () => {
         if (signal.aborted || err.name === 'CanceledError' || err.name === 'AbortError') return;
         clearTimeout(showLoadingTimeout);
         setError(err.response?.data?.error || err.message || 'Error fetching order history');
-        console.error('Error fetching order history:', err);
         setLoading(false);
       }
     };
@@ -826,7 +825,6 @@ const OrdersHistory = () => {
                               'Design Image'
                             )}
                             onError={(e) => {
-                              console.error('Failed to load image:', e.target.src);
                               e.target.style.display = 'none';
                             }}
                           />

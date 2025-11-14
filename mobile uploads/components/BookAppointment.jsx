@@ -80,22 +80,15 @@ export default function BookAppointment({ visible, onClose }) {
     if (appointmentDateRaw) {
       fetchAvailableSlots();
     }
-    const checkToken = async () => {
-      const token = await AsyncStorage.getItem('authToken');
-      console.log("Current token:", token);
-    };
-    checkToken();
     
     const fetchAdminPhone = async () => {
       try {
         const response = await api.get('/admin/contact');
-        console.log('Admin contact response:', response.data);
         if (response.data?.success && response.data?.data?.phone) {
           setAdminPhoneNumber(response.data.data.phone);
-          console.log('Admin phone number set to:', response.data.data.phone);
         }
       } catch (error) {
-        console.log('Could not fetch admin phone, using default:', error);
+        // Could not fetch admin phone, using default
       }
     };
     fetchAdminPhone();
@@ -103,13 +96,10 @@ export default function BookAppointment({ visible, onClose }) {
     const fetchServiceTypes = async () => {
       try {
         const response = await api.get('/service-types');
-        console.log('Service types response:', response.data);
         if (response.data?.success && response.data?.data) {
           setServiceTypes(response.data.data);
-          console.log('Service types loaded:', response.data.data);
         }
       } catch (error) {
-        console.log('Could not fetch service types, using fallback:', error);
         // Fallback to hardcoded service types if API fails
         setServiceTypes([
           { id: 1, name: 'Jersey Production', downpayment_amount: 500.00 },
@@ -147,38 +137,26 @@ export default function BookAppointment({ visible, onClose }) {
       const selectedService = serviceTypes.find(st => st.name === serviceType);
       if (selectedService) {
         const newAmount = parseFloat(selectedService.downpayment_amount);
-        console.log('✅ Updating downpayment amount from API:', {
-          serviceType: serviceType,
-          downpayment_amount: selectedService.downpayment_amount,
-          newAmount: newAmount
-        });
         setDownpaymentAmount(newAmount);
         return;
-      } else {
-        console.warn('⚠️ Service type not found in serviceTypes:', serviceType);
       }
     }
     
     // Fallback logic if serviceTypes haven't loaded yet or match not found
     if (serviceType === 'Repairs/Alterations (eg. incl. zippers, buttons, size alteration etc.)') {
-      console.log('💰 Using fallback: Repairs/Alterations -> P100.00');
       setDownpaymentAmount(100.00);
     } else {
-      console.log('💰 Using fallback: Other services -> P500.00');
       setDownpaymentAmount(500.00);
     }
   }, [serviceType, serviceTypes]);
 
   const fetchAvailableSlots = async () => {
     try {
-      console.log("Fetching slots for date:", appointmentDateRaw);
-      
       const selectedDate = new Date(appointmentDateRaw);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
       if (selectedDate < today) {
-        console.log("Selected date is in the past, clearing available slots");
         setAvailableSlots([]);
         return;
       }
@@ -187,10 +165,8 @@ export default function BookAppointment({ visible, onClose }) {
       const timestamp = new Date().getTime();
       const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}&t=${timestamp}`);
       
-      console.log("Available slots data:", response.data);
       setAvailableSlots(response.data.available_slots || []);
     } catch (error) {
-      console.error('Error fetching available slots:', error);
       Alert.alert('Error', 'Failed to fetch available time slots. Please try again.');
       setAvailableSlots([]);
     }
@@ -216,9 +192,7 @@ export default function BookAppointment({ visible, onClose }) {
           { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression (0.6 instead of 0.7)
         );
         setImage(manip.uri);
-        console.log('✅ Image selected and compressed:', manip.uri);
       } catch (e) {
-        console.warn('⚠️ Image compression failed, using original:', e);
         setImage(result.assets[0].uri);
       }
     }
@@ -326,13 +300,6 @@ export default function BookAppointment({ visible, onClose }) {
       }
 
       setIsLoading(true);
-      
-      console.log('📤 Starting appointment booking...', {
-        hasDesignImage: !!designImage,
-        hasGcashImage: !!gcashImage,
-        appointmentDate: appointmentDateRaw,
-        appointmentTime: appointmentTimeRaw,
-      });
     
       const formData = new FormData();
       formData.append('service_type', serviceType);
@@ -360,32 +327,26 @@ export default function BookAppointment({ visible, onClose }) {
       
       if (designImage) {
         try {
-          console.log('📦 Compressing design image...');
           const compressed = await ImageManipulator.manipulateAsync(
             designImage,
             [{ resize: { width: 1024 } }], // Reduce to max 1024px width
             { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression
           );
           finalDesignImage = compressed.uri;
-          console.log('✅ Design image compressed');
         } catch (error) {
-          console.warn('⚠️ Failed to compress design image, using original:', error);
           finalDesignImage = designImage;
         }
       }
       
       if (gcashImage) {
         try {
-          console.log('📦 Compressing GCash proof image...');
           const compressed = await ImageManipulator.manipulateAsync(
             gcashImage,
             [{ resize: { width: 1024 } }], // Reduce to max 1024px width
             { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // More aggressive compression
           );
           finalGcashImage = compressed.uri;
-          console.log('✅ GCash proof compressed');
         } catch (error) {
-          console.warn('⚠️ Failed to compress GCash image, using original:', error);
           finalGcashImage = gcashImage;
         }
       }
@@ -398,11 +359,6 @@ export default function BookAppointment({ visible, onClose }) {
           name: meta.name,
           type: meta.type,
         });
-        console.log('📎 Added design image to FormData:', {
-          name: meta.name,
-          type: meta.type,
-          uriLength: finalDesignImage.length,
-        });
       }
     
       if (finalGcashImage) {
@@ -413,53 +369,11 @@ export default function BookAppointment({ visible, onClose }) {
           name: meta.name,
           type: meta.type,
         });
-        console.log('📎 Added GCash proof to FormData:', {
-          name: meta.name,
-          type: meta.type,
-          uriLength: finalGcashImage.length,
-        });
       }
     
       formData.append('preferred_due_date', preferredDueDateRaw);
       formData.append('appointment_date', appointmentDateRaw);
       formData.append('appointment_time', appointmentTimeRaw);
-    
-      console.log("Sending appointment data:", {
-        service_type: serviceType,
-        sizes: JSON.stringify(sizes),
-        total_quantity: quantity,
-        notes: notes || 'None',
-        preferred_due_date: preferredDueDateRaw,
-        appointment_date: appointmentDateRaw,
-        appointment_time: appointmentTimeRaw,
-        hasDesignImage: !!finalDesignImage,
-        hasGcashImage: !!finalGcashImage,
-      });
-      
-      // Log FormData contents (be careful with file objects)
-      console.log('📋 FormData contents:');
-      try {
-        // Note: formData.entries() might not work in React Native, so we'll just log what we added
-        console.log('  - service_type:', serviceType);
-        console.log('  - sizes:', JSON.stringify(sizes));
-        console.log('  - total_quantity:', quantity);
-        console.log('  - notes:', notes || 'None');
-        console.log('  - preferred_due_date:', preferredDueDateRaw);
-        console.log('  - appointment_date:', appointmentDateRaw);
-        console.log('  - appointment_time:', appointmentTimeRaw);
-        console.log('  - design_image:', finalDesignImage ? 'Present' : 'Not present');
-        console.log('  - gcash_proof:', finalGcashImage ? 'Present' : 'Not present');
-      } catch (e) {
-        console.warn('Could not log FormData entries:', e);
-      }
-      
-      // Log FormData size estimate (approximate)
-      const estimatedSize = (finalDesignImage ? 500 : 0) + (finalGcashImage ? 500 : 0); // Rough estimate in KB
-      console.log('📊 FormData size estimate:', `${estimatedSize}KB (compressed)`);
-      console.log('🚀 Sending POST request to /appointments');
-      console.log('   - FormData type:', formData instanceof FormData ? 'FormData' : typeof formData);
-      console.log('   - Timeout: 120s');
-      console.log('   - Retries: DISABLED (__disableRetry: true)');
       
       // CRITICAL FIX: Use React Native's fetch API directly for FormData uploads
       // React Native's XMLHttpRequest (used by axios) has a bug that sets wrong Content-Type
@@ -468,13 +382,10 @@ export default function BookAppointment({ visible, onClose }) {
       const apiBaseUrl = api.defaults.baseURL;
       const fullUrl = `${apiBaseUrl}/appointments`;
       
-      console.log('🚀 Using fetch API for FormData upload to:', fullUrl);
-      
       // Add timeout using AbortController to prevent infinite loading
       const timeoutDuration = 120000; // 120 seconds (2 minutes) for large file uploads
       const abortController = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.error('⏱️ Request timeout after', timeoutDuration, 'ms');
         abortController.abort();
       }, timeoutDuration);
       
@@ -542,7 +453,6 @@ export default function BookAppointment({ visible, onClose }) {
       try {
         responseData = await response.json();
       } catch (parseError) {
-        console.error('Failed to parse response JSON:', parseError);
         throw {
           message: 'Invalid response from server. Please try again.',
           code: 'PARSE_ERROR',
@@ -558,21 +468,11 @@ export default function BookAppointment({ visible, onClose }) {
         headers: response.headers,
       };
       
-      console.log("✅ Booking response:", axiosLikeResponse.data);
-      
       // Reset loading state before showing success
       setIsLoading(false);
       showSuccess();
       
     } catch (error) {
-      console.error('Booking failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        response: error.response,
-        status: error.response?.status,
-      });
-      
       let errorMessage = 'Failed to book appointment.';
       let errorTitle = 'Booking Failed';
       
@@ -619,7 +519,6 @@ export default function BookAppointment({ visible, onClose }) {
         }
       } else {
         // Unknown error - use the error message if available
-        console.error('Request error:', error.message);
         errorMessage = error.message || 'Unknown error occurred. Please try again.';
       }
       

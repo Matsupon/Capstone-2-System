@@ -3,10 +3,6 @@ import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.10.87:8000/api';
 
-// Log the API URL being used (for debugging)
-console.log('API Base URL:', API_URL);
-console.log('EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
-
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -85,33 +81,16 @@ api.interceptors.request.use(async (config) => {
       }
       // IMPORTANT: Do NOT override transformRequest here - it's already set at instance level
     }
-    
-    const fullUrl = `${config.baseURL}${config.url}`;
-    console.log('API Request:', {
-      method: config.method?.toUpperCase(),
-      fullUrl: fullUrl,
-      url: config.url,
-      hasToken: !!token,
-      baseURL: config.baseURL,
-      isFormData: isFormData,
-      contentType: config.headers['Content-Type'] || config.headers['content-type'] || 'auto',
-    });
   } catch (error) {
-    console.error('Error getting token:', error);
+    // Error getting token
   }
   return config;
 }, (error) => {
-  console.error('Request Error:', error);
   return Promise.reject(error);
 });
 
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response Success:', {
-      status: response.status,
-      url: response.config.url,
-      fullUrl: `${response.config.baseURL}${response.config.url}`,
-    });
     return response;
   },
   async (error) => {
@@ -144,16 +123,9 @@ api.interceptors.response.use(
                        !retriesDisabled &&
                        !(isFormData && !config?.__enableFormDataRetry);
     
-    // Log FormData detection for debugging
-    if (isFormData) {
-      console.log('📦 FormData detected - retries disabled by default');
-    }
-    
     // Check if we should retry this request
     if (shouldRetry) {
       const newRetryCount = retryCount + 1;
-      
-      console.log(`🔄 Retrying request (${newRetryCount}/${MAX_RETRIES}): ${config?.method?.toUpperCase()} ${config?.url}`);
       
       // Wait before retrying (linear backoff: 1s, 2s, 3s)
       const delay = RETRY_DELAY * newRetryCount;
@@ -178,43 +150,7 @@ api.interceptors.response.use(
     // Handle final error (after retries exhausted or non-retryable error)
     const finalRetryCount = error.config?.__retryCount || retryCount;
     
-    if (error.code === 'ERR_NETWORK' || error.code === 'NETWORK_ERROR' || error.message === 'Network Error') {
-      // Get the server URL from the API instance
-      const serverURL = error.config?.baseURL || config?.baseURL || api.defaults.baseURL || API_URL;
-      const serverHost = serverURL ? serverURL.replace('/api', '').replace(/\/$/, '') : 'the server';
-      
-      console.error('⚠️ Network Error: Server may not be accessible. Check if backend is running at:', serverHost);
-      console.error('Network Error Details:', {
-        message: error.message,
-        code: error.code,
-        fullUrl: fullUrl,
-        baseURL: error.config?.baseURL || config?.baseURL || api.defaults.baseURL,
-        url: error.config?.url || config?.url,
-        requestMethod: error.config?.method || config?.method,
-        retriesAttempted: finalRetryCount,
-      });
-    } else {
-      // Suppress 401 errors for logout requests - they're expected after first logout succeeds
-      const isLogoutRequest = config?.__isLogoutRequest === true || 
-                              config?.url === '/logout' || 
-                              error.config?.url === '/logout';
-      const is401Error = error.response?.status === 401;
-      
-      if (isLogoutRequest && is401Error) {
-        // Don't log 401 errors for logout requests - they're normal when token is already invalidated
-        // This happens when user quickly presses logout multiple times
-      } else {
-        console.error('API Error:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          message: error.message,
-          code: error.code,
-          fullUrl: fullUrl,
-          url: error.config?.url || config?.url,
-          responseData: error.response?.data,
-        });
-      }
-    }
+    // Network errors and API errors are handled silently now
     
     return Promise.reject(error);
   }
