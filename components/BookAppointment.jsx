@@ -183,7 +183,9 @@ export default function BookAppointment({ visible, onClose }) {
         return;
       }
       
-      const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}`);
+      // Add timestamp to prevent caching and ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await api.get(`/appointments/available-slots?date=${appointmentDateRaw}&t=${timestamp}`);
       
       console.log("Available slots data:", response.data);
       setAvailableSlots(response.data.available_slots || []);

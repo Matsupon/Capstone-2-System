@@ -1125,7 +1125,7 @@ export default function AppointmentsPage() {
                     style={styles.editDetailsButton}
                     onPress={() => openEditModal(selectedAppointment)}
                   >
-                    <Text style={styles.editDetailsButtonText}>Edit</Text>
+                    <Text style={styles.editDetailsButtonText}>Reschedule</Text>
                   </TouchableOpacity>
                 )}
                 {shouldShowCancelButton(selectedAppointment) && (
@@ -1273,9 +1273,6 @@ export default function AppointmentsPage() {
         <View style={styles.modalBackdrop}>
           <View style={styles.confirmationModal}>
             <Text style={styles.confirmationTitle}>Are you sure you want to Cancel this order?</Text>
-            <Text style={styles.confirmationMessage}>
-              If you choose yes, this order will be permanently deleted from the system
-            </Text>
             <View style={styles.confirmationButtons}>
               <TouchableOpacity
                 style={styles.confirmationNoButton}
